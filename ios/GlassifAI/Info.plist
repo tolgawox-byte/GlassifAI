@@ -82,6 +82,16 @@
 	<string>AutoLoom Media Glasses uses the iPhone camera, only when you choose it, so the assistant can answer questions about what you see.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>AutoLoom Media Glasses uses the microphone for your live voice conversation with the assistant.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>AutoLoom Media Glasses adds reminders you ask for and reads your open reminders when you ask about them.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>AutoLoom Media Glasses adds reminders you ask for and reads your open reminders when you ask about them.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>AutoLoom Media Glasses reads your calendar when you ask about today or upcoming events, and adds events you ask for.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>AutoLoom Media Glasses adds calendar events you ask for.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>AutoLoom Media Glasses reads your calendar when you ask about today or upcoming events, and adds events you ask for.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
