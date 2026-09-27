@@ -12,7 +12,8 @@ enum FrameSourceKind: String {
   case iPhone = "iPhone"
 }
 
-/// One camera frame as it arrived on the phone. Only the newest frame is kept.
+/// One camera frame as it arrived on the phone. The store keeps the newest
+/// few so a vision request can pick the sharpest recent one.
 struct CapturedFrame {
   let pixelBuffer: CVPixelBuffer
   let source: FrameSourceKind
@@ -22,6 +23,12 @@ struct CapturedFrame {
   let height: Int
   let pixelFormat: OSType
   let sequence: UInt64
+  /// Capture time on the host clock when the frame's timestamp is host-based
+  /// (same time base as `arrivedAt`), otherwise nil.
+  var captureTime: CFTimeInterval?
+  /// FrameStore epoch at arrival. A camera-source switch starts a new epoch,
+  /// so a frame from before the switch can be recognised and rejected.
+  var epoch: UInt64 = 0
 
   var ageSeconds: CFTimeInterval { CACurrentMediaTime() - arrivedAt }
 }
@@ -94,9 +101,14 @@ private struct SampleWindow {
 /// no per-frame main-thread hop, no queue, and therefore no backlog.
 final class FrameStore: @unchecked Sendable {
   static let shared = FrameStore()
+  /// Recent frames kept for best-frame selection (about 0.5 s at 15 fps).
+  /// iPhone frames are capture-pool buffers, so only the newest is kept.
+  static let recentCapacity = 8
 
   private let lock = NSLock()
   private var latest: CapturedFrame?
+  private var recent: [CapturedFrame] = []
+  private var epoch: UInt64 = 0
   private var sequence: UInt64 = 0
   private var arrivals: [CFTimeInterval] = []
   private var framesReceived: UInt64 = 0
@@ -178,14 +190,18 @@ final class FrameStore: @unchecked Sendable {
     let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
     let hostNow = CMClockGetTime(CMClockGetHostTimeClock())
     var transportMs: Double?
+    var captureTime: CFTimeInterval?
     if presentationTime.isValid, presentationTime.isNumeric {
       let delta = CMTimeGetSeconds(CMTimeSubtract(hostNow, presentationTime))
-      if delta >= 0, delta < 3 { transportMs = delta * 1_000 }
+      if delta >= 0, delta < 3 {
+        transportMs = delta * 1_000
+        captureTime = CMTimeGetSeconds(presentationTime)
+      }
     }
 
     lock.lock()
     sequence &+= 1
-    latest = CapturedFrame(
+    let frame = CapturedFrame(
       pixelBuffer: pixelBuffer,
       source: source,
       arrivedAt: arrivedAt,
@@ -193,7 +209,17 @@ final class FrameStore: @unchecked Sendable {
       width: width,
       height: height,
       pixelFormat: format,
-      sequence: sequence)
+      sequence: sequence,
+      captureTime: captureTime,
+      epoch: epoch)
+    latest = frame
+    if source == .iPhone {
+      recent.removeAll { $0.source == .iPhone }
+    }
+    recent.append(frame)
+    if recent.count > Self.recentCapacity {
+      recent.removeFirst(recent.count - Self.recentCapacity)
+    }
     framesReceived &+= 1
     arrivals.append(arrivedAt)
     let cutoff = arrivedAt - 2
@@ -235,6 +261,23 @@ final class FrameStore: @unchecked Sendable {
     return frame
   }
 
+  /// Frames from one source that are at most `maxAge` old and belong to the
+  /// current epoch, oldest first.
+  func recentFrames(
+    source: FrameSourceKind,
+    maxAge: CFTimeInterval,
+    now: CFTimeInterval = CACurrentMediaTime()
+  ) -> [CapturedFrame] {
+    lock.lock(); defer { lock.unlock() }
+    return recent.filter { $0.source == source && $0.epoch == epoch && now - $0.arrivedAt <= maxAge }
+  }
+
+  /// Changes whenever the store is reset (camera source switch, privacy wipe).
+  var currentEpoch: UInt64 {
+    lock.lock(); defer { lock.unlock() }
+    return epoch
+  }
+
   /// Returns a frame no older than `maxAge`, waiting up to `timeout` for the
   /// camera to deliver one. Never returns a stale frame.
   func waitForFreshFrame(
@@ -255,6 +298,8 @@ final class FrameStore: @unchecked Sendable {
   func reset() {
     lock.lock()
     latest = nil
+    recent.removeAll()
+    epoch &+= 1
     arrivals.removeAll()
     framesReceived = 0
     previewRendered = 0
@@ -342,16 +387,110 @@ enum VisionFrameEncoder {
 
   /// Encodes with a vision profile: long side and patch count stay within
   /// what the Codex endpoint uses without further server-side downsizing.
-  static func encode(_ pixelBuffer: CVPixelBuffer, detail: VisionDetail, useCPU: Bool = false) -> Output? {
+  /// With `allowUpscale`, a small frame (the 720×1280 Ray-Ban stream) is
+  /// enlarged toward the patch budget so small text covers more image patches.
+  static func encode(
+    _ pixelBuffer: CVPixelBuffer,
+    detail: VisionDetail,
+    useCPU: Bool = false,
+    allowUpscale: Bool = false
+  ) -> Output? {
     let width = CVPixelBufferGetWidth(pixelBuffer)
     let height = CVPixelBufferGetHeight(pixelBuffer)
-    let fitted = detail.fittedSize(width: width, height: height)
+    let target = allowUpscale
+      ? detail.upscaledSize(width: width, height: height)
+      : detail.fittedSize(width: width, height: height)
+    if target.width > width || target.height > height {
+      return render(
+        CIImage(cvPixelBuffer: pixelBuffer),
+        crop: nil,
+        width: target.width,
+        height: target.height,
+        quality: detail.jpegQuality,
+        maxBytes: detail.maxBytes,
+        useCPU: useCPU)
+    }
     return encode(
       pixelBuffer,
-      maxLongSide: max(fitted.width, fitted.height),
+      maxLongSide: max(target.width, target.height),
       quality: detail.jpegQuality,
       maxBytes: detail.maxBytes,
       useCPU: useCPU)
+  }
+
+  /// Encodes an enlarged crop of `normalizedRect` (0…1, origin bottom-left as
+  /// in Vision and Core Image) so small text in that region covers more of
+  /// the model's image patches. Returns nil when the crop would not be
+  /// meaningfully larger than it already is in the full image.
+  static func encodeCrop(
+    _ source: CIImage,
+    normalizedRect: CGRect,
+    detail: VisionDetail,
+    useCPU: Bool = false
+  ) -> Output? {
+    let extent = source.extent
+    guard extent.width > 0, extent.height > 0, !extent.isInfinite else { return nil }
+    let rect = CGRect(
+      x: extent.minX + normalizedRect.minX * extent.width,
+      y: extent.minY + normalizedRect.minY * extent.height,
+      width: normalizedRect.width * extent.width,
+      height: normalizedRect.height * extent.height
+    ).integral.intersection(extent)
+    guard rect.width >= 24, rect.height >= 24 else { return nil }
+    let target = VisionDetail.cropTargetSize(width: Int(rect.width), height: Int(rect.height))
+    guard target.scale >= 1.25 else { return nil }
+    return render(
+      source,
+      crop: rect,
+      width: target.width,
+      height: target.height,
+      quality: detail.jpegQuality,
+      maxBytes: detail.maxBytes,
+      useCPU: useCPU)
+  }
+
+  /// Crops (optional) and resamples to an exact size with Lanczos, clamping
+  /// the edges so resampling does not darken the border, then encodes once.
+  static func render(
+    _ source: CIImage,
+    crop: CGRect?,
+    width: Int,
+    height: Int,
+    quality: Double,
+    maxBytes: Int,
+    useCPU: Bool
+  ) -> Output? {
+    guard width > 0, height > 0, let colorSpace = sRGB else { return nil }
+    var image = source
+    if let crop {
+      image = image.cropped(to: crop)
+    }
+    let inputExtent = image.extent
+    guard inputExtent.width > 0, inputExtent.height > 0, !inputExtent.isInfinite else { return nil }
+    image = image.transformed(by: CGAffineTransform(translationX: -inputExtent.minX, y: -inputExtent.minY))
+    let scale = Double(height) / Double(inputExtent.height)
+    let aspect = (Double(width) / Double(inputExtent.width)) / scale
+    if abs(scale - 1) > 0.0001 || abs(aspect - 1) > 0.0001 {
+      image = image.clampedToExtent().applyingFilter(
+        "CILanczosScaleTransform",
+        parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: aspect])
+    }
+    image = image.cropped(to: CGRect(x: 0, y: 0, width: width, height: height))
+    let context = useCPU ? cpuContext : gpuContext
+    var currentQuality = quality
+    for _ in 0..<3 {
+      let options: [CIImageRepresentationOption: Any] = [
+        CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): currentQuality
+      ]
+      guard let data = context.jpegRepresentation(of: image, colorSpace: colorSpace, options: options) else {
+        return nil
+      }
+      if data.count <= maxBytes {
+        return Output(jpeg: data, width: width, height: height, quality: currentQuality)
+      }
+      currentQuality -= 0.12
+    }
+    return nil
   }
 
   static func encode(
