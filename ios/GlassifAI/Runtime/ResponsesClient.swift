@@ -84,8 +84,10 @@ struct ResponsesClient {
     var instructions: String
     var input: [[String: Any]]
     var tools: [[String: Any]] = []
-    var reasoningEffort = "low"
-    var verbosity = "low"
+    /// nil omits `reasoning` (models that list no reasoning levels).
+    var reasoningEffort: String? = "low"
+    /// nil omits `text.verbosity` (models without verbosity support).
+    var verbosity: String? = "low"
     var jsonSchema: (name: String, schema: [String: Any])?
     var include: [String] = ["reasoning.encrypted_content"]
     var promptCacheKey: String?
@@ -218,11 +220,14 @@ struct ResponsesClient {
       "stream": true,
       "store": false,
       "instructions": request.instructions,
-      // No reasoning summary: nothing displays it and it only adds latency.
-      "reasoning": ["effort": request.reasoningEffort],
       "input": request.input,
     ]
-    var text: [String: Any] = ["verbosity": request.verbosity]
+    if let effort = request.reasoningEffort {
+      // No reasoning summary: nothing displays it and it only adds latency.
+      body["reasoning"] = ["effort": effort]
+    }
+    var text: [String: Any] = [:]
+    if let verbosity = request.verbosity { text["verbosity"] = verbosity }
     if let schema = request.jsonSchema {
       text["format"] = [
         "type": "json_schema",
@@ -231,7 +236,7 @@ struct ResponsesClient {
         "strict": true,
       ]
     }
-    body["text"] = text
+    if !text.isEmpty { body["text"] = text }
     if !request.include.isEmpty { body["include"] = request.include }
     if !request.tools.isEmpty {
       body["tools"] = request.tools

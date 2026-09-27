@@ -54,7 +54,12 @@ final class ChatGPTAuthSession {
   static let shared = ChatGPTAuthSession()
 
   private(set) var status: ChatGPTAuthStatus = .loading
+  /// Model slugs in Codex priority order (first = the service's default).
   private(set) var availableModels: [String] = []
+  /// Full model metadata returned by `/models` for this account.
+  private(set) var modelCatalog: [CatalogModel] = []
+  private(set) var modelsFetchedAt: Date?
+  private(set) var modelsError: String?
   private var pollingTask: Task<Void, Never>?
   private var refreshTask: Task<ChatGPTAuthTokens, Error>?
 
@@ -83,8 +88,15 @@ final class ChatGPTAuthSession {
     } catch {
       try? ChatGPTKeychain.delete()
       availableModels = []
+      modelCatalog = []
       status = .unauthenticated
     }
+  }
+
+  /// Reloads the model list and capabilities (Settings → AI models).
+  func refreshModels() async {
+    guard isAuthenticated else { return }
+    await loadModels()
   }
 
   func startLogin() async throws -> ChatGPTPendingLogin {
@@ -130,6 +142,7 @@ final class ChatGPTAuthSession {
     refreshTask = nil
     try? ChatGPTKeychain.delete()
     availableModels = []
+    modelCatalog = []
     status = .unauthenticated
   }
 
@@ -265,9 +278,15 @@ final class ChatGPTAuthSession {
       guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
         throw ChatGPTAuthError.modelsFailed
       }
-      availableModels = modelSlugs(try JSONSerialization.jsonObject(with: data))
+      let catalog = CatalogModel.parseList(try JSONSerialization.jsonObject(with: data))
+      modelCatalog = catalog
+      availableModels = catalog.map(\.slug)
+      modelsFetchedAt = Date()
+      modelsError = catalog.isEmpty ? "The service returned no models." : nil
     } catch {
       availableModels = []
+      modelCatalog = []
+      modelsError = LogSanitizer.sanitize(error.localizedDescription, limit: 160)
     }
   }
 }
@@ -334,19 +353,6 @@ private func jwtClaims(_ token: String?) -> [String: Any]? {
   guard let data = Data(base64Encoded: base64),
         let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
   return value
-}
-
-private func modelSlugs(_ value: Any) -> [String] {
-  let root = value as? [String: Any]
-  let candidates = (root?["models"] ?? root?["data"] ?? root?["items"] ?? value) as? [Any] ?? []
-  var seen = Set<String>()
-  return candidates.compactMap { item in
-    let slug = item as? String
-      ?? (item as? [String: Any])?["slug"] as? String
-      ?? (item as? [String: Any])?["id"] as? String
-    guard let slug, !slug.isEmpty, seen.insert(slug).inserted else { return nil }
-    return slug
-  }
 }
 
 private enum ChatGPTAuthError: LocalizedError {
