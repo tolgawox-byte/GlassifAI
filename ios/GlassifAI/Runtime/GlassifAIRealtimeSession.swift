@@ -14,10 +14,20 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     case failed(String)
   }
 
+  /// Which realtime configuration the current call was started with.
+  enum StartMode: String {
+    case autoloom = "AutoLoom instructions (v2)"
+    case baselineFallback = "Baseline fallback (v1)"
+  }
+
   @Published private(set) var state: State = .disconnected
   @Published private(set) var userTranscript = ""
   @Published private(set) var assistantCaption = ""
   @Published private(set) var isMicrophoneMuted = false
+  @Published private(set) var sidebandStatus = "idle"
+  @Published private(set) var startMode: StartMode?
+  @Published private(set) var lastRealtimeError: String?
+  @Published private(set) var isAssistantAudioSuppressed = false
 
   var isActive: Bool {
     switch state {
@@ -32,14 +42,17 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   private var audioTrack: LKRTCAudioTrack?
   private var audioRouteObserver: NSObjectProtocol?
   private var prefersBluetoothHFP = false
-  private var latestVisionJPEG: Data?
-  private var latestVisionDate = Date.distantPast
-  private var visionTask: Task<Void, Never>?
+  private var forcesBuiltInAudio = false
   private var sidebandEventTask: Task<Void, Never>?
+  private var audioSuppressionTask: Task<Void, Never>?
   private var streamingCaptionRole = ""
   private var streamingCaptionMessageId = ""
   private var streamingCaptionText = ""
-  func start(prefersBluetoothHFP: Bool = false) async {
+  private var userTurnOpen = false
+  private var assistantTurnOpen = false
+  private let orchestrator = AssistantOrchestrator.shared
+
+  func start(prefersBluetoothHFP: Bool = false, forcesBuiltInAudio: Bool = false) async {
     guard !isActive else { return }
     state = .connecting
     userTranscript = ""
@@ -48,8 +61,17 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     streamingCaptionRole = ""
     streamingCaptionMessageId = ""
     streamingCaptionText = ""
+    userTurnOpen = false
+    assistantTurnOpen = false
+    lastRealtimeError = nil
+    isAssistantAudioSuppressed = false
+    _ = orchestrator.beginVoiceSession()
+    AudioRouteMonitor.shared.onMediaServicesReset = { [weak self] in
+      Task { @MainActor in await self?.handleMediaServicesReset() }
+    }
 
     do {
+      self.forcesBuiltInAudio = forcesBuiltInAudio
       try configureAudioSession(prefersBluetoothHFP: prefersBluetoothHFP)
       let configuration = LKRTCConfiguration()
       configuration.sdpSemantics = .unifiedPlan
@@ -115,7 +137,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       startSidebandEventLoop()
     } catch {
       await tearDown()
-      state = .failed(error.localizedDescription)
+      let message = LogSanitizer.sanitize(error.localizedDescription)
+      lastRealtimeError = message
+      state = .failed(message)
     }
   }
 
@@ -125,17 +149,16 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     state = .disconnected
   }
 
-  func submitVisionJPEG(_ jpeg: Data) {
-    guard jpeg.count <= 1_500_000 else { return }
-    latestVisionJPEG = jpeg
-    latestVisionDate = Date()
-  }
-
+  /// Stops the current spoken answer. The V3 protocol has no interrupt
+  /// message (barge-in is handled server-side when the user talks), so the
+  /// app also silences the assistant's audio locally until the user speaks
+  /// again or the interrupted turn ends.
   func stopSpeaking() {
     sendEvent([
       "type": "action_request",
       "payload": ["action": "stop_speaking"],
     ])
+    suppressAssistantAudio()
     if isActive { state = .listening }
   }
 
@@ -147,13 +170,31 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
 
   private func createDirectRealtimeCall(sdp: String) async throws -> String {
     let tokens = try await ChatGPTAuthSession.shared.freshTokens()
-    let result = try await EmbeddedCodexBridge.startRealtime(tokens: tokens, sdp: sdp)
-    guard result.ok, let answer = result.sdp,
-          answer.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("v=0") else {
+    var options = RealtimeStartOptions()
+    options.instructions = AssistantInstructions.realtime(memory: LocalMemoryStore.shared.promptItems)
+    options.voice = AssistantPreferences.voice
+    if let resume = orchestrator.context.resumeSummary() {
+      options.initialItems = [RealtimeStartOptions.Item(role: "developer", text: resume)]
+    }
+    var result = try await EmbeddedCodexBridge.startRealtime(tokens: tokens, sdp: sdp, options: options)
+    startMode = .autoloom
+    if !result.ok || !Self.isAnswerSDP(result.sdp) {
+      // The customised session was rejected; fall back to the exact
+      // configuration that is verified on device.
+      NSLog("[AutoLoom] realtime v2 start failed (%@); retrying with baseline configuration",
+            LogSanitizer.sanitize(result.error ?? "no answer"))
+      result = try await EmbeddedCodexBridge.startRealtime(tokens: tokens, sdp: sdp)
+      startMode = .baselineFallback
+    }
+    guard result.ok, let answer = result.sdp, Self.isAnswerSDP(answer) else {
       throw RealtimeError.signalingFailed(
-        "Embedded Codex could not start ChatGPT Live. \(result.error ?? "Unknown error")")
+        "Could not start ChatGPT voice. \(LogSanitizer.sanitize(result.error ?? "Unknown error"))")
     }
     return answer
+  }
+
+  private static func isAnswerSDP(_ sdp: String?) -> Bool {
+    sdp?.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("v=0") == true
   }
 
   private func startSidebandEventLoop() {
@@ -166,8 +207,10 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
         }
         if ticks.isMultiple(of: 10) {
           let status = EmbeddedCodexBridge.sidebandStatus()
-          if status.contains("failed") || status.hasPrefix("server error") || status == "server closed" {
-            self?.state = .failed("The visual context channel disconnected. Tap to reconnect.")
+          self?.sidebandStatus = LogSanitizer.sanitize(status, limit: 160)
+          if EmbeddedCodexBridge.isSidebandTerminal(status) {
+            self?.lastRealtimeError = LogSanitizer.sanitize(status, limit: 160)
+            self?.state = .failed("The assistant's task channel disconnected. Tap to reconnect.")
             return
           }
         }
@@ -177,96 +220,40 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     }
   }
 
-
   private func handleDelegation(_ event: [String: Any]) {
     guard let item = event["item"] as? [String: Any],
           item["type"] as? String == "delegation",
           item["target"] as? String == "client",
           let handoffId = item["id"] as? String else { return }
     let content = item["content"] as? [[String: Any]] ?? []
-    let question = content.compactMap { entry -> String? in
+    let request = content.compactMap { entry -> String? in
       guard entry["type"] as? String == "input_text" else { return nil }
       return entry["text"] as? String
     }.joined()
-    visionTask?.cancel()
-    visionTask = Task { [weak self] in
-      guard let self else { return }
-      let result: String
-      do {
-        result = try await inspectCurrentView(question: question)
-      } catch {
-        result = "I could not inspect the current view. Ask the user to hold still and try again."
+    releaseAssistantAudio()
+    orchestrator.handleDelegation(handoffID: handoffId, text: request) { [weak self] text in
+      let delivered = EmbeddedCodexBridge.completeDelegation(handoffId: handoffId, text: text)
+      if !delivered {
+        self?.state = .failed("The assistant's task channel disconnected. Tap to reconnect.")
       }
-      guard !Task.isCancelled else { return }
-      sendDelegationContext(result, handoffId: handoffId)
+      return delivered
     }
   }
 
-  private func sendDelegationContext(_ text: String, handoffId: String) {
-    guard EmbeddedCodexBridge.completeDelegation(handoffId: handoffId, text: text) else {
-      state = .failed("The visual context channel disconnected. Tap to reconnect.")
-      return
-    }
-  }
-
-
-  private func inspectCurrentView(question: String) async throws -> String {
-    guard let jpeg = latestVisionJPEG,
-          Date().timeIntervalSince(latestVisionDate) <= 10 else {
-      return "No fresh camera frame is available. Ask the user to point the camera and try again."
-    }
-    let tokens = try await ChatGPTAuthSession.shared.freshTokens()
-    let available = ChatGPTAuthSession.shared.availableModels
-    guard let model = available.first(where: { $0 == "gpt-5.6-sol" }) ?? available.first else {
-      throw RealtimeError.noModel
-    }
-    var components = URLComponents(
-      url: ChatGPTAPI.codexBase.appending(path: "responses"),
-      resolvingAgainstBaseURL: false)!
-    components.queryItems = [URLQueryItem(name: "client_version", value: ChatGPTAPI.clientVersion)]
-    guard let url = components.url else { throw RealtimeError.invalidResponse }
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    request.timeoutInterval = 45
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setValue("text/event-stream, application/json", forHTTPHeaderField: "Accept")
-    for (name, value) in try ChatGPTAPI.codexHeaders(tokens: tokens) {
-      request.setValue(value, forHTTPHeaderField: name)
-    }
-    request.httpBody = try JSONSerialization.data(withJSONObject: [
-      "model": model,
-      "stream": true,
-      "store": false,
-      "instructions":
-        "You are GlassifAI visual perception. Answer only from the current image, briefly and concretely. " +
-        "State uncertainty instead of guessing.",
-      "reasoning": ["effort": "low", "summary": "auto"],
-      "text": ["verbosity": "low"],
-      "include": ["reasoning.encrypted_content"],
-      "input": [[
-        "role": "user",
-        "content": [
-          ["type": "input_text", "text": question.isEmpty ? "Describe the current view." : question],
-          ["type": "input_image", "image_url": "data:image/jpeg;base64,\(jpeg.base64EncodedString())"],
-        ],
-      ]],
-    ])
-    let (data, response) = try await URLSession.shared.data(for: request)
-    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-          let body = String(data: data, encoding: .utf8) else {
-      throw RealtimeError.visionFailed
-    }
-    let text = Self.parseResponsesText(body).trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { throw RealtimeError.visionFailed }
-    return String(text.prefix(2_000))
+  private func handleMediaServicesReset() async {
+    guard isActive else { return }
+    await tearDown()
+    state = .failed("iOS restarted the audio system. Tap to reconnect.")
   }
 
   private func tearDown() async {
-    visionTask?.cancel()
     sidebandEventTask?.cancel()
     sidebandEventTask = nil
+    audioSuppressionTask?.cancel()
+    audioSuppressionTask = nil
+    isAssistantAudioSuppressed = false
     isMicrophoneMuted = false
-    visionTask = nil
+    orchestrator.endVoiceSession()
     EmbeddedCodexBridge.closeRealtime()
     dataChannel?.delegate = nil
     dataChannel?.close()
@@ -281,8 +268,11 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       self.audioRouteObserver = nil
     }
     prefersBluetoothHFP = false
+    forcesBuiltInAudio = false
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    AudioRouteMonitor.shared.refresh()
   }
+
   private func configureAudioSession(prefersBluetoothHFP: Bool) throws {
     let session = AVAudioSession.sharedInstance()
     var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .mixWithOthers]
@@ -306,6 +296,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     }
 
     try applyPreferredAudioRoute()
+    AudioRouteMonitor.shared.start()
   }
 
   private func refreshPreferredAudioRoute() {
@@ -314,25 +305,77 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     } catch {
       NSLog("[GlassifAI] audio route refresh failed: %@", error.localizedDescription)
     }
+    AudioRouteMonitor.shared.refresh()
   }
 
   private func applyPreferredAudioRoute() throws {
-    guard prefersBluetoothHFP else { return }
     let session = AVAudioSession.sharedInstance()
-    if session.currentRoute.inputs.contains(where: { $0.portType == .bluetoothHFP }) {
+    if forcesBuiltInAudio {
+      if let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }),
+         session.currentRoute.inputs.first?.portType != .builtInMic {
+        try session.setPreferredInput(builtIn)
+      }
+      if !session.currentRoute.outputs.contains(where: { $0.portType == .builtInSpeaker }) {
+        try session.overrideOutputAudioPort(.speaker)
+      }
       return
     }
-    if let glassesInput = session.availableInputs?.first(where: { $0.portType == .bluetoothHFP }) {
+    guard prefersBluetoothHFP else { return }
+    let glassesName = AudioRouteMonitor.shared.glassesName
+    if session.currentRoute.inputs.contains(where: {
+      $0.portType == .bluetoothHFP && AudioRouteMonitor.isGlassesPortName($0.portName, glassesName: glassesName)
+    }) {
+      return
+    }
+    if let glassesInput = AudioRouteMonitor.preferredGlassesInput(
+      from: session.availableInputs, glassesName: glassesName) {
+      if session.currentRoute.inputs.first?.uid == glassesInput.uid { return }
       try session.overrideOutputAudioPort(.none)
       try session.setPreferredInput(glassesInput)
       NSLog("[GlassifAI] audio routed to Bluetooth HFP: %@", glassesInput.portName)
     } else {
+      if session.currentRoute.inputs.contains(where: { $0.portType == .bluetoothHFP }) {
+        // Another hands-free headset is active and the glasses are not
+        // identifiable; leave the user's current choice alone.
+        return
+      }
       if session.currentRoute.outputs.contains(where: { $0.portType == .builtInSpeaker }) {
         return
       }
       try session.overrideOutputAudioPort(.speaker)
       NSLog("[GlassifAI] Bluetooth HFP unavailable; using iPhone audio")
     }
+  }
+
+  // MARK: Local "stop speaking"
+
+  private func remoteAudioTracks() -> [LKRTCAudioTrack] {
+    guard let peer else { return [] }
+    return peer.transceivers.compactMap { transceiver in
+      guard transceiver.mediaType == .audio else { return nil }
+      return transceiver.receiver.track as? LKRTCAudioTrack
+    }
+  }
+
+  private func suppressAssistantAudio() {
+    let tracks = remoteAudioTracks()
+    guard !tracks.isEmpty else { return }
+    tracks.forEach { $0.isEnabled = false }
+    isAssistantAudioSuppressed = true
+    audioSuppressionTask?.cancel()
+    audioSuppressionTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 8_000_000_000)
+      guard !Task.isCancelled else { return }
+      self?.releaseAssistantAudio()
+    }
+  }
+
+  private func releaseAssistantAudio() {
+    guard isAssistantAudioSuppressed else { return }
+    audioSuppressionTask?.cancel()
+    audioSuppressionTask = nil
+    remoteAudioTracks().forEach { $0.isEnabled = true }
+    isAssistantAudioSuppressed = false
   }
 
   private func createOffer(
@@ -409,19 +452,41 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       if let next = payload["new_state"] as? String { applyLegacyState(next) }
     case "input_transcript.added":
       if let text = (event["item"] as? [String: Any])?["text"] as? String {
+        releaseAssistantAudio()
+        if !userTurnOpen {
+          userTurnOpen = true
+          userTranscript = ""
+          assistantCaption = ""
+        }
         userTranscript += text
       }
     case "output_transcript.added":
       if let text = (event["item"] as? [String: Any])?["text"] as? String {
+        if !assistantTurnOpen {
+          assistantTurnOpen = true
+          assistantCaption = ""
+        }
         assistantCaption += text
         state = .speaking
+        orchestrator.noteAssistantSpeaking()
       }
     case "turn.done":
       if let turn = event["turn"] as? [String: Any],
          let role = turn["role"] as? String,
          let text = turn["transcript"] as? String {
-        if role == "user" { userTranscript = text; state = .thinking }
-        if role == "assistant" { assistantCaption = text; state = .listening }
+        if role == "user" {
+          userTurnOpen = false
+          userTranscript = text
+          state = .thinking
+          orchestrator.noteUserTurn(text)
+        }
+        if role == "assistant" {
+          assistantTurnOpen = false
+          assistantCaption = text
+          state = .listening
+          orchestrator.noteAssistantTurn(text)
+          releaseAssistantAudio()
+        }
       }
     case "delegation.created":
       state = .thinking
@@ -432,7 +497,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     case "live_captioning_text":
       assistantCaption = (payload["text"] ?? payload["transcript"]) as? String ?? assistantCaption
     case "error":
-      state = .failed((event["message"] as? String) ?? "ChatGPT Live reported an error.")
+      let message = LogSanitizer.sanitize((event["message"] as? String) ?? "ChatGPT Live reported an error.")
+      lastRealtimeError = message
+      state = .failed(message)
     case "goodbye", "close_ready":
       Task { await stop() }
     default:
@@ -499,31 +566,6 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     default: break
     }
   }
-
-  private static func parseResponsesText(_ body: String) -> String {
-    let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
-    if !trimmed.hasPrefix("data:") && !trimmed.hasPrefix("event:") {
-      guard let data = body.data(using: .utf8),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "" }
-      return json["output_text"] as? String ?? ""
-    }
-    var output = ""
-    for line in body.split(separator: "\n") where line.hasPrefix("data:") {
-      let raw = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-      guard raw != "[DONE]", let data = raw.data(using: .utf8),
-            let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-      if event["type"] as? String == "response.output_text.delta", let delta = event["delta"] as? String {
-        output += delta
-      }
-    }
-    return output
-  }
-
-  private static let realtimePrompt =
-    "You are GlassifAI, a calm, fast, eyes-free assistant for smart glasses. Keep speech concise, " +
-    "natural, and interruptible. Never pretend to see. Whenever the user refers to what they see, " +
-    "asks about an object, scene, sign, document, person, color, or location, delegate to the client " +
-    "for current visual context. Use the returned speakable context to answer naturally."
 }
 
 extension GlassifAIRealtimeSession: LKRTCPeerConnectionDelegate {
@@ -535,6 +577,7 @@ extension GlassifAIRealtimeSession: LKRTCPeerConnectionDelegate {
     if newState == .failed {
       Task { @MainActor in
         await tearDown()
+        lastRealtimeError = "ICE connection failed"
         state = .failed("The voice connection was interrupted. Tap to reconnect.")
       }
     }
@@ -561,8 +604,6 @@ private enum RealtimeError: LocalizedError {
   case offerFailed
   case invalidResponse
   case connectionTimedOut
-  case noModel
-  case visionFailed
   case signalingFailed(String)
 
   var errorDescription: String? {
@@ -573,8 +614,6 @@ private enum RealtimeError: LocalizedError {
     case .offerFailed: "The iPhone could not create a voice offer."
     case .invalidResponse: "ChatGPT returned an invalid response."
     case .connectionTimedOut: "ChatGPT took too long to connect."
-    case .noModel: "No compatible ChatGPT model is available."
-    case .visionFailed: "The current view could not be inspected."
     case .signalingFailed(let message): message
     }
   }

@@ -133,10 +133,13 @@ final class ChatGPTAuthSession {
     status = .unauthenticated
   }
 
-  func freshTokens() async throws -> ChatGPTAuthTokens {
+  /// `forceRefresh` is used after the server rejects a token that still looked
+  /// valid locally (for example after a password change or revoked session).
+  func freshTokens(forceRefresh: Bool = false) async throws -> ChatGPTAuthTokens {
     if let refreshTask { return try await refreshTask.value }
     guard let stored = try ChatGPTKeychain.load() else { throw ChatGPTAuthError.notAuthenticated }
-    if let expiry = stored.expiresAt,
+    if !forceRefresh,
+       let expiry = stored.expiresAt,
        expiry > Date().timeIntervalSince1970 * 1_000 + 60_000,
        stored.accountId != nil {
       return stored
