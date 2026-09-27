@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - autoloom-glasses-next
+      - autoloom-glasses-vNext
 
 concurrency:
   group: ipa-${{ github.ref }}

@@ -1,5 +1,27 @@
 # Baseline — last device-verified working build
 
+## Current baseline for `autoloom-glasses-vNext` (recorded 2026-09-27)
+
+| Item | Value |
+| --- | --- |
+| Working build on the iPhone | CI run [36303697299](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36303697299), artifact `AutoLoomMediaGlasses-unsigned-IPAs` (Debug + Release, expires 2026-12-26) |
+| Commit of that build | `44f089db656d` ("docs: voice invocation research, Ray-Ban vision root cause and quality path") |
+| Rollback tag | `baseline-44f089d-vision-working` (annotated) |
+| Branch head when vNext started | `f24256bb9ae95295907788c57021d9affd82ef37` on `autoloom-glasses-next`. It differs from `44f089d` only in `TEST_REPORT.md`, so its app code is identical to the installed build |
+| New development branch | `autoloom-glasses-vNext` (from `f24256b`). `main` and `autoloom-glasses-next` are left untouched |
+
+Verified on the physical device by the owner, per the vNext brief:
+- The app installs and launches; ChatGPT device-code sign-in works.
+- Natural realtime voice works (`gpt-live-1-codex`), and Ray-Ban microphone and speaker routing work.
+- The iPhone camera works. Ray-Ban preview and Ray-Ban vision work (vision repaired in `a4d0d9a`).
+- Debug and Release builds and CI tests pass.
+
+Rollback: install the IPA from run 36303697299, or rebuild it with `git checkout baseline-44f089d-vision-working`, or run the workflow on `autoloom-glasses-next`.
+
+---
+
+## Original baseline (upstream fork state)
+
 Recorded 2026-09-27 before any AutoLoom Media Glasses work started.
 
 ## Repository state
