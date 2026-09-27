@@ -68,7 +68,7 @@ class ViewModelIntegrationTests: XCTestCase {
     XCTAssertEqual(viewModel.streamingStatus, .stopped)
     XCTAssertFalse(viewModel.isStreaming)
     XCTAssertFalse(viewModel.hasReceivedFirstFrame)
-    XCTAssertNil(viewModel.currentVideoFrame)
+    FrameStore.shared.reset()
 
     // Start streaming session
     await viewModel.handleStartStreaming()
@@ -79,7 +79,9 @@ class ViewModelIntegrationTests: XCTestCase {
     // Verify streaming is active and receiving frames
     XCTAssertTrue(viewModel.isStreaming)
     XCTAssertTrue(viewModel.hasReceivedFirstFrame)
-    XCTAssertNotNil(viewModel.currentVideoFrame)
+    // Frames now go to the shared latest-frame store (the preview layer draws
+    // them directly); `currentVideoFrame` is only filled in legacy preview mode.
+    XCTAssertNotNil(FrameStore.shared.latestFrame())
     XCTAssertTrue([.streaming, .waiting].contains(viewModel.streamingStatus))
 
     // Stop streaming
@@ -121,7 +123,7 @@ class ViewModelIntegrationTests: XCTestCase {
     XCTAssertEqual(viewModel.streamingStatus, .stopped)
     XCTAssertFalse(viewModel.isStreaming)
     XCTAssertFalse(viewModel.hasReceivedFirstFrame)
-    XCTAssertNil(viewModel.currentVideoFrame)
+    FrameStore.shared.reset()
 
     // Start streaming session
     await viewModel.handleStartStreaming()
@@ -132,7 +134,9 @@ class ViewModelIntegrationTests: XCTestCase {
     // Verify streaming is active and receiving frames
     XCTAssertTrue(viewModel.isStreaming)
     XCTAssertTrue(viewModel.hasReceivedFirstFrame)
-    XCTAssertNotNil(viewModel.currentVideoFrame)
+    // Frames now go to the shared latest-frame store (the preview layer draws
+    // them directly); `currentVideoFrame` is only filled in legacy preview mode.
+    XCTAssertNotNil(FrameStore.shared.latestFrame())
     XCTAssertTrue([.streaming, .waiting].contains(viewModel.streamingStatus))
 
     // Capture photo while streaming

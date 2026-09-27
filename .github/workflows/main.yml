@@ -45,8 +45,9 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             native/GlassifAICodexBridge/target
-          key: rust-ios-${{ env.RUSTC_VERSION_HASH }}-${{ hashFiles('native/GlassifAICodexBridge/Cargo.lock') }}
+          key: rust-ios-host-${{ env.RUSTC_VERSION_HASH }}-${{ hashFiles('native/GlassifAICodexBridge/Cargo.lock') }}
           restore-keys: |
+            rust-ios-host-${{ env.RUSTC_VERSION_HASH }}-
             rust-ios-${{ env.RUSTC_VERSION_HASH }}-
 
       - name: Build native Codex framework
@@ -90,3 +91,6 @@ jobs:
         run: |
           chmod +x ./scripts/ci-unit-tests.sh
           ./scripts/ci-unit-tests.sh
+
+      - name: Native bridge unit tests (host)
+        run: cargo test --manifest-path native/GlassifAICodexBridge/Cargo.toml --lib
