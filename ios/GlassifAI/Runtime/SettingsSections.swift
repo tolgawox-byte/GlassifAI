@@ -115,11 +115,13 @@ struct PrivacySettingsView: View {
       Section("What is stored on this iPhone") {
         privacyRow("Conversation context", "Kept in memory for the current app session only; cleared when the app quits or you wipe it below.", "text.bubble")
         privacyRow("On-device memory", "Only if you turn it on in Settings → Memory. Editable and deletable.", "brain")
+        privacyRow("AutoLoom notes", "Notes and reports you ask to save, only on this iPhone (Settings → AutoLoom Tasks & Notes). Deletable.", "note.text")
         privacyRow("Diagnostics", "In-memory metrics and sanitized error text; no audio, images, or tokens are logged.", "stethoscope")
       }
       Section("Safety") {
         privacyRow("Untrusted content", "Text from web pages, images, signs, and QR codes is treated as information, never as instructions.", "shield")
-        privacyRow("Actions", "The app cannot send email or messages, buy things, change calendars, delete files, push code, or deploy. Such requests are declined.", "hand.raised")
+        privacyRow("Actions", "Reminders, calendar events and notes are saved only after your spoken yes or a tap. Calls, messages, links, directions and sharing open only after a tap, and the system app lets you review before anything is sent. The app cannot send email, buy things, delete data, post publicly, push code, or deploy.", "hand.raised")
+        privacyRow("Images", "Camera images are kept in memory only for the request that needs them and are never saved. On-device text recognition runs on the iPhone.", "photo")
       }
       Section {
         Button("Delete all local data", role: .destructive) { confirmWipe = true }
@@ -128,13 +130,14 @@ struct PrivacySettingsView: View {
             .foregroundStyle(.green)
         }
       } footer: {
-        Text("Deletes on-device memory, the current conversation context, sources, and diagnostics. Your ChatGPT sign-in stays until you disconnect it under ChatGPT account.")
+        Text("Deletes on-device memory, AutoLoom notes, the current conversation context, sources, and diagnostics. Your ChatGPT sign-in stays until you disconnect it under ChatGPT account.")
       }
     }
     .navigationTitle("Privacy")
     .confirmationDialog("Delete all local data?", isPresented: $confirmWipe, titleVisibility: .visible) {
       Button("Delete", role: .destructive) {
         LocalMemoryStore.shared.deleteAll()
+        AutoLoomNotesStore.shared.deleteAll()
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()
         wiped = true
@@ -221,9 +224,20 @@ struct DiagnosticsView: View {
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
   @ObservedObject private var ledger = AssistantOrchestrator.shared.ledger
   @ObservedObject private var audioRoute = AudioRouteMonitor.shared
+  @ObservedObject private var liveVision = LiveVisionController.shared
   @State private var metrics = FrameMetricsSnapshot()
   @State private var sidebandStatus = "—"
   @State private var copied = false
+
+  private var thermalLabel: String {
+    switch ProcessInfo.processInfo.thermalState {
+    case .nominal: "nominal"
+    case .fair: "fair"
+    case .serious: "serious (Live Vision slows down)"
+    case .critical: "critical (Live Vision paused)"
+    @unknown default: "unknown"
+    }
+  }
 
   var body: some View {
     List {
@@ -237,16 +251,24 @@ struct DiagnosticsView: View {
         row("Provider", "ChatGPT account · chatgpt.com/backend-api/codex")
         row("OAuth", oauthStatus)
         row("Token", tokenExpiry)
-        row("Realtime model", "gpt-live-1-codex")
+        row("Realtime model", ModelSelector.realtimeModel)
         row("Realtime start", voice?.startMode?.rawValue ?? "not started")
         row("Voice", AssistantPreferences.voice)
-        row("Vision model", ModelSelector.model(for: .vision, available: models) ?? "—")
-        row("Web model", ModelSelector.model(for: .webSearch, available: models, needsHostedWebSearch: true) ?? "—")
-        row("Models available", "\(models.count)")
+        row("Service default model", catalog.first(where: \.isListed)?.slug ?? models.first ?? "—")
+        row("General model", pick(.generalChat))
+        row("Vision model", pick(.vision, images: true))
+        row("Reasoning model", pick(.deepReasoning))
+        row("Web model", pick(.webSearch, web: true))
+        row("Models available", "\(models.count)" + (ChatGPTAuthSession.shared.modelsError.map { " — \($0)" } ?? ""))
+        row("GPT-6 Astra", ModelRouting.gpt6AstraStatus(catalog: catalog, health: ModelHealth.shared.entries))
+        row("Model status", modelHealthSummary)
       }
       Section("Realtime") {
         row("Voice state", voiceState)
         row("Sideband", sidebandStatus)
+        row("Connect time", voice?.lastConnectMs.map { "\($0) ms" } ?? "—")
+        row("Response latency (median)", voice?.responseLatencyMedianMs.map { "\($0) ms" } ?? "—")
+        row("Auto-reconnects", "\(voice?.reconnectCount ?? 0)" + (voice?.lastReconnectReason.map { " — last: \($0)" } ?? ""))
         row("Last realtime error", voice?.lastRealtimeError ?? "none")
       }
       Section("Ray-Ban (Meta DAT)") {
@@ -270,10 +292,23 @@ struct DiagnosticsView: View {
         row("Copy fallbacks", "\(metrics.copyFailures)")
         row("FrameStore sequence", "\(metrics.latestSequence)")
         row("Vision image mode", GlassesVisionCaptureMode.current.label)
+        row("Vision quality", VisionQualityPreference.current.label)
+        row("Text detail mode", VisionAssistPreferences.textAssist ? "on (on-device OCR + zoomed crop)" : "off")
+        row("Enlarge for reading", VisionAssistPreferences.upscale ? "on (≤1.6×, patch budget)" : "off")
+        row("Best-frame window", "last \(FrameStore.recentCapacity) frames, ≤\(Int(AssistantOrchestrator.maxFrameAge * 1_000)) ms old")
         row("Still photo support", "In-stream capture (DAT \(GlassesSDKInfo.datVersion)) = a frame of the video stream; full-resolution photo needs DAT 1.0")
         row("Photos requested / received / failed", "\(metrics.photosRequested) / \(metrics.photosReceived) / \(metrics.photoFailures)")
         row("Last photo", "\(metrics.lastPhotoResolution)" + (metrics.lastPhotoLatencyMs.map { " in \($0) ms" } ?? ""))
         row("Last AI image", metrics.lastVisionImage)
+      }
+      Section("Live Vision") {
+        row("Status", liveVision.status.label)
+        row("Started", liveVision.startedAt.map { $0.formatted(date: .omitted, time: .standard) } ?? "—")
+        row("Notes sent / stable skips", "\(liveVision.updateCount) / \(liveVision.skippedStable)")
+        row("Last note", liveVision.lastUpdateAt.map { $0.formatted(date: .omitted, time: .standard) } ?? "—")
+        row("Last error", liveVision.lastError ?? "none")
+        row("Last stop", liveVision.lastStopReason ?? "—")
+        row("Thermal state", thermalLabel)
       }
       Section("Camera pipeline") {
         row("Source", metrics.source)
@@ -333,6 +368,21 @@ struct DiagnosticsView: View {
   }
 
   private var models: [String] { ChatGPTAuthSession.shared.availableModels }
+  private var catalog: [CatalogModel] { ChatGPTAuthSession.shared.modelCatalog }
+
+  private func pick(_ kind: AssistantTaskKind, images: Bool = false, web: Bool = false) -> String {
+    ModelSelector.model(
+      for: kind, available: models, needsHostedWebSearch: web, catalog: catalog, needsImages: images,
+      excluded: ModelHealth.shared.failedThisRun) ?? "—"
+  }
+
+  private var modelHealthSummary: String {
+    let entries = ModelHealth.shared.entries
+    guard !entries.isEmpty else { return "no requests yet" }
+    return entries.sorted { $0.key < $1.key }
+      .map { "\($0.key): \($0.value.working ? "working" : "failed")" }
+      .joined(separator: ", ")
+  }
 
   private var requestedStream: String {
     guard let glassesStream else { return "—" }
@@ -431,8 +481,10 @@ struct DiagnosticsView: View {
     var lines: [String] = [
       "\(AutoLoomBrand.appName) diagnostics \(Date().formatted())",
       "version \(AppInfo.version) (\(AppInfo.build)) commit \(AppInfo.commit) bridge \(EmbeddedCodexBridge.bridgeVersion())",
-      "oauth: \(oauthStatus); models: \(models.count); realtime start: \(voice?.startMode?.rawValue ?? "—")",
-      "voice: \(voiceState); sideband: \(sidebandStatus); realtime error: \(voice?.lastRealtimeError ?? "none")",
+      "oauth: \(oauthStatus); models: \(models.count) [\(models.prefix(12).joined(separator: ","))]; realtime \(ModelSelector.realtimeModel) start: \(voice?.startMode?.rawValue ?? "—")",
+      "model picks: general \(pick(.generalChat)); vision \(pick(.vision, images: true)); reasoning \(pick(.deepReasoning)); web \(pick(.webSearch, web: true)); status \(modelHealthSummary)",
+      "gpt-6 astra: \(ModelRouting.gpt6AstraStatus(catalog: catalog, health: ModelHealth.shared.entries))",
+      "voice: \(voiceState); sideband: \(sidebandStatus); connect \(voice?.lastConnectMs.map { "\($0) ms" } ?? "—"); response median \(voice?.responseLatencyMedianMs.map { "\($0) ms" } ?? "—"); reconnects \(voice?.reconnectCount ?? 0) (\(voice?.lastReconnectReason ?? "—")); realtime error: \(voice?.lastRealtimeError ?? "none")",
       "glasses: \(glassesStream?.lastStreamState ?? "—"); DAT \(GlassesSDKInfo.datVersion); device \(glassesStream?.deviceDescription ?? "—"); profile \(glassesStream?.streamProfile.rawValue ?? "—"); requested \(requestedStream); actual \(actualStream); transport note \(glassesStream?.transportNote ?? "none"); stream error \(glassesStream?.lastStreamError ?? "none")",
       "camera: \(metrics.source) \(metrics.inputResolution) \(metrics.pixelFormat) fps \(String(format: "%.1f", metrics.measuredFPS)) received \(metrics.framesReceived) rendered \(metrics.previewRendered) dropped \(metrics.previewDropped) failures \(metrics.previewFailures)",
       "glasses samples: \(metrics.glassesCompressed.map { $0 ? "compressed" : "raw" } ?? "—") \(metrics.glassesCodec) \(metrics.glassesSampleSize) raw \(metrics.rawSamples) compressed \(metrics.compressedSamples) decoded \(metrics.decodedFrames) decodeFail \(metrics.decodeFailures) copyFallback \(metrics.copyFailures) seq \(metrics.latestSequence)",
@@ -441,6 +493,7 @@ struct DiagnosticsView: View {
       "latency: processing \(ms(metrics.processingMedianMs))/\(ms(metrics.processingP95Ms)) capture→phone \(ms(metrics.transportMedianMs))/\(ms(metrics.transportP95Ms)) frame age \(metrics.lastFrameAgeMs.map(String.init) ?? "—") ms; preview \(metrics.previewMode)",
       "audio: mic \(audioRoute.inputSummary); speaker \(audioRoute.outputSummary); interrupted \(audioRoute.isInterrupted); last \(audioRoute.lastEvent)",
       "web: enabled \(AssistantPreferences.webSearchEnabled); \(orchestrator.lastWebStatus)",
+      "live vision: \(liveVision.status.label); notes \(liveVision.updateCount); stable skips \(liveVision.skippedStable); error \(liveVision.lastError ?? "none"); last stop \(liveVision.lastStopReason ?? "—"); thermal \(thermalLabel)",
     ]
     for record in ledger.records.suffix(6) {
       let timeline = record.timeline.breakdown.map { "\($0.stage)=\($0.ms)" }.joined(separator: " ")

@@ -11,9 +11,11 @@ enum AssistantTaskKind: String, Codable, CaseIterable, Equatable {
   case deepReasoning = "DEEP_REASONING"
   case localMemory = "LOCAL_MEMORY"
   case authorizedAction = "AUTHORIZED_ACTION"
+  /// Research with live web search, written up and saved as a note.
+  case report = "REPORT"
 
   var usesCamera: Bool { self == .vision || self == .visionPlusWeb }
-  var usesWeb: Bool { self == .webSearch || self == .visionPlusWeb }
+  var usesWeb: Bool { self == .webSearch || self == .visionPlusWeb || self == .report }
 
   var displayName: String {
     switch self {
@@ -24,6 +26,7 @@ enum AssistantTaskKind: String, Codable, CaseIterable, Equatable {
     case .deepReasoning: "Reasoning"
     case .localMemory: "Memory"
     case .authorizedAction: "Action"
+    case .report: "Report"
     }
   }
 }
@@ -119,13 +122,36 @@ struct VisionFrameInfo: Equatable {
   let captureLatencyMs: Int?
   let reencoded: Bool
   let detail: VisionDetail
+  /// How the frame was chosen among recent frames (video only).
+  var selection: String?
+  /// On-device OCR used as a hint: line count, confidence, time.
+  var ocr: String?
+  /// Enlarged text crop sent as a second image.
+  var crop: String?
+  /// The frame was enlarged toward the patch budget for reading.
+  var upscaled = false
+  /// `detail` value sent with the image(s).
+  var imageDetail = "high"
+  /// Total image bytes in the request (all images).
+  var totalImageBytes: Int?
+
+  /// VIDEO, PHOTO, OCR+VIDEO or OCR+PHOTO.
+  var sourceLabel: String {
+    ocr == nil ? kind.rawValue : "OCR+\(kind.rawValue)"
+  }
 
   var summary: String {
     let quality = reencoded ? "JPEG q\(String(format: "%.2f", jpegQuality))" : "original JPEG"
     let sequenceText = sequence.map { " #\($0)" } ?? ""
     let latency = captureLatencyMs.map { ", captured in \($0) ms" } ?? ""
-    return "\(kind.rawValue) \(source)\(sequenceText) \(pixelFormat) \(sourceWidth)×\(sourceHeight) → " +
-      "\(encodedWidth)×\(encodedHeight), \(quality), \(jpegBytes / 1_024) KB, age \(frameAgeMs) ms\(latency), \(detail.rawValue) detail"
+    var text = "\(sourceLabel) \(source)\(sequenceText) \(pixelFormat) \(sourceWidth)×\(sourceHeight) → " +
+      "\(encodedWidth)×\(encodedHeight)\(upscaled ? " (upscaled)" : ""), \(quality), \(jpegBytes / 1_024) KB, " +
+      "age \(frameAgeMs) ms\(latency), \(detail.label) profile, detail=\(imageDetail)"
+    if let selection { text += "; \(selection)" }
+    if let crop { text += "; crop \(crop)" }
+    if let ocr { text += "; OCR \(ocr)" }
+    if let totalImageBytes, totalImageBytes != jpegBytes { text += "; request images \(totalImageBytes / 1_024) KB" }
+    return text
   }
 }
 
@@ -143,6 +169,8 @@ struct AssistantTaskRecord: Identifiable, Equatable {
   var phase: AssistantTaskPhase = .routing
   var timeline: TaskTimeline
   var frame: VisionFrameInfo?
+  /// Vision profile chosen for this task (FAST / BALANCED / HIGH_DETAIL).
+  var visionProfile: VisionDetail?
   var sourceCount = 0
 
   var cancelled: Bool {

@@ -12,6 +12,8 @@ struct GlassifAIExperienceView: View {
 
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
   @ObservedObject private var audioRoute = AudioRouteMonitor.shared
+  @ObservedObject private var liveVision = LiveVisionController.shared
+  @State private var liveVisionNotice: String?
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.debugOverlayKey) private var showsDebugOverlay = false
   @State private var showSettings = false
@@ -41,7 +43,11 @@ struct GlassifAIExperienceView: View {
 
       VStack(spacing: 10) {
         topBar
-        cameraSourcePicker
+        HStack(spacing: 8) {
+          cameraSourcePicker
+          liveVisionButton
+        }
+        if liveVision.isActive || liveVisionNotice != nil { liveVisionChip }
         if showsDebugOverlay { debugOverlay }
         Spacer(minLength: 12)
         conversationPanel
@@ -200,6 +206,69 @@ struct GlassifAIExperienceView: View {
     .background(.ultraThinMaterial, in: Capsule())
   }
 
+  // MARK: Live Vision
+
+  private var liveVisionButton: some View {
+    Button {
+      if liveVision.isActive {
+        liveVision.stop(reason: "stopped on screen")
+      } else if captureSource == .off {
+        liveVisionNotice = word("Turn on a camera first", "Önce bir kamera açın")
+      } else if !voice.isActive {
+        liveVisionNotice = word("Start a conversation first", "Önce konuşmayı başlatın")
+      } else {
+        _ = liveVision.start()
+      }
+    } label: {
+      Image(systemName: liveVision.isActive ? "eye.fill" : "eye")
+        .font(.subheadline.weight(.semibold))
+        .frame(width: 44, height: 44)
+        .foregroundStyle(liveVision.isActive ? Color.white : Color.white.opacity(0.85))
+        .background(
+          liveVision.isActive ? AutoLoomTheme.electricBlue.opacity(0.85) : Color.clear,
+          in: Circle())
+        .background(.ultraThinMaterial, in: Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(liveVision.isActive ? "Stop Live Vision" : "Start Live Vision")
+    .accessibilityHint("While on, the assistant keeps an eye on the camera view during the conversation")
+    .task(id: liveVisionNotice) {
+      guard liveVisionNotice != nil else { return }
+      try? await Task.sleep(nanoseconds: 3_000_000_000)
+      liveVisionNotice = nil
+    }
+  }
+
+  private var liveVisionChip: some View {
+    HStack(spacing: 7) {
+      if liveVision.isActive {
+        Circle()
+          .fill(Color.red)
+          .frame(width: 8, height: 8)
+        Text("\(word("Live Vision", "Canlı Görüş")) · \(liveVisionStatus)")
+      } else if let notice = liveVisionNotice {
+        Image(systemName: "info.circle")
+        Text(notice)
+      }
+    }
+    .font(.caption.weight(.semibold))
+    .lineLimit(1)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 6)
+    .background(.ultraThinMaterial, in: Capsule())
+    .accessibilityElement(children: .combine)
+  }
+
+  private var liveVisionStatus: String {
+    let count = liveVision.updateCount
+    switch liveVision.status {
+    case .off: return word("off", "kapalı")
+    case .watching: return word("watching", "izliyor") + (count > 0 ? " · \(count)" : "")
+    case .describing: return word("looking", "bakıyor")
+    case .paused(let reason): return word("paused", "duraklatıldı") + " (\(reason))"
+    }
+  }
+
   private var debugOverlay: some View {
     VStack(alignment: .leading, spacing: 2) {
       if captureSource == .glasses {
@@ -227,6 +296,10 @@ struct GlassifAIExperienceView: View {
 
   private var conversationPanel: some View {
     VStack(spacing: 12) {
+      if let pending = orchestrator.pendingAction {
+        PendingActionCard(pending: pending)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
       if !orchestrator.sources.isEmpty { sourcesStrip }
       if let question = orchestrator.typedQuestion { typedAnswerCard(question: question) }
       if let caption {
@@ -401,7 +474,9 @@ struct GlassifAIExperienceView: View {
     if voice.isMicrophoneMuted { return (word("Mic muted", "Mikrofon kapalı"), "mic.slash.fill", false) }
     if case .failed(let message) = voice.state { return (message, "exclamationmark.triangle.fill", true) }
     switch orchestrator.activity {
-    case .seeing: return (word("Seeing", "Görüntüyü inceliyor"), "eye", false)
+    case .seeing: return (word("Looking", "Bakıyor"), "eye", false)
+    case .reading: return (word("Reading", "Okuyor"), "text.viewfinder", false)
+    case .acting: return (word("Acting", "İşlem yapıyor"), "checklist", false)
     case .searching: return (word("Searching", "Araştırıyor"), "globe", false)
     case .thinking: return (word("Thinking", "Düşünüyor"), "ellipsis", false)
     case nil: break

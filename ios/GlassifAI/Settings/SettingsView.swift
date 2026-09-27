@@ -79,6 +79,11 @@ struct SettingsView: View {
   @AppStorage(AssistantPreferences.regionKey) private var region = ""
   @AppStorage(ModelSelector.overrideKey) private var modelOverride = ""
   @AppStorage(GlassesVisionCaptureMode.defaultsKey) private var glassesVisionCapture = GlassesVisionCaptureMode.automatic.rawValue
+  @AppStorage(VisionQualityPreference.defaultsKey) private var visionQuality = VisionQualityPreference.automatic.rawValue
+  @AppStorage(VisionAssistPreferences.textAssistKey) private var textDetailAssist = true
+  @AppStorage(VisionAssistPreferences.upscaleKey) private var upscaleForReading = true
+  @AppStorage(LiveVisionPolicy.maxMinutesKey) private var liveVisionMinutes = LiveVisionPolicy.defaultMaxMinutes
+  @AppStorage(AssistantPreferences.actionsKey) private var actionsEnabled = true
   @AppStorage(AssistantPreferences.addressedOnlyKey) private var addressedOnly = false
   @State private var assistantNameDraft = AssistantIdentity.name
 
@@ -103,12 +108,13 @@ struct SettingsView: View {
             onConnect: { showChatGPTConsent = true },
             onOpenVerification: { openURL($0) },
             onDisconnect: { Task { await chatGPT.logout() } })
-          if !chatGPT.availableModels.isEmpty {
-            Picker("Task model", selection: $modelOverride) {
-              Text("Automatic").tag("")
-              ForEach(chatGPT.availableModels, id: \.self) { model in
-                Text(model).tag(model)
-              }
+          if chatGPT.isAuthenticated {
+            NavigationLink {
+              ModelSettingsView()
+            } label: {
+              LabeledContent(
+                "AI models",
+                value: modelOverride.isEmpty ? "Automatic (\(chatGPT.modelCatalog.count) available)" : modelOverride)
             }
           }
         }
@@ -122,7 +128,24 @@ struct SettingsView: View {
             }
           }
           .pickerStyle(.segmented)
+          Picker("Vision quality", selection: $visionQuality) {
+            ForEach(VisionQualityPreference.allCases) { preference in
+              Text(preference.label).tag(preference.rawValue)
+            }
+          }
+          Toggle("Text detail mode (on-device OCR + zoomed crop)", isOn: $textDetailAssist)
+          Toggle("Enlarge small frames for reading", isOn: $upscaleForReading)
           Toggle("Show camera metrics overlay", isOn: $showsDebugOverlay)
+        }
+
+        Section(
+          header: Text("Live Vision"),
+          footer: Text("Say \"start live vision\" or tap the eye button during a conversation. The assistant then gets a short note about the view when it changes (at most every 6 seconds; slower when the phone is warm or the battery is low). Notes are not spoken or stored. Detailed questions still use a fresh full-quality frame. It stops when the conversation ends or at the time limit.")) {
+          Picker("Time limit", selection: $liveVisionMinutes) {
+            ForEach(LiveVisionPolicy.maxMinuteChoices, id: \.self) { minutes in
+              Text("\(minutes) min").tag(minutes)
+            }
+          }
         }
 
         Section(
@@ -213,6 +236,17 @@ struct SettingsView: View {
             .textInputAutocapitalization(.words)
         }
 
+        Section(
+          header: Text("iPhone actions"),
+          footer: Text("Reminders, calendar, AutoLoom notes, directions, links, copy, share, calls and messages. Saving a reminder, event or note needs your spoken yes or a tap on Save. Directions, links, calls, messages and sharing always need a tap on the phone. iOS asks for Reminders and Calendar access the first time. Email, purchases, payments, deleting data and posting are not supported.")) {
+          Toggle("Allow iPhone actions", isOn: $actionsEnabled)
+          NavigationLink {
+            TasksAndNotesView()
+          } label: {
+            Label("AutoLoom Tasks & Notes", systemImage: "note.text")
+          }
+        }
+
         Section("Hands-free, memory & privacy") {
           NavigationLink {
             HandsFreeView()
@@ -252,7 +286,9 @@ struct SettingsView: View {
           Label("Live voice through your ChatGPT account", systemImage: "waveform")
           Label("Vision on request from Ray-Ban or iPhone camera", systemImage: "eye")
           Label("Live web search with sources", systemImage: "globe")
-          Label("Not available: ChatGPT memory/history sync, Work, Codex tasks, email, calendar, purchases", systemImage: "xmark.circle")
+          Label("iPhone actions with your confirmation: reminders, calendar, notes, maps, calls, messages", systemImage: "checklist")
+          Label("Live Vision and research reports saved as notes", systemImage: "eye")
+          Label("Not available: ChatGPT memory/history sync, ChatGPT Work, Codex cloud tasks, email, purchases", systemImage: "xmark.circle")
             .foregroundStyle(.secondary)
         }
       }
@@ -284,10 +320,12 @@ struct SettingsView: View {
   }
 
   private var cameraFooter: String {
+    let source: String
     switch CaptureSource(rawValue: captureSourceRaw) ?? .iPhoneCamera {
-    case .glasses: "Uses the camera in your connected Meta glasses."
-    case .iPhoneCamera: "Uses this iPhone’s back camera."
-    case .off: "No camera. Conversation, web search, and reasoning keep working."
+    case .glasses: source = "Uses the camera in your connected Meta glasses."
+    case .iPhoneCamera: source = "Uses this iPhone’s back camera."
+    case .off: source = "No camera. Conversation, web search, and reasoning keep working."
     }
+    return source + " Reading requests (signs, labels, VINs, badges, screens) use the sharpest recent frame in high detail. Text detail mode adds on-device OCR hints and a zoomed crop of the text; neither is stored."
   }
 }

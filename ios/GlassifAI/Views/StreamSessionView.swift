@@ -71,6 +71,7 @@ struct StreamSessionView: View {
       }
       AssistantOrchestrator.shared.glassesStreamState = { stream.lastStreamState }
       let voiceSession = voice
+      LiveVisionController.shared.isVoiceActive = { voiceSession.isActive }
       VoiceStartCoordinator.shared.register(isActive: { voiceSession.isActive }) { _ in
         let source = CaptureSource(rawValue: UserDefaults.standard.string(forKey: CaptureSource.defaultsKey) ?? "")
           ?? .iPhoneCamera

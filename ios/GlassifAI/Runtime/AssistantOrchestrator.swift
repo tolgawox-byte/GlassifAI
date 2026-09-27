@@ -1,4 +1,6 @@
+import CoreImage
 import Foundation
+import QuartzCore
 import UIKit
 
 /// A web source shown as a card under the answer. Only data the search
@@ -21,8 +23,30 @@ struct WebSource: Identifiable, Equatable {
 /// What the assistant is visibly doing right now, derived from real task state.
 enum AssistantActivity: Equatable {
   case seeing
+  /// A high-detail vision request (text, labels, badges, screens).
+  case reading
   case searching
+  /// Preparing or running an iPhone action.
+  case acting
   case thinking
+}
+
+/// Everything a vision request sends besides the question: the full view,
+/// optionally an enlarged crop of the text area, and optional on-device OCR
+/// hints. All of it comes from one camera frame chosen for this task.
+struct VisionAttachment {
+  struct Image {
+    let jpeg: Data
+    let role: String
+  }
+
+  var images: [Image]
+  var ocrText: String?
+  var info: VisionFrameInfo
+  let profile: VisionDetail
+
+  var hasCrop: Bool { images.count > 1 }
+  var totalBytes: Int { images.reduce(0) { $0 + $1.jpeg.count } }
 }
 
 /// Routes every delegated request to the right capability, runs it with task
@@ -42,6 +66,9 @@ final class AssistantOrchestrator: ObservableObject {
   @Published private(set) var lastWebStatus = "Not used yet"
   @Published private(set) var lastError: String?
   @Published private(set) var activity: AssistantActivity?
+  /// An iPhone action waiting for the user's yes or tap.
+  @Published private(set) var pendingAction: PendingDeviceAction?
+  @Published private(set) var lastActionResult: String?
 
   /// The camera source currently selected in the app (persisted setting).
   func captureSource() -> CaptureSource {
@@ -61,9 +88,12 @@ final class AssistantOrchestrator: ObservableObject {
   private var awaitingSpeech: UUID?
   /// Models whose requests rejected the hosted web-search tool in this run.
   private var hostedSearchUnsupported = Set<String>()
+  /// Set if the endpoint ever rejects an explicit image `detail`.
+  private var imageDetailRejected = false
   private let client = ResponsesClient()
 
   private var availableModels: [String] { ChatGPTAuthSession.shared.availableModels }
+  private var catalog: [CatalogModel] { ChatGPTAuthSession.shared.modelCatalog }
 
   private init() {}
 
@@ -79,6 +109,7 @@ final class AssistantOrchestrator: ObservableObject {
 
   func endVoiceSession() {
     cancelAll(reason: "voice session ended", voiceOnly: true)
+    LiveVisionController.shared.stop(reason: "conversation ended")
     sessionID = nil
     awaitingSpeech = nil
   }
@@ -114,6 +145,7 @@ final class AssistantOrchestrator: ObservableObject {
   /// Deletes every piece of conversation data held in memory.
   func wipeConversationData() {
     cancelAll(reason: "privacy wipe", voiceOnly: false)
+    LiveVisionController.shared.stop(reason: "privacy wipe")
     context.reset()
     ledger.clear()
     clearSources()
@@ -138,6 +170,21 @@ final class AssistantOrchestrator: ObservableObject {
         ? "There was no task in progress to cancel."
         : "The pending task was cancelled. Nothing more will be reported from it."
       _ = deliver(reply)
+      return
+    }
+    if case .liveVision(let enable)? = envelope?.command {
+      let reply = enable
+        ? LiveVisionController.shared.start()
+        : LiveVisionController.shared.stop(reason: "stopped by voice")
+      _ = deliver(reply)
+      return
+    }
+    if case .confirmAction(let confirmed)? = envelope?.command {
+      Task { [weak self] in
+        guard let self else { return }
+        let reply = confirmed ? await self.confirmPendingAction(byVoice: true) : self.cancelPendingAction()
+        _ = deliver(reply)
+      }
       return
     }
 
@@ -222,9 +269,9 @@ final class AssistantOrchestrator: ObservableObject {
 
     // Verify the requested route against what the app can actually do now.
     if let requested = kind {
-      if requested == .authorizedAction {
+      if requested == .authorizedAction && !AssistantPreferences.actionsEnabled {
         return Outcome(
-          speakable: "This app cannot perform actions such as sending messages or emails, purchases, calendar changes, file changes, or deployments. Tell the user honestly that this is not supported yet.",
+          speakable: "iPhone actions are turned off in the app settings, so nothing was done. The user can enable them in Settings, iPhone actions.",
           kind: requested)
       }
       if requested == .localMemory && !LocalMemoryStore.shared.isEnabled {
@@ -249,9 +296,21 @@ final class AssistantOrchestrator: ObservableObject {
       }
     }
 
+    // Reading and fine-detail words in the request always get the
+    // high-detail profile, whatever the voice model chose.
+    if let kind, kind.usesCamera {
+      detail = VisionQueryClassifier.profile(for: query, requested: detail)
+    }
+
     do {
       if kind == .localMemory {
         return try await runMemory(taskID: taskID, query: query)
+      }
+      if kind == .authorizedAction {
+        return try await runAction(taskID: taskID, query: query)
+      }
+      if kind == .report {
+        return try await runReport(taskID: taskID, query: query)
       }
       if let kind {
         return try await runExecutor(
@@ -288,27 +347,30 @@ final class AssistantOrchestrator: ObservableObject {
     var tools: [[String: Any]] = []
     if camera != .off { tools.append(AssistantTools.lookAtCamera) }
     let result: ResponsesResult
-    let hostedModel = ModelSelector.model(for: nil, available: availableModels, needsHostedWebSearch: true)
+    let hostedModel = ModelSelector.model(
+      for: nil, available: availableModels, needsHostedWebSearch: true, catalog: catalog,
+      excluded: ModelHealth.shared.failedThisRun)
     if webEnabled, let hostedModel, !hostedSearchUnsupported.contains(hostedModel) {
       do {
         result = try await callModel(
-          taskID: taskID, kind: nil, query: query, tools: tools + [AssistantTools.webSearch], image: nil)
+          taskID: taskID, kind: nil, query: query, tools: tools + [AssistantTools.webSearch], attachment: nil)
       } catch ResponsesError.badRequest(let message) {
         hostedSearchUnsupported.insert(hostedModel)
         NSLog("[AutoLoom] hosted web search rejected for %@: %@", hostedModel, message)
         result = try await callModel(
-          taskID: taskID, kind: nil, query: query, tools: tools + [AssistantTools.searchWebFunction], image: nil)
+          taskID: taskID, kind: nil, query: query, tools: tools + [AssistantTools.searchWebFunction], attachment: nil)
       }
     } else {
       let fallbackTools = webEnabled ? tools + [AssistantTools.searchWebFunction] : tools
-      result = try await callModel(taskID: taskID, kind: nil, query: query, tools: fallbackTools, image: nil)
+      result = try await callModel(taskID: taskID, kind: nil, query: query, tools: fallbackTools, attachment: nil)
     }
 
     if let call = result.functionCalls.first(where: { $0.name == AssistantTools.lookAtCameraName }) {
       let arguments = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any]
       let wantsWeb = (arguments?["also_search_web"] as? Bool ?? false) && webEnabled
       let visionKind: AssistantTaskKind = wantsWeb ? .visionPlusWeb : .vision
-      let detail: VisionDetail = (arguments?["detail"] as? String) == "high" || wantsWeb ? .high : .standard
+      let requested: VisionDetail = (arguments?["detail"] as? String) == "high" || wantsWeb ? .high : .standard
+      let detail = VisionQueryClassifier.profile(for: query, requested: requested)
       ledger.update(taskID) { $0.kind = visionKind }
       return try await runExecutor(taskID: taskID, kind: visionKind, query: query, image: true, detail: detail)
     }
@@ -316,7 +378,8 @@ final class AssistantOrchestrator: ObservableObject {
       let arguments = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any]
       let searchQuery = (arguments?["query"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? query
       ledger.update(taskID) { $0.kind = .webSearch }
-      return try await runDirectSearch(taskID: taskID, kind: .webSearch, query: query, searchQueries: [searchQuery], image: nil)
+      return try await runDirectSearch(
+        taskID: taskID, kind: .webSearch, query: query, searchQueries: [searchQuery], attachment: nil)
     }
     let inferred: AssistantTaskKind = result.webSearches.isEmpty && result.citations.isEmpty ? .generalChat : .webSearch
     ledger.update(taskID) { $0.kind = inferred }
@@ -330,20 +393,23 @@ final class AssistantOrchestrator: ObservableObject {
     image: Bool,
     detail: VisionDetail = .standard
   ) async throws -> Outcome {
-    var attachment: (jpeg: Data, info: VisionFrameInfo)?
+    var attachment: VisionAttachment?
     if image {
+      ledger.update(taskID) { $0.visionProfile = detail }
       attachment = try await prepareVisionImage(taskID: taskID, detail: detail)
     }
     guard kind.usesWeb else {
       let result = try await callModel(
-        taskID: taskID, kind: kind, query: query, tools: [], image: attachment?.jpeg, detail: detail)
+        taskID: taskID, kind: kind, query: query, tools: [], attachment: attachment, detail: detail)
       return makeOutcome(kind: kind, query: query, result: result)
     }
-    let hostedModel = ModelSelector.model(for: kind, available: availableModels, needsHostedWebSearch: true)
+    let hostedModel = ModelSelector.model(
+      for: kind, available: availableModels, needsHostedWebSearch: true, catalog: catalog,
+      needsImages: attachment != nil, excluded: ModelHealth.shared.failedThisRun)
     if let hostedModel, !hostedSearchUnsupported.contains(hostedModel) {
       do {
         let result = try await callModel(
-          taskID: taskID, kind: kind, query: query, tools: [AssistantTools.webSearch], image: attachment?.jpeg,
+          taskID: taskID, kind: kind, query: query, tools: [AssistantTools.webSearch], attachment: attachment,
           detail: detail)
         return makeOutcome(kind: kind, query: query, result: result)
       } catch ResponsesError.badRequest(let message) {
@@ -354,7 +420,7 @@ final class AssistantOrchestrator: ObservableObject {
       }
     }
     return try await runDirectSearch(
-      taskID: taskID, kind: kind, query: query, searchQueries: [query], image: attachment?.jpeg)
+      taskID: taskID, kind: kind, query: query, searchQueries: [query], attachment: attachment, detail: detail)
   }
 
   /// Search through the backend search endpoint, then let the model answer
@@ -364,12 +430,15 @@ final class AssistantOrchestrator: ObservableObject {
     kind: AssistantTaskKind,
     query: String,
     searchQueries: [String],
-    image: Data?
+    attachment: VisionAttachment?,
+    detail: VisionDetail = .standard
   ) async throws -> Outcome {
     ledger.update(taskID) { $0.phase = .searching }
     refreshActivity()
     lastWebStatus = "Searching (direct): \(searchQueries.first ?? query)"
-    guard let model = ModelSelector.model(for: kind, available: availableModels) else {
+    guard let model = ModelSelector.model(
+      for: kind, available: availableModels, catalog: catalog, needsImages: attachment != nil,
+      excluded: ModelHealth.shared.failedThisRun) else {
       throw ResponsesError.failed("No compatible ChatGPT model is available for this account.")
     }
     let search = try await DirectSearchClient().search(
@@ -392,8 +461,8 @@ final class AssistantOrchestrator: ObservableObject {
     let extra = "Web search results (retrieved \(fetched.formatted(date: .abbreviated, time: .shortened))):\n" +
       UntrustedContent.wrap(rendered, origin: "web search")
     var result = try await callModel(
-      taskID: taskID, kind: kind, query: query, tools: [], image: image,
-      extraContext: extra, directSearch: true)
+      taskID: taskID, kind: kind, query: query, tools: [], attachment: attachment,
+      extraContext: extra, directSearch: true, detail: detail)
     result.completedAt = result.completedAt ?? fetched
     var outcome = makeOutcome(kind: kind, query: query, result: result)
     let hitSources = search.hits.compactMap { hit -> WebSource? in
@@ -415,6 +484,122 @@ final class AssistantOrchestrator: ObservableObject {
     return outcome
   }
 
+  // MARK: iPhone actions
+
+  /// What staging an action produced: text for the voice model, plus an
+  /// optional display text.
+  struct ActionStageResult {
+    let speakable: String
+    let display: String?
+    let failed: String?
+  }
+
+  private func runAction(taskID: UUID, query: String) async throws -> Outcome {
+    if let reason = ActionGuard.blockedReason(for: query) {
+      return Outcome(speakable: ActionGuard.declineText(reason: reason), kind: .authorizedAction)
+    }
+    let result = try await callModel(
+      taskID: taskID, kind: .authorizedAction, query: query, tools: [], attachment: nil,
+      schema: AssistantTools.actionSchema)
+    try Task.checkCancellation()
+    let staged: ActionStageResult
+    switch DeviceActionParser.parse(result.text) {
+    case .failure(let error):
+      staged = ActionStageResult(
+        speakable: error.speakable + " Tell the user briefly and ask for what is missing.",
+        display: nil, failed: "action plan: \(error.speakable)")
+    case .success(let plan):
+      staged = await stage(plan)
+    }
+    return Outcome(speakable: staged.speakable, display: staged.display, kind: .authorizedAction, failed: staged.failed)
+  }
+
+  /// Runs a read-only action now, or holds the plan until the user confirms:
+  /// saves by a spoken yes or a tap, everything that leaves the app by a tap.
+  func stage(_ plan: DeviceActionPlan) async -> ActionStageResult {
+    switch plan.kind.risk {
+    case .readOnly:
+      do {
+        let text = try await DeviceActionExecutor.shared.run(plan)
+        lastActionResult = text
+        return ActionStageResult(
+          speakable: text + "\nTell the user naturally and briefly.", display: text, failed: nil)
+      } catch {
+        let message = LogSanitizer.sanitize(error.localizedDescription)
+        return ActionStageResult(speakable: message + " Tell the user.", display: nil, failed: message)
+      }
+    case .save:
+      pendingAction = PendingDeviceAction(plan: plan)
+      return ActionStageResult(
+        speakable: "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to confirm. If they say yes, delegate TASK: confirm_action; if no, TASK: cancel_action. They can also tap Save or Cancel on the phone. Nothing is saved yet.",
+        display: plan.summary, failed: nil)
+    case .needsTap:
+      pendingAction = PendingDeviceAction(plan: plan)
+      return ActionStageResult(
+        speakable: "\(plan.summary) is ready on the phone screen. For safety the user must tap to confirm it there; a spoken yes is not enough. Tell the user briefly. Nothing has happened yet.",
+        display: plan.summary, failed: nil)
+    }
+  }
+
+  /// A yes by voice or a tap on Save. Actions that leave the app are never
+  /// confirmed by voice.
+  func confirmPendingAction(byVoice: Bool) async -> String {
+    guard let pending = pendingAction, !pending.isExpired else {
+      pendingAction = nil
+      return "There is no action waiting for confirmation."
+    }
+    if pending.plan.kind.risk == .needsTap {
+      return "For safety, this must be confirmed with a tap on the phone; a spoken yes is not enough."
+    }
+    pendingAction = nil
+    do {
+      let text = try await DeviceActionExecutor.shared.run(pending.plan)
+      lastActionResult = text
+      return text + (byVoice ? " Tell the user it is done." : "")
+    } catch {
+      let message = LogSanitizer.sanitize(error.localizedDescription)
+      lastActionResult = message
+      return message
+    }
+  }
+
+  @discardableResult
+  func cancelPendingAction() -> String {
+    guard pendingAction != nil else { return "There was no action waiting." }
+    pendingAction = nil
+    lastActionResult = "Cancelled"
+    return "Cancelled. Nothing was saved or sent."
+  }
+
+  /// Called by the confirmation card after the user tapped an action that
+  /// opens another app (Maps, Safari, Phone, Messages, share sheet).
+  func completeTapAction(_ result: String) {
+    pendingAction = nil
+    lastActionResult = result
+  }
+
+  // MARK: Reports
+
+  /// "Research this and prepare a report": live web research written up and
+  /// saved as an AutoLoom note with its sources; a short summary is spoken.
+  private func runReport(taskID: UUID, query: String) async throws -> Outcome {
+    let outcome = try await runExecutor(taskID: taskID, kind: .report, query: query, image: false)
+    guard outcome.failed == nil, let report = outcome.display, !report.isEmpty else { return outcome }
+    let title = "Report: " + String(query.prefix(60))
+    AutoLoomNotesStore.shared.add(
+      title: title, body: report, source: "report", sources: outcome.sources.map { $0.url.absoluteString })
+    let summary = report
+      .components(separatedBy: CharacterSet.newlines)
+      .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+      .prefix(4)
+      .joined(separator: " ")
+    var spoken = outcome
+    let sourceNames = outcome.sources.prefix(3).map(\.host).joined(separator: ", ")
+    spoken.speakable = "The report was saved in AutoLoom notes on the phone. Give the user this summary in two or three sentences:\n" +
+      String(summary.prefix(900)) + (sourceNames.isEmpty ? "" : "\n(Sources: \(sourceNames).)")
+    return spoken
+  }
+
   private func runMemory(taskID: UUID, query: String) async throws -> Outcome {
     let memory = LocalMemoryStore.shared
     let listing = memory.items.isEmpty
@@ -422,7 +607,7 @@ final class AssistantOrchestrator: ObservableObject {
       : memory.items.map { "- \($0.text)" }.joined(separator: "\n")
     let request = "Current memory list:\n\(listing)\n\nUser request: \(query)"
     let result = try await callModel(
-      taskID: taskID, kind: .localMemory, query: request, tools: [], image: nil,
+      taskID: taskID, kind: .localMemory, query: request, tools: [], attachment: nil,
       schema: AssistantTools.memorySchema)
     guard let data = result.text.data(using: .utf8),
           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -438,15 +623,53 @@ final class AssistantOrchestrator: ObservableObject {
     return Outcome(speakable: reply, kind: .localMemory)
   }
 
+  /// Frames older than this never answer a visual question.
+  static let maxFrameAge: CFTimeInterval = 1.0
+
+  /// One short description of the current view for Live Vision. Uses the
+  /// fast image profile and low effort, is not recorded as a task, and is
+  /// only ever given to the voice model as silent context.
+  func describeLiveView(_ frame: CapturedFrame) async throws -> String {
+    let pixelBuffer = frame.pixelBuffer
+    let background = UIApplication.shared.applicationState == .background
+    let encoded = await Task.detached(priority: .utility) {
+      VisionFrameEncoder.encode(pixelBuffer, detail: .fast, useCPU: background)
+    }.value
+    guard let encoded else { throw ResponsesError.failed("The live image could not be prepared.") }
+    let catalog = self.catalog
+    guard let model = ModelSelector.model(
+      for: .vision, available: availableModels, catalog: catalog, needsImages: true,
+      excluded: ModelHealth.shared.failedThisRun) else {
+      throw ResponsesError.failed("No compatible ChatGPT model is available for this account.")
+    }
+    var image: [String: Any] = [
+      "type": "input_image",
+      "image_url": "data:image/jpeg;base64,\(encoded.jpeg.base64EncodedString())",
+    ]
+    if !imageDetailRejected { image["detail"] = "high" }
+    let info = catalog.first { $0.slug == model }
+    let content: [[String: Any]] = [["type": "input_text", "text": "Describe the current view."], image]
+    var request = ResponsesClient.Request(
+      model: model,
+      instructions: AssistantInstructions.liveView(detectedLanguage: context.detectedLanguage),
+      input: [["role": "user", "content": content]])
+    request.reasoningEffort = ModelRouting.effort("low", supported: info?.reasoningLevels ?? [])
+    request.verbosity = (info?.supportsVerbosity ?? true) ? "low" : nil
+    request.timeout = 20
+    let result = try await client.send(request)
+    return String(result.text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(400))
+  }
+
   /// Gets one current image from the selected camera for this task.
-  /// - Ray-Ban: a fresh still photo (reading requests, or when chosen in
-  ///   Settings) or the freshest decoded video frame, each falling back to the
-  ///   other. Never the iPhone camera, a preview screenshot, or an older image.
+  /// - Ray-Ban: the best of the last few video frames (sharp, well exposed,
+  ///   fresh, and showing the same scene as the newest frame), or a still
+  ///   photo when video stalls or when chosen in Settings. Never the iPhone
+  ///   camera, a preview screenshot, or an older image.
   /// - iPhone: the freshest camera frame.
   private func prepareVisionImage(
     taskID: UUID,
     detail: VisionDetail
-  ) async throws -> (jpeg: Data, info: VisionFrameInfo) {
+  ) async throws -> VisionAttachment {
     ledger.update(taskID) { $0.phase = .capturingFrame }
     refreshActivity()
     let source = captureSource()
@@ -458,13 +681,15 @@ final class AssistantOrchestrator: ObservableObject {
         reason: "camera off",
         speakable: "The camera is turned off in the app, so nothing can be seen right now.")
     case .iPhoneCamera:
-      guard let frame = await FrameStore.shared.waitForFreshFrame(maxAge: 1.0, timeout: 1.5, source: .iPhone) else {
+      guard let frame = await FrameStore.shared.waitForFreshFrame(
+        maxAge: Self.maxFrameAge, timeout: 1.5, source: .iPhone) else {
         try Task.checkCancellation()
         throw VisionUnavailable(
           reason: "no fresh iPhone frame",
           speakable: "No fresh image arrived from the iPhone camera, so nothing can be described. Ask the user to point the phone at the subject and try again. Do not describe any earlier image.")
       }
-      return try await encodeVideoFrame(frame, taskID: taskID, detail: detail, useCPU: background)
+      let selection = await selectFrame(source: .iPhone, fallback: frame, detail: detail)
+      return try await buildVideoAttachment(selection, taskID: taskID, detail: detail, useCPU: background)
     case .glasses:
       let mode = GlassesVisionCaptureMode.current
       var triedPhoto = false
@@ -472,8 +697,10 @@ final class AssistantOrchestrator: ObservableObject {
         triedPhoto = true
         if let photo = try await captureGlassesPhoto(taskID: taskID, detail: detail) { return photo }
       }
-      if let frame = await FrameStore.shared.waitForFreshFrame(maxAge: 1.0, timeout: 2.0, source: .glasses) {
-        return try await encodeVideoFrame(frame, taskID: taskID, detail: detail, useCPU: background)
+      if let frame = await FrameStore.shared.waitForFreshFrame(
+        maxAge: Self.maxFrameAge, timeout: 2.0, source: .glasses) {
+        let selection = await selectFrame(source: .glasses, fallback: frame, detail: detail)
+        return try await buildVideoAttachment(selection, taskID: taskID, detail: detail, useCPU: background)
       }
       try Task.checkCancellation()
       if mode.allowsPhoto, !triedPhoto, !background,
@@ -497,25 +724,59 @@ final class AssistantOrchestrator: ObservableObject {
     }
   }
 
-  private func encodeVideoFrame(
-    _ frame: CapturedFrame,
+  /// Chooses among the recent frames of one source. Reading requests wait up
+  /// to 0.4 s for a few more glasses frames when only one or two are fresh.
+  private func selectFrame(
+    source: FrameSourceKind,
+    fallback: CapturedFrame,
+    detail: VisionDetail
+  ) async -> FrameSelection {
+    let maxAge = Self.maxFrameAge
+    var frames = FrameStore.shared.recentFrames(source: source, maxAge: maxAge)
+    if detail == .high, source == .glasses {
+      let deadline = CACurrentMediaTime() + 0.4
+      while frames.count < 3, CACurrentMediaTime() < deadline, !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        frames = FrameStore.shared.recentFrames(source: source, maxAge: maxAge)
+      }
+    }
+    let candidates = frames
+    let selected = await Task.detached(priority: .userInitiated) {
+      FrameSelector.select(from: candidates, maxAge: maxAge)
+    }.value
+    return selected ?? FrameSelection(
+      frame: fallback, metrics: nil, available: 1, compared: 1,
+      ageMs: Int((fallback.ageSeconds * 1_000).rounded()))
+  }
+
+  private func buildVideoAttachment(
+    _ selection: FrameSelection,
     taskID: UUID,
     detail: VisionDetail,
     useCPU: Bool
-  ) async throws -> (jpeg: Data, info: VisionFrameInfo) {
-    let ageMs = Int((frame.ageSeconds * 1_000).rounded())
+  ) async throws -> VisionAttachment {
+    let frame = selection.frame
     ledger.update(taskID) { $0.timeline.frameSelected = Date() }
     let pixelBuffer = frame.pixelBuffer
-    let encoded = await Task.detached(priority: .userInitiated) {
-      VisionFrameEncoder.encode(pixelBuffer, detail: detail, useCPU: useCPU)
-    }.value
+    let upscale = detail == .high && VisionAssistPreferences.upscale
+    // The full image encodes while OCR runs.
+    let fullTask = Task.detached(priority: .userInitiated) {
+      VisionFrameEncoder.encode(pixelBuffer, detail: detail, useCPU: useCPU, allowUpscale: upscale)
+    }
+    let assist = await textAssist(CIImage(cvPixelBuffer: pixelBuffer), detail: detail, useCPU: useCPU)
+    let encoded = await fullTask.value
     try Task.checkCancellation()
+    guard FrameStore.shared.currentEpoch == frame.epoch else {
+      throw VisionUnavailable(
+        reason: "camera source changed during capture",
+        speakable: "The camera was switched while the image was being prepared, so nothing is described. Ask the user to try again.")
+    }
     guard let encoded else {
       throw VisionUnavailable(
         reason: "image encoding failed",
         speakable: "The camera image could not be prepared. Ask the user to try again.")
     }
-    let info = VisionFrameInfo(
+    var info = VisionFrameInfo(
       kind: .video,
       source: frame.source.rawValue,
       sequence: frame.sequence,
@@ -523,13 +784,76 @@ final class AssistantOrchestrator: ObservableObject {
       sourceWidth: frame.width, sourceHeight: frame.height,
       encodedWidth: encoded.width, encodedHeight: encoded.height,
       jpegQuality: encoded.quality, jpegBytes: encoded.jpeg.count,
-      frameAgeMs: ageMs, captureLatencyMs: nil, reencoded: true, detail: detail)
+      frameAgeMs: selection.ageMs, captureLatencyMs: nil, reencoded: true, detail: detail)
+    info.selection = selection.summary + (assist.note.map { "; \($0)" } ?? "")
+    info.upscaled = encoded.width > frame.width
+    return finishAttachment(full: encoded.jpeg, assist: assist, info: info, taskID: taskID, profile: detail)
+  }
+
+  /// Optional, time-bounded help for reading requests: on-device OCR as a
+  /// hint and an enlarged crop of the text region of the same frame.
+  private struct TextAssist {
+    var ocrText: String?
+    var ocrSummary: String?
+    var crop: VisionFrameEncoder.Output?
+    var cropSummary: String?
+    var note: String?
+  }
+
+  private func textAssist(_ image: CIImage, detail: VisionDetail, useCPU: Bool) async -> TextAssist {
+    guard detail == .high, VisionAssistPreferences.textAssist else { return TextAssist() }
+    var assist = TextAssist()
+    guard let result = await OnDeviceTextRecognizer.recognize(image, timeout: 1.5) else {
+      assist.note = "OCR timed out or failed"
+      return assist
+    }
+    let confidence = Int((result.averageConfidence * 100).rounded())
+    guard let text = OnDeviceTextRecognizer.promptText(result) else {
+      assist.note = result.lines.isEmpty
+        ? "OCR found no text (\(result.durationMs) ms)"
+        : "OCR rejected \(result.lines.count) low-confidence lines (avg \(confidence)%)"
+      return assist
+    }
+    assist.ocrText = text
+    let languages = result.languages.isEmpty ? "default languages" : result.languages.joined(separator: "+")
+    assist.ocrSummary = "\(result.lines.count) lines, avg \(confidence)%, \(result.durationMs) ms, \(languages)"
+    if let region = OnDeviceTextRecognizer.focusRegion(for: result.lines) {
+      let crop = await Task.detached(priority: .userInitiated) {
+        VisionFrameEncoder.encodeCrop(image, normalizedRect: region, detail: detail, useCPU: useCPU)
+      }.value
+      if let crop {
+        assist.crop = crop
+        assist.cropSummary = String(
+          format: "x %.2f y %.2f w %.2f h %.2f → %d×%d",
+          region.minX, region.minY, region.width, region.height, crop.width, crop.height)
+      }
+    }
+    return assist
+  }
+
+  private func finishAttachment(
+    full: Data,
+    assist: TextAssist,
+    info: VisionFrameInfo,
+    taskID: UUID,
+    profile: VisionDetail
+  ) -> VisionAttachment {
+    var info = info
+    var images = [VisionAttachment.Image(jpeg: full, role: "the full current view")]
+    if let crop = assist.crop {
+      images.append(VisionAttachment.Image(
+        jpeg: crop.jpeg, role: "an enlarged crop of the text area of the same frame"))
+      info.crop = assist.cropSummary
+    }
+    info.ocr = assist.ocrSummary
+    info.totalImageBytes = images.reduce(0) { $0 + $1.jpeg.count }
+    let prepared = info
     ledger.update(taskID) {
       $0.timeline.imagePrepared = Date()
-      $0.frame = info
+      $0.frame = prepared
     }
-    FrameStore.shared.recordVisionImage(info.summary)
-    return (encoded.jpeg, info)
+    FrameStore.shared.recordVisionImage(prepared.summary)
+    return VisionAttachment(images: images, ocrText: assist.ocrText, info: prepared, profile: profile)
   }
 
   /// Requests a new still photo from the glasses for this task only. Returns
@@ -538,7 +862,7 @@ final class AssistantOrchestrator: ObservableObject {
   private func captureGlassesPhoto(
     taskID: UUID,
     detail: VisionDetail
-  ) async throws -> (jpeg: Data, info: VisionFrameInfo)? {
+  ) async throws -> VisionAttachment? {
     guard let provider = glassesStillPhoto else { return nil }
     let requestedAt = Date()
     let still = await provider(4.0)
@@ -551,7 +875,11 @@ final class AssistantOrchestrator: ObservableObject {
     }.value
     try Task.checkCancellation()
     guard let prepared else { return nil }
-    let info = VisionFrameInfo(
+    var assist = TextAssist()
+    if let image = CIImage(data: jpeg, options: [.applyOrientationProperty: true]) {
+      assist = await textAssist(image, detail: detail, useCPU: UIApplication.shared.applicationState == .background)
+    }
+    var info = VisionFrameInfo(
       kind: .photo,
       source: FrameSourceKind.glasses.rawValue,
       sequence: nil,
@@ -560,13 +888,18 @@ final class AssistantOrchestrator: ObservableObject {
       encodedWidth: prepared.width, encodedHeight: prepared.height,
       jpegQuality: prepared.quality, jpegBytes: prepared.jpeg.count,
       frameAgeMs: 0, captureLatencyMs: still.latencyMs, reencoded: prepared.reencoded, detail: detail)
+    info.selection = assist.note
     ledger.update(taskID) {
       $0.timeline.frameSelected = requestedAt.addingTimeInterval(Double(still.latencyMs) / 1_000)
-      $0.timeline.imagePrepared = Date()
-      $0.frame = info
     }
-    FrameStore.shared.recordVisionImage(info.summary)
-    return (prepared.jpeg, info)
+    return finishAttachment(full: prepared.jpeg, assist: assist, info: info, taskID: taskID, profile: detail)
+  }
+
+  /// `detail` sent with input images. Codex sends "high" by default and never
+  /// "low". The images this app sends already fit the high-detail budget
+  /// (≤ 2048 px, ≤ 2500 patches), so "original" would not change anything.
+  private func imageDetailValue(model: String, profile: VisionDetail) -> String {
+    "high"
   }
 
   private func callModel(
@@ -574,56 +907,95 @@ final class AssistantOrchestrator: ObservableObject {
     kind: AssistantTaskKind?,
     query: String,
     tools: [[String: Any]],
-    image: Data?,
+    attachment: VisionAttachment?,
     schema: (name: String, schema: [String: Any])? = nil,
     extraContext: String? = nil,
     directSearch: Bool = false,
     detail: VisionDetail = .standard
   ) async throws -> ResponsesResult {
     let usesWeb = tools.contains { ($0["type"] as? String) == "web_search" }
-    guard let model = ModelSelector.model(
-      for: kind, available: availableModels, needsHostedWebSearch: usesWeb) else {
+    let needsImages = attachment != nil
+    let catalog = self.catalog
+    guard let firstModel = ModelSelector.model(
+      for: kind, available: availableModels, needsHostedWebSearch: usesWeb, catalog: catalog,
+      needsImages: needsImages, excluded: ModelHealth.shared.failedThisRun) else {
       throw ResponsesError.failed("No compatible ChatGPT model is available for this account.")
     }
     ledger.update(taskID) {
-      $0.model = model
-      $0.phase = usesWeb ? .searching : (kind == .deepReasoning ? .reasoning : (image != nil ? .analyzing : .reasoning))
+      $0.model = firstModel
+      $0.phase = usesWeb ? .searching : (kind == .deepReasoning ? .reasoning : (needsImages ? .analyzing : .reasoning))
     }
     refreshActivity()
 
-    var content: [[String: Any]] = []
-    let background = context.promptContext(memory: LocalMemoryStore.shared.promptItems)
-    if !background.isEmpty {
-      content.append(["type": "input_text", "text": "Conversation context:\n\(background)"])
-    }
-    if let extraContext {
-      content.append(["type": "input_text", "text": extraContext])
-    }
-    content.append(["type": "input_text", "text": "Request: \(query)"])
-    if let image {
-      content.append(["type": "input_image", "image_url": "data:image/jpeg;base64,\(image.base64EncodedString())"])
-    }
-
+    var imageDetail: String? = attachment.map { imageDetailValue(model: firstModel, profile: $0.profile) }
+    if imageDetailRejected { imageDetail = nil }
+    let contextText = context.promptContext(memory: LocalMemoryStore.shared.promptItems)
     var instructions = AssistantInstructions.executor(
-      kind: kind, detectedLanguage: context.detectedLanguage, detail: detail)
+      kind: kind,
+      detectedLanguage: context.detectedLanguage,
+      detail: detail,
+      hasCrop: attachment?.hasCrop ?? false,
+      hasOCR: attachment?.ocrText != nil)
     if directSearch {
       instructions += "\nWeb search results are provided in the input. Base current facts only on them, " +
         "name the most relevant source briefly, and say so if they do not answer the request."
     }
-    var request = ResponsesClient.Request(
-      model: model,
-      instructions: instructions,
-      input: [["role": "user", "content": content]])
-    request.tools = tools
-    request.reasoningEffort = ModelSelector.reasoningEffort(for: kind)
-    request.verbosity = AssistantPreferences.prefersDetailedAnswers ? "medium" : "low"
-    request.timeout = ModelSelector.timeout(for: kind)
-    request.jsonSchema = schema
-    request.promptCacheKey = sessionID.map { "autoloom-\($0.uuidString)" }
+    let sessionKey = sessionID.map { "autoloom-\($0.uuidString)" }
 
+    func makeRequest(model: String, imageDetail: String?) -> ResponsesClient.Request {
+      var content: [[String: Any]] = []
+      if !contextText.isEmpty {
+        content.append(["type": "input_text", "text": "Conversation context:\n\(contextText)"])
+      }
+      if let extraContext {
+        content.append(["type": "input_text", "text": extraContext])
+      }
+      content.append(["type": "input_text", "text": "Request: \(query)"])
+      if let attachment {
+        for (index, image) in attachment.images.enumerated() {
+          if attachment.images.count > 1 {
+            content.append(["type": "input_text", "text": "Image \(index + 1): \(image.role)."])
+          }
+          var item: [String: Any] = [
+            "type": "input_image",
+            "image_url": "data:image/jpeg;base64,\(image.jpeg.base64EncodedString())",
+          ]
+          if let imageDetail { item["detail"] = imageDetail }
+          content.append(item)
+        }
+        if let ocrText = attachment.ocrText {
+          content.append([
+            "type": "input_text",
+            "text": "On-device OCR of image 1 (automatic, may contain mistakes; the images are authoritative):\n" +
+              UntrustedContent.wrap(ocrText, origin: "on-device OCR of the camera image"),
+          ])
+        }
+      }
+      let info = catalog.first { $0.slug == model }
+      var request = ResponsesClient.Request(
+        model: model,
+        instructions: instructions,
+        input: [["role": "user", "content": content]])
+      request.tools = tools
+      // Only parameters the model advertises: an unsupported effort or
+      // verbosity would get the request rejected.
+      request.reasoningEffort = ModelRouting.effort(
+        ModelSelector.reasoningEffort(for: kind), supported: info?.reasoningLevels ?? [])
+      request.verbosity = (info?.supportsVerbosity ?? true)
+        ? (AssistantPreferences.prefersDetailedAnswers ? "medium" : "low")
+        : nil
+      request.timeout = ModelSelector.timeout(for: kind)
+      request.jsonSchema = schema
+      request.promptCacheKey = sessionKey
+      return request
+    }
+
+    if let imageDetail {
+      ledger.update(taskID) { $0.frame?.imageDetail = imageDetail }
+    }
     ledger.update(taskID) { $0.timeline.requestSent = Date() }
     if usesWeb { lastWebStatus = "Searching…" }
-    let result = try await client.send(request) { [weak self] progress in
+    let onProgress: @MainActor (ResponsesProgress) -> Void = { [weak self] progress in
       guard let self else { return }
       switch progress {
       case .requestSent:
@@ -637,10 +1009,46 @@ final class AssistantOrchestrator: ObservableObject {
         self.ledger.update(taskID) { $0.phase = .searching }
         self.lastWebStatus = query.map { "Searching: \($0)" } ?? "Searching…"
       case .webSearchFinished:
-        self.ledger.update(taskID) { $0.phase = image != nil ? .analyzing : .reasoning }
+        self.ledger.update(taskID) { $0.phase = needsImages ? .analyzing : .reasoning }
       }
       self.refreshActivity()
     }
+
+    var model = firstModel
+    var triedFallback = false
+    var response: ResponsesResult?
+    while response == nil {
+      do {
+        response = try await client.send(makeRequest(model: model, imageDetail: imageDetail), onProgress: onProgress)
+      } catch ResponsesError.badRequest(let message)
+        where imageDetail != nil && !usesWeb
+          && (message.lowercased().contains("detail") || !ModelHealth.looksLikeModelProblem(message)) {
+        // If the endpoint ever rejects the explicit image detail, the image is
+        // still sent, with the service's default detail, for the rest of the run.
+        imageDetailRejected = true
+        imageDetail = nil
+        NSLog("[AutoLoom] image detail rejected, retrying without it: %@", message)
+        ledger.update(taskID) { $0.frame?.imageDetail = "service default (explicit detail rejected)" }
+      } catch ResponsesError.badRequest(let message)
+        where !triedFallback && !usesWeb && ModelHealth.looksLikeModelProblem(message) {
+        // The chosen model was rejected (for example a newly listed model this
+        // connection cannot use): record it and try the next best model once.
+        ModelHealth.shared.recordFailure(model, message: message)
+        triedFallback = true
+        guard let fallback = ModelSelector.model(
+          for: kind, available: availableModels, needsHostedWebSearch: usesWeb, catalog: catalog,
+          needsImages: needsImages, excluded: ModelHealth.shared.failedThisRun),
+          fallback != model else {
+          throw ResponsesError.badRequest(message)
+        }
+        NSLog("[AutoLoom] model %@ rejected, falling back to %@", model, fallback)
+        let failed = model
+        model = fallback
+        ledger.update(taskID) { $0.model = "\(fallback) (after \(failed) failed)" }
+      }
+    }
+    guard let result = response else { throw ResponsesError.emptyResponse }
+    ModelHealth.shared.recordSuccess(model)
     ledger.update(taskID) {
       if $0.timeline.firstModelOutput == nil { $0.timeline.firstModelOutput = result.firstOutputAt ?? Date() }
       $0.timeline.modelCompleted = result.completedAt ?? Date()
@@ -740,9 +1148,13 @@ final class AssistantOrchestrator: ObservableObject {
   }
 
   private func refreshActivity() {
-    let phases = ledger.active.map { ($0.kind, $0.phase) }
-    if phases.contains(where: { $0.1 == .capturingFrame || ($0.1 == .analyzing && $0.0?.usesCamera == true) }) {
-      activity = .seeing
+    let active = ledger.active
+    let phases = active.map { ($0.kind, $0.phase) }
+    let visual = active.filter { $0.phase == .capturingFrame || ($0.phase == .analyzing && $0.kind?.usesCamera == true) }
+    if !visual.isEmpty {
+      activity = visual.contains { $0.visionProfile == .high } ? .reading : .seeing
+    } else if active.contains(where: { $0.kind == .authorizedAction }) {
+      activity = .acting
     } else if phases.contains(where: { $0.1 == .searching }) {
       activity = .searching
     } else if !phases.isEmpty {
