@@ -34,8 +34,60 @@ enum StreamingMode {
   case iPhone
 }
 
+/// Resolution / frame-rate trade-offs for the glasses stream. Over Bluetooth
+/// the glasses compress harder at higher resolution and frame rate, so fewer
+/// frames can mean sharper frames. `balanced` is the original configuration.
+enum GlassesStreamProfile: String, CaseIterable, Identifiable {
+  case balanced
+  case smooth
+  case sharp
+
+  static let defaultsKey = "autoloom.glasses.profile"
+
+  static var current: GlassesStreamProfile {
+    GlassesStreamProfile(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .balanced
+  }
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .balanced: "Balanced — 720p request, 24 fps (original)"
+    case .smooth: "Smooth — 504p, 30 fps"
+    case .sharp: "Sharper frames — 720p request, 15 fps"
+    }
+  }
+
+  var resolution: StreamingResolution {
+    switch self {
+    case .balanced, .sharp: .high
+    case .smooth: .medium
+    }
+  }
+
+  var frameRateLabel: String {
+    switch self {
+    case .balanced: "24"
+    case .smooth: "30"
+    case .sharp: "15"
+    }
+  }
+
+  func makeConfig() -> StreamSessionConfig {
+    switch self {
+    case .balanced:
+      StreamSessionConfig(videoCodec: VideoCodec.raw, resolution: StreamingResolution.high, frameRate: 24)
+    case .smooth:
+      StreamSessionConfig(videoCodec: VideoCodec.raw, resolution: StreamingResolution.medium, frameRate: 30)
+    case .sharp:
+      StreamSessionConfig(videoCodec: VideoCodec.raw, resolution: StreamingResolution.high, frameRate: 15)
+    }
+  }
+}
+
 @MainActor
 class StreamSessionViewModel: ObservableObject {
+  /// Only produced by the legacy preview path (Settings → Camera → Preview).
   @Published var currentVideoFrame: UIImage?
   @Published var hasReceivedFirstFrame: Bool = false
   @Published var streamingStatus: StreamingStatus = .stopped
@@ -44,6 +96,8 @@ class StreamSessionViewModel: ObservableObject {
   @Published var hasActiveDevice: Bool = false
   @Published var streamingMode: StreamingMode = .glasses
   @Published var selectedResolution: StreamingResolution = .high
+  @Published private(set) var streamProfile: GlassesStreamProfile = .balanced
+  @Published private(set) var lastStreamState = "stopped"
 
   var isStreaming: Bool {
     streamingStatus != .stopped
@@ -62,6 +116,10 @@ class StreamSessionViewModel: ObservableObject {
   @Published var capturedPhoto: UIImage?
   @Published var showPhotoPreview: Bool = false
 
+  /// Receives every glasses frame on the SDK's callback thread: one copy into
+  /// the shared latest-frame store and a hand-off to the preview layer.
+  let frameIngestor = GlassesFrameIngestor()
+
   // The core DAT SDK StreamSession - handles all streaming operations.
   // nil when the Wearables SDK is unavailable (simulator, or a build without
   // glasses); the iPhone camera path never touches it.
@@ -74,29 +132,24 @@ class StreamSessionViewModel: ObservableObject {
   private let wearables: WearablesInterface?
   private let deviceSelector: AutoDeviceSelector?
   private var deviceMonitorTask: Task<Void, Never>?
-  // CPU-based CIContext for rendering decoded pixel buffers in background
-  private let cpuCIContext = CIContext(options: [.useSoftwareRenderer: true])
   // VideoDecoder for decompressing HEVC/H.264 frames in background
   private let videoDecoder = VideoDecoder()
   private var backgroundFrameCount = 0
   private var bgDiagLogged = false
+  private var lifecycleObservers: [NSObjectProtocol] = []
 
   init(wearables: WearablesInterface?) {
     self.wearables = wearables
+    let profile = GlassesStreamProfile.current
 
     if let wearables {
       // Let the SDK auto-select from available devices
       let selector = AutoDeviceSelector(wearables: wearables)
       self.deviceSelector = selector
-      // 720x1280 rather than 360x640. At the low tier, printed text is a few
-      // pixels tall before JPEG compression halves it again -- the model could
-      // read a receipt's header and total but nothing smaller. Must match
-      // `selectedResolution` below; the two are set independently.
-      let config = StreamSessionConfig(
-        videoCodec: VideoCodec.raw,
-        resolution: StreamingResolution.high,
-        frameRate: 24)
-      streamSession = StreamSession(streamSessionConfig: config, deviceSelector: selector)
+      // The profile's resolution is a request: DAT 0.4.0 cannot always honour
+      // `.high`, and the glasses step resolution down on weak Bluetooth links.
+      // Diagnostics shows the resolution that actually arrives.
+      streamSession = StreamSession(streamSessionConfig: profile.makeConfig(), deviceSelector: selector)
 
       // Monitor device availability
       deviceMonitorTask = Task { @MainActor in
@@ -108,42 +161,37 @@ class StreamSessionViewModel: ObservableObject {
       self.deviceSelector = nil
     }
 
+    streamProfile = profile
+    selectedResolution = profile.resolution
+    frameIngestor.configure(legacyPreview: AssistantPreferences.usesLegacyPreview)
     setupVideoDecoder()
     attachListeners()
+    observeLifecycle()
   }
 
-  /// Latest glasses view, compressed at most once per second for the
-  /// memory-only GlassifAI vision bridge.
-  var onVisionJPEG: ((Data) -> Void)?
-  private var lastVisionFrameAt = Date.distantPast
-
   private func setupVideoDecoder() {
-    videoDecoder.setFrameCallback { [weak self] decodedFrame in
-      Task { @MainActor [weak self] in
-        guard let self else { return }
-        let pixelBuffer = decodedFrame.pixelBuffer
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let rect = CGRect(x: 0, y: 0, width: width, height: height)
-        if let cgImage = self.cpuCIContext.createCGImage(ciImage, from: rect) {
-          let image = UIImage(cgImage: cgImage)
-          self.emitVisionJPEG(image)
-          if self.backgroundFrameCount <= 5 || self.backgroundFrameCount % 120 == 0 {
-            NSLog("[Stream] Background frame #%d decoded and forwarded (%dx%d)",
-                  self.backgroundFrameCount, width, height)
-          }
-        }
-      }
+    // Background frames decoded by VideoToolbox go straight to the shared
+    // frame store; no image conversion or JPEG encoding happens per frame.
+    videoDecoder.setFrameCallback { decodedFrame in
+      FrameStore.shared.ingest(
+        pixelBuffer: decodedFrame.pixelBuffer,
+        source: .glasses,
+        presentationTime: decodedFrame.presentationTimeStamp)
     }
   }
 
-  private func emitVisionJPEG(_ image: UIImage) {
-    guard Date().timeIntervalSince(lastVisionFrameAt) >= 1,
-          let jpeg = image.jpegData(compressionQuality: 0.58),
-          jpeg.count <= 1_500_000 else { return }
-    lastVisionFrameAt = Date()
-    onVisionJPEG?(jpeg)
+  private func observeLifecycle() {
+    let ingestor = frameIngestor
+    lifecycleObservers.append(NotificationCenter.default.addObserver(
+      forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+    ) { _ in
+      ingestor.setBackground(true)
+    })
+    lifecycleObservers.append(NotificationCenter.default.addObserver(
+      forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+    ) { _ in
+      ingestor.setBackground(false)
+    })
   }
 
   /// Recreate the StreamSession with the current selectedResolution.
@@ -160,6 +208,20 @@ class StreamSessionViewModel: ObservableObject {
     NSLog("[Stream] Resolution changed to %@", resolutionLabel)
   }
 
+  /// Applies the stream profile chosen in Settings. The session is only
+  /// recreated when the profile changed and the stream is stopped, so the
+  /// original configuration is untouched unless the user picks another one.
+  func applyStreamProfileIfNeeded() {
+    let profile = GlassesStreamProfile.current
+    frameIngestor.configure(legacyPreview: AssistantPreferences.usesLegacyPreview)
+    guard profile != streamProfile, !isStreaming, let deviceSelector else { return }
+    streamSession = StreamSession(streamSessionConfig: profile.makeConfig(), deviceSelector: deviceSelector)
+    streamProfile = profile
+    selectedResolution = profile.resolution
+    attachListeners()
+    NSLog("[Stream] Stream profile changed to %@", profile.rawValue)
+  }
+
   private func attachListeners() {
     guard let streamSession else { return }
     // Subscribe to session state changes using the DAT SDK listener pattern
@@ -169,10 +231,21 @@ class StreamSessionViewModel: ObservableObject {
       }
     }
 
-    // Subscribe to video frames from the device camera
-    // This callback fires whether the app is in the foreground or background,
-    // enabling continuous streaming even when the screen is locked.
+    // Subscribe to video frames from the device camera. The SDK invokes this
+    // inline on its decoder thread, so the fast path must not hop to the main
+    // actor or retain the SDK's buffer.
+    let ingestor = frameIngestor
     videoFrameListenerToken = streamSession.videoFramePublisher.listen { [weak self] videoFrame in
+      let result = ingestor.handle(videoFrame.sampleBuffer)
+      if result.isFirstFrame {
+        Task { @MainActor [weak self] in
+          self?.hasReceivedFirstFrame = true
+        }
+      }
+      if result.handled { return }
+
+      // Legacy preview path (the original behaviour), and background frames
+      // that arrive compressed.
       Task { @MainActor [weak self] in
         guard let self else { return }
 
@@ -183,7 +256,6 @@ class StreamSessionViewModel: ObservableObject {
           self.bgDiagLogged = false
           if let image = videoFrame.makeUIImage() {
             self.currentVideoFrame = image
-            self.emitVisionJPEG(image)
             if !self.hasReceivedFirstFrame {
               self.hasReceivedFirstFrame = true
             }
@@ -191,14 +263,11 @@ class StreamSessionViewModel: ObservableObject {
         } else {
           // In background: makeUIImage() uses VideoToolbox GPU rendering which iOS suspends.
           // Instead, use our VideoDecoder (VTDecompressionSession) to decode compressed
-          // frames into pixel buffers, then convert via CPU CIContext.
+          // frames into pixel buffers for the frame store.
           self.backgroundFrameCount += 1
 
           let sampleBuffer = videoFrame.sampleBuffer
-          let hasCompressedData = CMSampleBufferGetDataBuffer(sampleBuffer) != nil
-
-          if hasCompressedData {
-            // Compressed frame (HEVC/H.264) - decode via VTDecompressionSession
+          if CMSampleBufferGetDataBuffer(sampleBuffer) != nil {
             do {
               try self.videoDecoder.decode(sampleBuffer)
             } catch {
@@ -207,17 +276,6 @@ class StreamSessionViewModel: ObservableObject {
                       self.backgroundFrameCount, String(describing: error))
               }
             }
-          } else if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            // Raw pixel buffer - convert directly via CPU CIContext
-            let width = CVPixelBufferGetWidth(pixelBuffer)
-            let height = CVPixelBufferGetHeight(pixelBuffer)
-            let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-            let rect = CGRect(x: 0, y: 0, width: width, height: height)
-            if let cgImage = self.cpuCIContext.createCGImage(ciImage, from: rect) {
-              let image = UIImage(cgImage: cgImage)
-              self.emitVisionJPEG(image)
-            }
-            self.videoDecoder.invalidateSession()
           }
         }
       }
@@ -240,6 +298,7 @@ class StreamSessionViewModel: ObservableObject {
         default:
           self.glassesIssue = .reconnecting
         }
+        self.lastStreamError = self.formatStreamingError(error)
       }
     }
 
@@ -266,6 +325,7 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   @Published var glassesIssue: GlassesIssue?
+  @Published private(set) var lastStreamError: String?
 
   func handleStartStreaming() async {
     glassesIssue = nil
@@ -273,6 +333,7 @@ class StreamSessionViewModel: ObservableObject {
       glassesIssue = .sdkUnavailable
       return
     }
+    applyStreamProfileIfNeeded()
     let permission = Permission.camera
     do {
       let status = try await wearables.checkPermissionStatus(permission)
@@ -327,9 +388,12 @@ class StreamSessionViewModel: ObservableObject {
 
   private func updateStatusFromState(_ state: StreamSessionState) {
     NSLog("[GlassifAI] glasses stream state: %@", String(describing: state))
+    lastStreamState = String(describing: state)
     switch state {
     case .stopped:
       currentVideoFrame = nil
+      hasReceivedFirstFrame = false
+      frameIngestor.resetFirstFrame()
       streamingStatus = .stopped
     case .waitingForDevice, .starting, .stopping, .paused:
       streamingStatus = .waiting

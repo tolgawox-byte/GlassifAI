@@ -9,13 +9,11 @@ final class GlassifAICamera: NSObject, ObservableObject {
   @Published private(set) var errorMessage: String?
 
   let captureSession = AVCaptureSession()
-  var onVisionJPEG: ((Data) -> Void)?
 
   private let sessionQueue = DispatchQueue(label: "ai.glassifai.camera.session")
   private let outputQueue = DispatchQueue(label: "ai.glassifai.camera.frames")
-  private let ciContext = CIContext()
+  private let frameThrottle = FrameThrottle(minimumInterval: 0.1)
   private var configured = false
-  private var lastVisionFrame = Date.distantPast
 
   func start() async {
     let authorized = await requestPermission()
@@ -102,15 +100,33 @@ extension GlassifAICamera: AVCaptureVideoDataOutputSampleBufferDelegate {
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
-    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-    Task { @MainActor [weak self] in
-      guard let self, Date().timeIntervalSince(self.lastVisionFrame) >= 1 else { return }
-      self.lastVisionFrame = Date()
-      let image = CIImage(cvPixelBuffer: pixelBuffer)
-      guard let cgImage = self.ciContext.createCGImage(image, from: image.extent),
-            let jpeg = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.58) else { return }
-      self.onVisionJPEG?(jpeg)
-    }
+    // The preview layer draws the camera itself. Here we only keep the newest
+    // frame (at most ten per second) for vision requests: no main-thread hop,
+    // no per-frame image conversion, and only one retained capture buffer.
+    guard frameThrottle.shouldAccept(),
+          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+    FrameStore.shared.ingest(
+      pixelBuffer: pixelBuffer,
+      source: .iPhone,
+      presentationTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+  }
+}
+
+/// Lock-protected rate limiter used on capture callback queues.
+final class FrameThrottle: @unchecked Sendable {
+  private let minimumInterval: CFTimeInterval
+  private let lock = NSLock()
+  private var last: CFTimeInterval = 0
+
+  init(minimumInterval: CFTimeInterval) {
+    self.minimumInterval = minimumInterval
+  }
+
+  func shouldAccept(now: CFTimeInterval = CACurrentMediaTime()) -> Bool {
+    lock.lock(); defer { lock.unlock() }
+    guard now - last >= minimumInterval else { return false }
+    last = now
+    return true
   }
 }
 
