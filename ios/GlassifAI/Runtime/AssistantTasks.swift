@@ -95,17 +95,38 @@ struct TaskTimeline: Equatable {
   }
 }
 
-/// Details of the frame a vision task actually used.
+/// Details of the image a vision task actually used (never the image itself).
 struct VisionFrameInfo: Equatable {
+  enum Kind: String {
+    case video = "VIDEO"
+    case photo = "PHOTO"
+  }
+
+  let kind: Kind
   let source: String
+  /// FrameStore sequence number of a video frame (nil for photos).
+  let sequence: UInt64?
+  let pixelFormat: String
   let sourceWidth: Int
   let sourceHeight: Int
   let encodedWidth: Int
   let encodedHeight: Int
   let jpegQuality: Double
   let jpegBytes: Int
+  /// Age of the video frame when selected; 0 for a photo taken for this task.
   let frameAgeMs: Int
-  let usedStillPhoto: Bool
+  /// Time from requesting a still photo to receiving it.
+  let captureLatencyMs: Int?
+  let reencoded: Bool
+  let detail: VisionDetail
+
+  var summary: String {
+    let quality = reencoded ? "JPEG q\(String(format: "%.2f", jpegQuality))" : "original JPEG"
+    let sequenceText = sequence.map { " #\($0)" } ?? ""
+    let latency = captureLatencyMs.map { ", captured in \($0) ms" } ?? ""
+    return "\(kind.rawValue) \(source)\(sequenceText) \(pixelFormat) \(sourceWidth)×\(sourceHeight) → " +
+      "\(encodedWidth)×\(encodedHeight), \(quality), \(jpegBytes / 1_024) KB, age \(frameAgeMs) ms\(latency), \(detail.rawValue) detail"
+  }
 }
 
 struct AssistantTaskRecord: Identifiable, Equatable {

@@ -44,6 +44,23 @@ struct FrameMetricsSnapshot: Equatable {
   var previewMode = "—"
   var previewResolution = "—"
   var conversionsPerFrame = "—"
+  /// Most recent glasses sample buffer: codec FourCC and whether it arrived
+  /// compressed (data buffer) or decoded (image buffer).
+  var glassesCodec = "—"
+  var glassesCompressed: Bool?
+  var glassesSampleSize = "—"
+  var rawSamples: UInt64 = 0
+  var compressedSamples: UInt64 = 0
+  var decodedFrames: UInt64 = 0
+  var decodeFailures: UInt64 = 0
+  var copyFailures: UInt64 = 0
+  var latestSequence: UInt64 = 0
+  var photosRequested: UInt64 = 0
+  var photosReceived: UInt64 = 0
+  var photoFailures: UInt64 = 0
+  var lastPhotoResolution = "—"
+  var lastPhotoLatencyMs: Int?
+  var lastVisionImage = "—"
 
   var inputResolution: String {
     inputWidth > 0 ? "\(inputWidth)×\(inputHeight)" : "—"
@@ -91,6 +108,62 @@ final class FrameStore: @unchecked Sendable {
   private var previewMode = "—"
   private var previewResolution = "—"
   private var conversionsPerFrame = "—"
+  private var glassesCodec = "—"
+  private var glassesCompressed: Bool?
+  private var glassesSampleSize = "—"
+  private var rawSamples: UInt64 = 0
+  private var compressedSamples: UInt64 = 0
+  private var decodedFrames: UInt64 = 0
+  private var decodeFailures: UInt64 = 0
+  private var copyFailures: UInt64 = 0
+  private var photosRequested: UInt64 = 0
+  private var photosReceived: UInt64 = 0
+  private var photoFailures: UInt64 = 0
+  private var lastPhotoResolution = "—"
+  private var lastPhotoLatencyMs: Int?
+  private var lastVisionImage = "—"
+
+  /// Describes a glasses sample buffer as delivered by the Meta SDK.
+  func recordGlassesSample(compressed: Bool, codec: String, width: Int, height: Int) {
+    lock.lock()
+    glassesCompressed = compressed
+    glassesCodec = codec
+    glassesSampleSize = width > 0 ? "\(width)×\(height)" : "—"
+    if compressed { compressedSamples &+= 1 } else { rawSamples &+= 1 }
+    lock.unlock()
+  }
+
+  func recordDecode(success: Bool) {
+    lock.lock()
+    if success { decodedFrames &+= 1 } else { decodeFailures &+= 1 }
+    lock.unlock()
+  }
+
+  func recordCopyFailure() {
+    lock.lock(); copyFailures &+= 1; lock.unlock()
+  }
+
+  func recordPhotoRequest() {
+    lock.lock(); photosRequested &+= 1; lock.unlock()
+  }
+
+  func recordPhoto(width: Int?, height: Int?, latencyMs: Int?, success: Bool) {
+    lock.lock()
+    if success {
+      photosReceived &+= 1
+      if let width, let height { lastPhotoResolution = "\(width)×\(height)" }
+      lastPhotoLatencyMs = latencyMs
+    } else {
+      photoFailures &+= 1
+    }
+    lock.unlock()
+  }
+
+  /// Short description of the image most recently sent to the vision model
+  /// (never the image itself).
+  func recordVisionImage(_ description: String) {
+    lock.lock(); lastVisionImage = description; lock.unlock()
+  }
 
   /// Records a new frame. `presentationTime` is checked against the host clock;
   /// when it is host-based the difference is the capture→phone latency.
@@ -187,6 +260,11 @@ final class FrameStore: @unchecked Sendable {
     previewRendered = 0
     previewDropped = 0
     previewFailures = 0
+    rawSamples = 0
+    compressedSamples = 0
+    decodedFrames = 0
+    decodeFailures = 0
+    copyFailures = 0
     processing.reset()
     transport.reset()
     lock.unlock()
@@ -218,6 +296,21 @@ final class FrameStore: @unchecked Sendable {
     snapshot.previewMode = previewMode
     snapshot.previewResolution = previewResolution
     snapshot.conversionsPerFrame = conversionsPerFrame
+    snapshot.glassesCodec = glassesCodec
+    snapshot.glassesCompressed = glassesCompressed
+    snapshot.glassesSampleSize = glassesSampleSize
+    snapshot.rawSamples = rawSamples
+    snapshot.compressedSamples = compressedSamples
+    snapshot.decodedFrames = decodedFrames
+    snapshot.decodeFailures = decodeFailures
+    snapshot.copyFailures = copyFailures
+    snapshot.latestSequence = sequence
+    snapshot.photosRequested = photosRequested
+    snapshot.photosReceived = photosReceived
+    snapshot.photoFailures = photoFailures
+    snapshot.lastPhotoResolution = lastPhotoResolution
+    snapshot.lastPhotoLatencyMs = lastPhotoLatencyMs
+    snapshot.lastVisionImage = lastVisionImage
     return snapshot
   }
 
@@ -239,11 +332,27 @@ enum VisionFrameEncoder {
     let width: Int
     let height: Int
     let quality: Double
+    /// False when an already-compressed photo was passed through unchanged.
+    var reencoded = true
   }
 
   private static let gpuContext = CIContext(options: [.cacheIntermediates: false])
   private static let cpuContext = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
   private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)
+
+  /// Encodes with a vision profile: long side and patch count stay within
+  /// what the Codex endpoint uses without further server-side downsizing.
+  static func encode(_ pixelBuffer: CVPixelBuffer, detail: VisionDetail, useCPU: Bool = false) -> Output? {
+    let width = CVPixelBufferGetWidth(pixelBuffer)
+    let height = CVPixelBufferGetHeight(pixelBuffer)
+    let fitted = detail.fittedSize(width: width, height: height)
+    return encode(
+      pixelBuffer,
+      maxLongSide: max(fitted.width, fitted.height),
+      quality: detail.jpegQuality,
+      maxBytes: detail.maxBytes,
+      useCPU: useCPU)
+  }
 
   static func encode(
     _ pixelBuffer: CVPixelBuffer,
@@ -494,24 +603,39 @@ final class PixelBufferCopier: @unchecked Sendable {
   }
 }
 
-/// Runs inline on the Meta SDK's frame callback thread. Keeps the work there to
-/// one copy plus two pointer hand-offs so the callback returns immediately.
+/// Runs inline on the Meta SDK's frame callback thread and makes sure every
+/// glasses frame that can be shown can also answer a vision question:
+/// - decoded (image-buffer) samples: one copy into an app-owned buffer
+/// - compressed (data-buffer) samples: hardware decode on a serial queue
+/// Both paths feed the shared FrameStore as `.glasses`, in the foreground and
+/// in the background, and feed the low-latency preview in the foreground.
 final class GlassesFrameIngestor: @unchecked Sendable {
   let renderer = LowLatencyPreviewRenderer()
   private let copier = PixelBufferCopier()
+  private let decoder = VideoDecoder()
+  private let decodeQueue = DispatchQueue(label: "com.autoloom.glasses.decode", qos: .userInitiated)
   private let lock = NSLock()
   private var legacyPreview = false
   private var inBackground = false
   private var sawFirstFrame = false
+  private var pendingDecodes = 0
+  private let store: FrameStore
+
+  init(store: FrameStore = .shared) {
+    self.store = store
+    decoder.setFrameCallback { [weak self] decoded in
+      self?.handleDecoded(decoded)
+    }
+  }
 
   func configure(legacyPreview: Bool) {
     lock.lock(); self.legacyPreview = legacyPreview; lock.unlock()
-    FrameStore.shared.setPipelineDescription(
+    store.setPipelineDescription(
       mode: legacyPreview ? "Legacy (UIImage per frame on main thread)" : "Low-latency (sample buffer layer)",
       resolution: "full stream resolution, aspect-fill",
       conversions: legacyPreview
-        ? "SDK makeUIImage per frame + 1 buffer copy"
-        : "1 buffer copy, 0 UIImage, 0 JPEG (JPEG only on vision request)")
+        ? "SDK makeUIImage per frame + 1 buffer copy or hardware decode"
+        : "1 buffer copy (raw) or 1 hardware decode (compressed); 0 UIImage; JPEG only on vision request")
   }
 
   func setBackground(_ background: Bool) {
@@ -536,6 +660,34 @@ final class GlassesFrameIngestor: @unchecked Sendable {
     let isFirstFrame: Bool
   }
 
+  /// Describes the sample buffer without touching its pixels.
+  struct SampleInfo: Equatable {
+    let compressed: Bool
+    let codec: String
+    let width: Int
+    let height: Int
+  }
+
+  static func describe(_ sampleBuffer: CMSampleBuffer) -> SampleInfo {
+    let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+    let format = CMSampleBufferGetFormatDescription(sampleBuffer)
+    var codec = "—"
+    var width = 0
+    var height = 0
+    if let imageBuffer {
+      codec = FrameStore.fourCC(CVPixelBufferGetPixelFormatType(imageBuffer))
+      width = CVPixelBufferGetWidth(imageBuffer)
+      height = CVPixelBufferGetHeight(imageBuffer)
+    } else if let format {
+      codec = FrameStore.fourCC(CMFormatDescriptionGetMediaSubType(format))
+      let dimensions = CMVideoFormatDescriptionGetDimensions(format)
+      width = Int(dimensions.width)
+      height = Int(dimensions.height)
+    }
+    let compressed = imageBuffer == nil && CMSampleBufferGetDataBuffer(sampleBuffer) != nil
+    return SampleInfo(compressed: compressed, codec: codec, width: width, height: height)
+  }
+
   func handle(_ sampleBuffer: CMSampleBuffer) -> Result {
     let arrivedAt = CACurrentMediaTime()
     lock.lock()
@@ -545,27 +697,81 @@ final class GlassesFrameIngestor: @unchecked Sendable {
     sawFirstFrame = true
     lock.unlock()
 
-    guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-      // Compressed sample: only the background decoder path can use it.
-      return Result(handled: false, isFirstFrame: first)
-    }
-    guard let copy = copier.copy(imageBuffer) else {
-      return Result(handled: false, isFirstFrame: first)
-    }
-    FrameStore.shared.ingest(
-      pixelBuffer: copy,
-      source: .glasses,
-      presentationTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer),
-      arrivedAt: arrivedAt)
-    if background {
+    let info = Self.describe(sampleBuffer)
+    store.recordGlassesSample(compressed: info.compressed, codec: info.codec, width: info.width, height: info.height)
+
+    if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+      // Decoded frame: copy it so the SDK's decoder pool is released at once.
+      // If the buffer cannot be copied on the CPU (for example a GPU-only
+      // format), keep the original reference rather than losing the frame.
+      let frame: CVPixelBuffer
+      if let copy = copier.copy(imageBuffer) {
+        frame = copy
+      } else {
+        store.recordCopyFailure()
+        frame = imageBuffer
+      }
+      store.ingest(
+        pixelBuffer: frame,
+        source: .glasses,
+        presentationTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer),
+        arrivedAt: arrivedAt)
+      if background {
+        return Result(handled: true, isFirstFrame: first)
+      }
+      if legacy || renderer.hasFailed {
+        return Result(handled: false, isFirstFrame: first)
+      }
+      renderer.submit(pixelBuffer: frame)
+      store.recordProcessing(milliseconds: (CACurrentMediaTime() - arrivedAt) * 1_000)
       return Result(handled: true, isFirstFrame: first)
     }
-    if legacy || renderer.hasFailed {
+
+    guard info.compressed else {
       return Result(handled: false, isFirstFrame: first)
     }
-    renderer.submit(pixelBuffer: copy)
-    FrameStore.shared.recordProcessing(milliseconds: (CACurrentMediaTime() - arrivedAt) * 1_000)
-    return Result(handled: true, isFirstFrame: first)
+    // Compressed frame: decode every frame in order (P-frames depend on the
+    // previous ones). The decoded buffer reaches the store and, in the
+    // foreground, the preview. A bounded backlog protects against a stalled
+    // decoder; dropping a frame only costs one preview update, and decoding
+    // resumes cleanly at the next keyframe.
+    lock.lock()
+    let backlog = pendingDecodes
+    if backlog < 8 { pendingDecodes += 1 }
+    lock.unlock()
+    if backlog >= 8 {
+      store.recordDecode(success: false)
+      return Result(handled: !legacy || background, isFirstFrame: first)
+    }
+    decodeQueue.async { [weak self] in
+      guard let self else { return }
+      do {
+        try self.decoder.decode(sampleBuffer)
+      } catch {
+        self.store.recordDecode(success: false)
+        self.decoder.invalidateSession()
+      }
+      self.lock.lock(); self.pendingDecodes -= 1; self.lock.unlock()
+    }
+    // Legacy mode keeps the SDK's UIImage preview; the decoder still feeds
+    // the store so vision works in every preview mode.
+    return Result(handled: !legacy || background, isFirstFrame: first)
+  }
+
+  private func handleDecoded(_ decoded: VideoDecoder.DecodedFrame) {
+    store.recordDecode(success: true)
+    let arrivedAt = CACurrentMediaTime()
+    store.ingest(
+      pixelBuffer: decoded.pixelBuffer,
+      source: .glasses,
+      presentationTime: decoded.presentationTimeStamp,
+      arrivedAt: arrivedAt)
+    lock.lock()
+    let showPreview = !legacyPreview && !inBackground
+    lock.unlock()
+    if showPreview && !renderer.hasFailed {
+      renderer.submit(pixelBuffer: decoded.pixelBuffer)
+    }
   }
 }
 

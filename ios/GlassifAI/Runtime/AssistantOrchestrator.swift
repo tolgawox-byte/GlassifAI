@@ -49,6 +49,11 @@ final class AssistantOrchestrator: ObservableObject {
       ?? .iPhoneCamera
   }
 
+  /// Supplied by the camera screen: one fresh Ray-Ban still photo for one
+  /// request (argument: timeout), and the DAT stream state for explanations.
+  var glassesStillPhoto: (@MainActor (TimeInterval) async -> StillPhoto?)?
+  var glassesStreamState: @MainActor () -> String = { "unknown" }
+
   private(set) var sessionID: UUID?
   private(set) var turnID = 0
   private var running: [UUID: Task<Void, Never>] = [:]
@@ -204,9 +209,11 @@ final class AssistantOrchestrator: ObservableObject {
     let camera = captureSource()
     var kind: AssistantTaskKind?
     var query = rawText
+    var detail = VisionDetail.standard
     if let envelope, case .task(let requested) = envelope.command {
       kind = requested
       query = envelope.query
+      detail = envelope.detail
       ledger.update(taskID) { $0.kind = requested; $0.routeOrigin = .verifiedEnvelope }
     } else {
       let origin: RouteOrigin = ledger.record(taskID)?.source == .typedInput ? .typedInput : .toolRouting
@@ -247,7 +254,8 @@ final class AssistantOrchestrator: ObservableObject {
         return try await runMemory(taskID: taskID, query: query)
       }
       if let kind {
-        return try await runExecutor(taskID: taskID, kind: kind, query: query, image: kind.usesCamera)
+        return try await runExecutor(
+          taskID: taskID, kind: kind, query: query, image: kind.usesCamera, detail: detail)
       }
       return try await runToolRouting(taskID: taskID, query: query, camera: camera)
     } catch let error as VisionUnavailable {
@@ -300,8 +308,9 @@ final class AssistantOrchestrator: ObservableObject {
       let arguments = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any]
       let wantsWeb = (arguments?["also_search_web"] as? Bool ?? false) && webEnabled
       let visionKind: AssistantTaskKind = wantsWeb ? .visionPlusWeb : .vision
+      let detail: VisionDetail = (arguments?["detail"] as? String) == "high" || wantsWeb ? .high : .standard
       ledger.update(taskID) { $0.kind = visionKind }
-      return try await runExecutor(taskID: taskID, kind: visionKind, query: query, image: true)
+      return try await runExecutor(taskID: taskID, kind: visionKind, query: query, image: true, detail: detail)
     }
     if let call = result.functionCalls.first(where: { $0.name == AssistantTools.searchWebName }) {
       let arguments = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any]
@@ -314,20 +323,28 @@ final class AssistantOrchestrator: ObservableObject {
     return makeOutcome(kind: inferred, query: query, result: result)
   }
 
-  private func runExecutor(taskID: UUID, kind: AssistantTaskKind, query: String, image: Bool) async throws -> Outcome {
+  private func runExecutor(
+    taskID: UUID,
+    kind: AssistantTaskKind,
+    query: String,
+    image: Bool,
+    detail: VisionDetail = .standard
+  ) async throws -> Outcome {
     var attachment: (jpeg: Data, info: VisionFrameInfo)?
     if image {
-      attachment = try await prepareVisionImage(taskID: taskID)
+      attachment = try await prepareVisionImage(taskID: taskID, detail: detail)
     }
     guard kind.usesWeb else {
-      let result = try await callModel(taskID: taskID, kind: kind, query: query, tools: [], image: attachment?.jpeg)
+      let result = try await callModel(
+        taskID: taskID, kind: kind, query: query, tools: [], image: attachment?.jpeg, detail: detail)
       return makeOutcome(kind: kind, query: query, result: result)
     }
     let hostedModel = ModelSelector.model(for: kind, available: availableModels, needsHostedWebSearch: true)
     if let hostedModel, !hostedSearchUnsupported.contains(hostedModel) {
       do {
         let result = try await callModel(
-          taskID: taskID, kind: kind, query: query, tools: [AssistantTools.webSearch], image: attachment?.jpeg)
+          taskID: taskID, kind: kind, query: query, tools: [AssistantTools.webSearch], image: attachment?.jpeg,
+          detail: detail)
         return makeOutcome(kind: kind, query: query, result: result)
       } catch ResponsesError.badRequest(let message) {
         // The hosted tool is not accepted for this model/account: remember it
@@ -421,24 +438,76 @@ final class AssistantOrchestrator: ObservableObject {
     return Outcome(speakable: reply, kind: .localMemory)
   }
 
-  private func prepareVisionImage(taskID: UUID) async throws -> (jpeg: Data, info: VisionFrameInfo) {
+  /// Gets one current image from the selected camera for this task.
+  /// - Ray-Ban: a fresh still photo (reading requests, or when chosen in
+  ///   Settings) or the freshest decoded video frame, each falling back to the
+  ///   other. Never the iPhone camera, a preview screenshot, or an older image.
+  /// - iPhone: the freshest camera frame.
+  private func prepareVisionImage(
+    taskID: UUID,
+    detail: VisionDetail
+  ) async throws -> (jpeg: Data, info: VisionFrameInfo) {
     ledger.update(taskID) { $0.phase = .capturingFrame }
     refreshActivity()
     let source = captureSource()
-    let frameSource: FrameSourceKind = source == .glasses ? .glasses : .iPhone
     let background = UIApplication.shared.applicationState == .background
 
-    guard let frame = await FrameStore.shared.waitForFreshFrame(maxAge: 1.0, timeout: 1.5, source: frameSource) else {
-      try Task.checkCancellation()
+    switch source {
+    case .off:
       throw VisionUnavailable(
-        reason: "no fresh frame",
-        speakable: "No fresh camera frame is available right now, so nothing can be described. Ask the user to check that the \(frameSource.rawValue) camera is on and pointed at the subject, then try again.")
+        reason: "camera off",
+        speakable: "The camera is turned off in the app, so nothing can be seen right now.")
+    case .iPhoneCamera:
+      guard let frame = await FrameStore.shared.waitForFreshFrame(maxAge: 1.0, timeout: 1.5, source: .iPhone) else {
+        try Task.checkCancellation()
+        throw VisionUnavailable(
+          reason: "no fresh iPhone frame",
+          speakable: "No fresh image arrived from the iPhone camera, so nothing can be described. Ask the user to point the phone at the subject and try again. Do not describe any earlier image.")
+      }
+      return try await encodeVideoFrame(frame, taskID: taskID, detail: detail, useCPU: background)
+    case .glasses:
+      let mode = GlassesVisionCaptureMode.current
+      var triedPhoto = false
+      if mode.prefersPhoto(for: detail), !background {
+        triedPhoto = true
+        if let photo = try await captureGlassesPhoto(taskID: taskID, detail: detail) { return photo }
+      }
+      if let frame = await FrameStore.shared.waitForFreshFrame(maxAge: 1.0, timeout: 2.0, source: .glasses) {
+        return try await encodeVideoFrame(frame, taskID: taskID, detail: detail, useCPU: background)
+      }
+      try Task.checkCancellation()
+      if mode.allowsPhoto, !triedPhoto, !background,
+         let photo = try await captureGlassesPhoto(taskID: taskID, detail: detail) {
+        return photo
+      }
+      let state = glassesStreamState().lowercased()
+      let reason: String
+      if state.contains("paused") {
+        reason = "The Ray-Ban camera stream is paused (a tap on the glasses' temple pauses it; tapping again resumes it)."
+      } else if state.contains("waiting") || state.contains("starting") {
+        reason = "The app is still waiting for the Ray-Ban camera to start."
+      } else if state.contains("stopped") {
+        reason = "The Ray-Ban camera stream is not running."
+      } else {
+        reason = "No fresh image arrived from the Ray-Ban camera in time."
+      }
+      throw VisionUnavailable(
+        reason: "no fresh Ray-Ban image (stream: \(state))",
+        speakable: "\(reason) Nothing can be described right now. Tell the user briefly and do not describe any earlier image.")
     }
+  }
+
+  private func encodeVideoFrame(
+    _ frame: CapturedFrame,
+    taskID: UUID,
+    detail: VisionDetail,
+    useCPU: Bool
+  ) async throws -> (jpeg: Data, info: VisionFrameInfo) {
     let ageMs = Int((frame.ageSeconds * 1_000).rounded())
     ledger.update(taskID) { $0.timeline.frameSelected = Date() }
     let pixelBuffer = frame.pixelBuffer
     let encoded = await Task.detached(priority: .userInitiated) {
-      VisionFrameEncoder.encode(pixelBuffer, useCPU: background)
+      VisionFrameEncoder.encode(pixelBuffer, detail: detail, useCPU: useCPU)
     }.value
     try Task.checkCancellation()
     guard let encoded else {
@@ -447,16 +516,57 @@ final class AssistantOrchestrator: ObservableObject {
         speakable: "The camera image could not be prepared. Ask the user to try again.")
     }
     let info = VisionFrameInfo(
+      kind: .video,
       source: frame.source.rawValue,
+      sequence: frame.sequence,
+      pixelFormat: FrameStore.fourCC(frame.pixelFormat),
       sourceWidth: frame.width, sourceHeight: frame.height,
       encodedWidth: encoded.width, encodedHeight: encoded.height,
       jpegQuality: encoded.quality, jpegBytes: encoded.jpeg.count,
-      frameAgeMs: ageMs, usedStillPhoto: false)
+      frameAgeMs: ageMs, captureLatencyMs: nil, reencoded: true, detail: detail)
     ledger.update(taskID) {
       $0.timeline.imagePrepared = Date()
       $0.frame = info
     }
+    FrameStore.shared.recordVisionImage(info.summary)
     return (encoded.jpeg, info)
+  }
+
+  /// Requests a new still photo from the glasses for this task only. Returns
+  /// nil (so the caller can fall back to video) when the SDK refuses, times
+  /// out, or the task stopped being current while waiting.
+  private func captureGlassesPhoto(
+    taskID: UUID,
+    detail: VisionDetail
+  ) async throws -> (jpeg: Data, info: VisionFrameInfo)? {
+    guard let provider = glassesStillPhoto else { return nil }
+    let requestedAt = Date()
+    let still = await provider(4.0)
+    try Task.checkCancellation()
+    guard let still,
+          let record = ledger.record(taskID), !record.phase.isTerminal else { return nil }
+    let jpeg = still.jpeg
+    let prepared = await Task.detached(priority: .userInitiated) {
+      StillPhotoProcessor.prepare(jpeg, detail: detail)
+    }.value
+    try Task.checkCancellation()
+    guard let prepared else { return nil }
+    let info = VisionFrameInfo(
+      kind: .photo,
+      source: FrameSourceKind.glasses.rawValue,
+      sequence: nil,
+      pixelFormat: "JPEG",
+      sourceWidth: still.width, sourceHeight: still.height,
+      encodedWidth: prepared.width, encodedHeight: prepared.height,
+      jpegQuality: prepared.quality, jpegBytes: prepared.jpeg.count,
+      frameAgeMs: 0, captureLatencyMs: still.latencyMs, reencoded: prepared.reencoded, detail: detail)
+    ledger.update(taskID) {
+      $0.timeline.frameSelected = requestedAt.addingTimeInterval(Double(still.latencyMs) / 1_000)
+      $0.timeline.imagePrepared = Date()
+      $0.frame = info
+    }
+    FrameStore.shared.recordVisionImage(info.summary)
+    return (prepared.jpeg, info)
   }
 
   private func callModel(
@@ -467,7 +577,8 @@ final class AssistantOrchestrator: ObservableObject {
     image: Data?,
     schema: (name: String, schema: [String: Any])? = nil,
     extraContext: String? = nil,
-    directSearch: Bool = false
+    directSearch: Bool = false,
+    detail: VisionDetail = .standard
   ) async throws -> ResponsesResult {
     let usesWeb = tools.contains { ($0["type"] as? String) == "web_search" }
     guard let model = ModelSelector.model(
@@ -493,7 +604,8 @@ final class AssistantOrchestrator: ObservableObject {
       content.append(["type": "input_image", "image_url": "data:image/jpeg;base64,\(image.base64EncodedString())"])
     }
 
-    var instructions = AssistantInstructions.executor(kind: kind, detectedLanguage: context.detectedLanguage)
+    var instructions = AssistantInstructions.executor(
+      kind: kind, detectedLanguage: context.detectedLanguage, detail: detail)
     if directSearch {
       instructions += "\nWeb search results are provided in the input. Base current facts only on them, " +
         "name the most relevant source briefly, and say so if they do not answer the request."

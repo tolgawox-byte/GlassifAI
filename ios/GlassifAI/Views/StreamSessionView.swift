@@ -63,6 +63,20 @@ struct StreamSessionView: View {
       }
     }
     .task {
+      let stream = viewModel
+      AssistantOrchestrator.shared.glassesStillPhoto = { timeout in
+        await stream.captureStillForVision(timeout: timeout)
+      }
+      AssistantOrchestrator.shared.glassesStreamState = { stream.lastStreamState }
+      let voiceSession = voice
+      VoiceStartCoordinator.shared.register(isActive: { voiceSession.isActive }) { _ in
+        let source = CaptureSource(rawValue: UserDefaults.standard.string(forKey: CaptureSource.defaultsKey) ?? "")
+          ?? .iPhoneCamera
+        let route = AudioRoutePreference.current
+        await voiceSession.start(
+          prefersBluetoothHFP: route.prefersGlassesAudio(for: source),
+          forcesBuiltInAudio: route == .iPhone)
+      }
       if gestureSession == nil, let wearables {
         gestureSession = GlassesGestureSession(wearables: wearables)
       }
@@ -89,6 +103,7 @@ struct StreamSessionView: View {
       Task { await activateCaptureSource() }
     }
     .onDisappear {
+      VoiceStartCoordinator.shared.unregister()
       Task {
         await gestureSession?.stop()
         await voice.stop()
@@ -117,6 +132,7 @@ struct StreamSessionView: View {
     let route = AudioRoutePreference.current
     let audioChanges = route.prefersGlassesAudio(for: previous) != route.prefersGlassesAudio(for: captureSource)
     AssistantOrchestrator.shared.cancelAll(reason: "camera source changed", voiceOnly: false)
+    viewModel.stillPhotos.cancel()
     FrameStore.shared.reset()
     if audioChanges && voice.isActive {
       await gestureSession?.stop()

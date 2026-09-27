@@ -132,11 +132,10 @@ class StreamSessionViewModel: ObservableObject {
   private let wearables: WearablesInterface?
   private let deviceSelector: AutoDeviceSelector?
   private var deviceMonitorTask: Task<Void, Never>?
-  // VideoDecoder for decompressing HEVC/H.264 frames in background
-  private let videoDecoder = VideoDecoder()
-  private var backgroundFrameCount = 0
-  private var bgDiagLogged = false
   private var lifecycleObservers: [NSObjectProtocol] = []
+  /// One app-requested still capture at a time; photos that do not answer a
+  /// pending request (shutter button, late arrivals) never reach vision.
+  let stillPhotos = StillPhotoCoordinator()
 
   init(wearables: WearablesInterface?) {
     self.wearables = wearables
@@ -164,20 +163,23 @@ class StreamSessionViewModel: ObservableObject {
     streamProfile = profile
     selectedResolution = profile.resolution
     frameIngestor.configure(legacyPreview: AssistantPreferences.usesLegacyPreview)
-    setupVideoDecoder()
     attachListeners()
     observeLifecycle()
   }
 
-  private func setupVideoDecoder() {
-    // Background frames decoded by VideoToolbox go straight to the shared
-    // frame store; no image conversion or JPEG encoding happens per frame.
-    videoDecoder.setFrameCallback { decodedFrame in
-      FrameStore.shared.ingest(
-        pixelBuffer: decodedFrame.pixelBuffer,
-        source: .glasses,
-        presentationTime: decodedFrame.presentationTimeStamp)
+  /// Asks the glasses for a fresh still photo for one vision request.
+  /// Returns nil when the stream is not running, the SDK refuses, or no photo
+  /// arrives before the timeout.
+  func captureStillForVision(timeout: TimeInterval) async -> StillPhoto? {
+    guard streamingStatus == .streaming, streamSession != nil else { return nil }
+    FrameStore.shared.recordPhotoRequest()
+    let photo = await stillPhotos.capture(timeout: timeout) { [weak self] in
+      guard let session = self?.streamSession else { return false }
+      return session.capturePhoto(format: .jpeg)
     }
+    FrameStore.shared.recordPhoto(
+      width: photo?.width, height: photo?.height, latencyMs: photo?.latencyMs, success: photo != nil)
+    return photo
   }
 
   private func observeLifecycle() {
@@ -244,38 +246,15 @@ class StreamSessionViewModel: ObservableObject {
       }
       if result.handled { return }
 
-      // Legacy preview path (the original behaviour), and background frames
-      // that arrive compressed.
+      // Legacy preview path (the original behaviour), foreground only. The
+      // ingestor has already fed the frame store (raw copy or decode), so
+      // vision works in this mode too.
       Task { @MainActor [weak self] in
-        guard let self else { return }
-
-        let isInBackground = UIApplication.shared.applicationState == .background
-
-        if !isInBackground {
-          self.backgroundFrameCount = 0
-          self.bgDiagLogged = false
-          if let image = videoFrame.makeUIImage() {
-            self.currentVideoFrame = image
-            if !self.hasReceivedFirstFrame {
-              self.hasReceivedFirstFrame = true
-            }
-          }
-        } else {
-          // In background: makeUIImage() uses VideoToolbox GPU rendering which iOS suspends.
-          // Instead, use our VideoDecoder (VTDecompressionSession) to decode compressed
-          // frames into pixel buffers for the frame store.
-          self.backgroundFrameCount += 1
-
-          let sampleBuffer = videoFrame.sampleBuffer
-          if CMSampleBufferGetDataBuffer(sampleBuffer) != nil {
-            do {
-              try self.videoDecoder.decode(sampleBuffer)
-            } catch {
-              if self.backgroundFrameCount <= 5 || self.backgroundFrameCount % 120 == 0 {
-                NSLog("[Stream] Background frame #%d decode error: %@",
-                      self.backgroundFrameCount, String(describing: error))
-              }
-            }
+        guard let self, UIApplication.shared.applicationState != .background else { return }
+        if let image = videoFrame.makeUIImage() {
+          self.currentVideoFrame = image
+          if !self.hasReceivedFirstFrame {
+            self.hasReceivedFirstFrame = true
           }
         }
       }
@@ -304,8 +283,12 @@ class StreamSessionViewModel: ObservableObject {
 
     updateStatusFromState(streamSession.state)
 
-    // Subscribe to photo capture events
+    // Subscribe to photo capture events. A photo that answers a pending vision
+    // request goes to that request only; anything else keeps the original
+    // preview behaviour and is never used for vision.
+    let photos = stillPhotos
     photoDataListenerToken = streamSession.photoDataPublisher.listen { [weak self] photoData in
+      if photos.deliver(photoData.data) { return }
       Task { @MainActor [weak self] in
         guard let self else { return }
         guard let uiImage = UIImage(data: photoData.data) else { return }
@@ -394,6 +377,7 @@ class StreamSessionViewModel: ObservableObject {
       currentVideoFrame = nil
       hasReceivedFirstFrame = false
       frameIngestor.resetFirstFrame()
+      stillPhotos.cancel()
       streamingStatus = .stopped
     case .waitingForDevice, .starting, .stopping, .paused:
       streamingStatus = .waiting
