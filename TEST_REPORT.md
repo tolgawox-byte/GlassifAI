@@ -7,6 +7,23 @@ Environment: Windows 11 development machine (no Xcode). All compilation and test
 ## Automated results
 
 <!-- AUTOMATED-RESULTS -->
+### Run 36302332223 — commit `8f04249` (proof of executed tests)
+
+Test names and counts come from the `.xcresult` bundle and are published as annotations.
+
+- **iOS: 33 passed, 0 failed, 0 skipped.**
+  - `AutoLoomCoreTests`: 23
+  - `AutoLoomTaskTests`: 7
+  - `GlassesGestureInterpreterTests`: 3
+- **Rust: 5 passed, 0 failed.** `empty_options_keep_baseline_configuration`, `invalid_voice_falls_back_to_juniper`, `reconnect_delay_backs_off_and_caps`, `truncation_respects_char_boundaries`, `initial_items_are_bounded_and_typed`.
+
+### Ray-Ban vision + assistant name work
+
+Results are added after the CI run for this change. The new classes are:
+- `AutoLoomVisionTests`: raw frame to FrameStore, compressed frame decoded to FrameStore, wrong source, stale frame, switch clears, pending-only photo, late photo rejected, one capture in flight, photo pass-through/fit, vision profile limits, reading requests use high detail, high-detail encoder
+- `AutoLoomAssistantTests`: name validation, persistence and default, name in instructions, other settings unchanged, invocation cannot start two sessions, queued invocation runs once
+
+The CI script now discovers every test class automatically, excluding only the Meta mock-device class.
 ### Run 36300781448 — commit `e104d71` (feature commits)
 
 https://github.com/tolgawox-byte/GlassifAI/actions/runs/36300781448
@@ -72,6 +89,17 @@ Before starting: install the **Release** IPA, open Settings → Diagnostics and 
 | 11 | Privacy delete | Enable Memory, say "Bütçemin 500 dolar olduğunu hatırla", verify in Settings → Memory; then Privacy → Delete all local data | Item appears, then everything is cleared | |
 | 12 | Cancel | Ask a web question, immediately say "görevi iptal et" (or tap ✕) | "Cancelled" acknowledgement; no late answer from the cancelled task | |
 | 13 | Typed question | Tap ⌨︎, type "Toronto'da bugün hava nasıl?" | Answer card with sources; not spoken | |
+
+## Physical tests — Ray-Ban vision and assistant name
+
+| # | Test | Steps | Expected | Result |
+|---|---|---|---|---|
+| E1 | Name | Settings → Assistant → name **Jarvis**. Start a conversation and say: "Jarvis, nasılsın?" | Normal reply; does not keep saying "I am Jarvis" | |
+| E2 | Ray-Ban vision | Ray-Ban selected. Ask: "Jarvis, şu an neye bakıyorum?" | Correct description. Diagnostics → Recent tasks shows `VIDEO Ray-Ban #<seq> … age ≤1000 ms`, or `PHOTO` as fallback. **Also note** *Delivered as* (raw/compressed), decoded frames, and stream state | |
+| E3 | Text reading | Point at text. Say: "Jarvis, önümdeki yazıyı oku." | Task shows `PHOTO … high detail` (or video fallback); exact transcription; unreadable parts named. Compare photo vs video legibility using Settings → Ray-Ban → Vision image | |
+| E4 | Meta invocation | Try "Hey Meta, start AutoLoom" | **Expected not to work in this build** (DAT 0.4.0). Record Meta AI's response | |
+| E5 | Siri | Say "Hey Siri, start AutoLoom", then create a Shortcut named "Jarvis" running *Start Conversation* and say "Hey Siri, Jarvis" | App opens and starts listening once; Settings → Hands-Free → Recent invocations shows `Siri / Shortcuts = started` | |
+| E6 | Stall explanation | During a conversation, tap the glasses' temple (pauses the stream), then ask what you're looking at | The assistant says the camera is paused (or uses a fresh photo); it never describes an old image | |
 
 ## Camera acceptance (from the brief)
 

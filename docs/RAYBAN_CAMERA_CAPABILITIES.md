@@ -9,18 +9,82 @@ Researched 2026-09-27 from Meta's official DAT documentation (wearables.develope
 - Third-party video goes over **Bluetooth Classic**, and the glasses compress harder as resolution and frame rate go up. Wi-Fi streaming arrived in 0.8.0 and needs Wi-Fi entitlements from a **paid Apple developer team**, which a free sideloading account can't provide. Meta AI's own experience is not limited this way, so some softness compared with it is a platform limit, not an app bug.
 - The phone-side pipeline had real problems, and this release fixes them: every frame hopped to the main thread and was converted to a `UIImage` there, SDK buffers were retained until that ran, and a JPEG was encoded every second. Meta's SDK calls the frame callback inline, so holding its buffers can drain the decoder pool and stall the stream (UNVERIFIED staff-adjacent report, consistent with the observed lag).
 
+## Vision reliability fix: "preview visible, but no fresh frame"
+
+What the code showed in the previous build (`8f04249`):
+
+1. **Compressed samples never reached vision in the foreground.**
+   - `GlassesFrameIngestor.handle` fed `FrameStore` only for samples with an image buffer. A compressed sample (data buffer, no image buffer) returned "not handled".
+   - In the foreground it then reached only the legacy `makeUIImage()` preview, which decodes internally. That produced a visible preview and no vision frame.
+   - The app's own decoder ran only in the background.
+2. **No fallback when the stream stalls.** Vision required a frame at most 1.0 s old and waited only 1.5 s. Several things can make the stream stall while the preview keeps showing the last frame:
+   - a temple tap, which pauses the DAT session
+   - Bluetooth congestion while HFP voice audio is active
+   - the dropped-I-frame freeze Meta staff reported for DAT
+   
+   The original GlassifAI accepted frames up to **10 s** old, which hid stalls but could describe a stale view.
+3. **A frame whose buffer could not be copied on the CPU was dropped** instead of being kept for vision.
+
+Which of these hit the physical device has not been measured yet. If the preview was visible in the default low-latency mode, the frames were raw, which points to (2). Diagnostics now shows the exact path: *Delivered as* raw or compressed, codec, decoded frames and failures, copy fallbacks, stream state, and each task's image source.
+
+**Fix**
+- **Every sample is fed to vision.**
+  - Raw samples: copy, then `FrameStore`, then preview. If the copy fails, the original buffer is kept.
+  - Compressed samples: hardware decode (`VTDecompressionSession`) on a serial queue in **both foreground and background**, then `FrameStore` and preview.
+  - Rule enforced: if a Ray-Ban frame can be shown, vision can use it.
+- **Ray-Ban vision requests never use the iPhone camera, a preview screenshot, an earlier task's photo, or a stale frame.**
+  - Video frames must be ≤ 1.0 s old (the app waits up to 2.0 s).
+  - Photos are requested per task and accepted only while that task's request is pending.
+  - Switching camera source clears the frame cache and cancels a pending photo.
+- **Fallback:** if no fresh video frame arrives, the app asks the glasses for a still photo (4 s timeout). If that also fails, the assistant explains why, using the DAT stream state ("paused — tap the temple", "waiting for glasses", "not running"), and never describes an older image.
+
+## Quality path for AI vision
+
+| Request | Ray-Ban image | Profile |
+|---|---|---|
+| General ("what am I looking at?") | Freshest decoded video frame → fallback still photo | **Standard**: long side ≤ 1280 px (the 720×1280 stream is never downscaled), JPEG q0.80, ≤ 1 MB |
+| Reading / fine detail ("read this sign", VIN, badge, label, screen, price, warning) — `TASK: vision_read` or `look_at_camera(detail: high)` | Fresh still photo first → fallback video frame | **High detail**: long side ≤ 2048 px and ≤ 2500 patches of 32 px (Codex's image limits), JPEG q0.92, ≤ 2.6 MB. A photo that already fits is sent **unchanged** (no recompression) |
+| Vision + web (identify, then research) | Same as reading | High detail |
+
+- The mode can be changed in Settings → Ray-Ban → Vision image: *Automatic* (default), *Video frames only*, or *Still photo first*.
+- Each task records:
+  - source and kind (PHOTO or VIDEO)
+  - frame sequence
+  - pixel format
+  - source and encoded size
+  - JPEG quality and bytes
+  - frame age or capture latency
+  - profile
+- The last AI image is summarized in Diagnostics as metadata only; the image itself is never logged.
+
+## Still photo support (DAT 0.4.0)
+
+- `StreamSession.capturePhoto(format: .jpeg)` works only **during an active stream**. Video pauses briefly and resumes.
+- Meta maintainers describe in-stream photos as frames of the video stream, so they are **not higher resolution than the stream**. They may still be a cleaner single JPEG than a decoded video frame. Diagnostics shows *last photo* resolution and latency, and Test 3 compares the two.
+- The photo publisher carries **no request ID**, and photos taken with the glasses' shutter button arrive on the same publisher. The app therefore:
+  - keeps at most one capture in flight
+  - accepts a photo only while a request is pending
+  - rejects late or unsolicited photos (unit tested)
+- Full-resolution photos (up to 4032×3024, `Camera.photo`) require **DAT 1.0** and cannot run during a stream. They are part of the upgrade plan below.
+
+## Text reading strategy
+
+- The best available source image goes straight to the multimodal model. There is no separate OCR engine.
+- Reading requests get the high-detail profile, a fresh photo first, and instructions to transcribe exactly: keep letters, digits, units, and codes exact, and say which parts are unreadable instead of guessing.
+- Legibility is limited by the glasses' optics and Bluetooth compression. Moving closer and holding still helps more than any encoder setting.
+
 ## Capability table
 
 | Capability | Current behavior (this build) | Official DAT max | Can improve? | Platform limitation? | Physical test? |
 |---|---|---|---|---|---|
 | Stream resolution | Requests 720×1280 by default (original profile). Actual size is shown in Diagnostics | 720×1280 (`.high`), 504×896 (`.medium`), 360×640 (`.low`) | Yes: upgrade to ≥0.5.0 so `.high` is honored. Try the "Smooth" or "Sharper frames" profile now | Yes. The ladder drops resolution first, then fps (never below 15), when Bluetooth bandwidth is low | Yes (Test 6) |
 | Frame rate | 24 fps requested (original). Profiles: 30 fps (504p) or 15 fps (720p) | 2, 7, 15, 24, 30 fps | Yes. Fewer fps means less compression loss per frame | Yes (adaptive) | Yes |
-| Codec | `.raw` (SDK-decoded 420v YUV) | `.raw` (foreground only), `.hvc1` (HEVC, 0.5.0+, foreground and background) | Yes, after upgrading: `.hvc1` plus hardware decode | — | Yes |
+| Codec | `.raw` requested (the only case in 0.4.0). Both decoded and compressed samples are handled; compressed ones are hardware-decoded by the app | `.raw` (foreground only), `.hvc1` (HEVC, 0.5.0+, foreground and background) | Yes, after upgrading: `.hvc1` plus hardware decode | — | Yes |
 | Transport | Bluetooth Classic | Bluetooth Classic, or Wi-Fi (0.8.0+) | Only with Wi-Fi entitlements (paid Apple team) | Yes, bandwidth | — |
-| Still capture | Not used. In-stream `capturePhoto` on 0.4.0 returns a stream frame and pauses the video | 1.0.0 `Camera.photo` up to 4032×3024 JPEG/HEIC. Experimental, can't run during a stream, can't be published | Yes, after the 1.0.0 upgrade (dev builds) | Yes | — |
+| Still capture | In-stream `capturePhoto(format: .jpeg)` per vision task: first for reading requests, and as the fallback when video stalls (4 s timeout). One request at a time; late or unsolicited photos rejected | 1.0.0 `Camera.photo` up to 4032×3024 JPEG/HEIC. Experimental, can't run during a stream, can't be published | Yes, after the 1.0.0 upgrade (dev builds) | Yes | Yes (Test 3) |
 | Frame timestamps | Arrival time on the phone; PTS used only if it is on the host clock | `VideoFrame` exposes only `sampleBuffer` and `makeUIImage()`; clock origin undocumented | — | Yes: no official capture timestamp | Stopwatch test |
 | Preview pipeline | One buffer copy on the callback thread, then `AVSampleBufferDisplayLayer`; latest frame wins; no main-thread work | — | Done | — | Yes |
-| AI frame | Encoded on request from the newest source buffer (≤1 s old), JPEG q0.82, long side ≤1600 px, `detail` high by default | Codex caps images at 2048 px | Done | — | Yes (Test 3) |
+| AI image | Standard: freshest frame (≤1 s old), ≤1280 px, q0.80. High detail: fresh photo or frame, ≤2048 px and ≤2500 patches, q0.92; photos that already fit are passed through unchanged | Codex caps images at 2048 px and 2500 32-px patches | Done | — | Yes (Test 2, 3) |
 | Sessions | One DAT stream plus the gesture session | Only one session per device; some Meta AI features pause while a third-party session is active | — | Yes | — |
 | Devices | Ray-Ban Meta (tested) | Ray-Ban Meta Gen 1/2, Meta Ray-Ban Display, Oakley Meta HSTN/Vanguard (1.0.0 needs firmware V128) | — | — | — |
 

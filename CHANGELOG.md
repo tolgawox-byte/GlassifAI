@@ -27,6 +27,27 @@ AutoLoom Media Glasses, built on GlassifAI. Baseline: `74d9be5` (tag `baseline-7
   - Simulator unit tests and Rust unit tests run in CI.
 - **Documentation.** `BASELINE.md`, `CAPABILITIES.md`, `TEST_REPORT.md`, and in `docs/`: `RAYBAN_CAMERA_CAPABILITIES.md`, `PRIVACY_AND_PERMISSIONS.md`, and `WINDOWS_INSTALL.md`. `docs/ARCHITECTURE.md` was updated.
 
+### Added — Ray-Ban vision and assistant name
+
+- **Ray-Ban vision.**
+  - Compressed glasses frames are now hardware-decoded in the foreground and in the background. Every frame that can be displayed reaches vision.
+  - If the CPU copy fails, the original buffer is kept.
+  - Diagnostics shows raw vs compressed, codec, decoded frames and failures, FrameStore sequence, photo statistics, and the last AI image source.
+- **Still photos for vision.**
+  - Fresh Ray-Ban stills are used for reading and detail requests, and as the fallback when video stalls.
+  - One request is in flight at a time. Late and shutter-button photos are rejected.
+- **Vision profiles.**
+  - Standard: 1280 px, q0.80.
+  - High detail: ≤2048 px and ≤2500 patches, q0.92. Photos that already fit are sent unchanged.
+  - New `TASK: vision_read` route and a `look_at_camera(detail:)` parameter.
+- **Honest explanations.** When the camera stalls, the assistant reports the stream state ("paused", "waiting", "not running") and never describes an older image.
+- **Assistant name.** Settings → Assistant sets a custom name (for example "Jarvis"). It is validated, stored locally, and used as identity in the voice instructions. An experimental "only answer when called by name" option is included.
+- **Siri.** "Hey Siri, start AutoLoom" works through an App Shortcut, and users can create their own Siri phrase with a shortcut. Alternative app names were added for Siri.
+- **Single start path.** `VoiceStartCoordinator` handles the button, Siri, and the future "Hey Meta" invocation idempotently, so two sessions can never start.
+- **Settings → Hands-Free.** Shows what really works: Meta invocation (not available in this build), custom wake word (not supported), Siri, and background limits.
+- **CI.** Test classes are discovered automatically.
+- **Documentation.** `docs/VOICE_INVOCATION.md` is new; the camera document is updated.
+
 ### Changed
 
 - Executor requests no longer ask for a reasoning summary, which lowers latency.
