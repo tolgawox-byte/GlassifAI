@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>GlassifAI</string>
+	<string>AutoLoom</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>GlassifAI</string>
+	<string>AutoLoom Media Glasses</string>
+	<key>AutoLoomCommitSHA</key>
+	<string>$(AUTOLOOM_COMMIT_SHA)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -57,18 +59,18 @@
 		<string>external-accessory</string>
 	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>GlassifAI uses Bluetooth to receive camera frames from your Meta glasses.</string>
+	<string>AutoLoom Media Glasses uses Bluetooth to receive camera frames from your Meta glasses.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>GlassifAI uses the glasses connection while you ask ChatGPT about what you see.</string>
+	<string>AutoLoom Media Glasses uses the glasses connection while you ask about what you see.</string>
 	<key>UISupportedExternalAccessoryProtocols</key>
 	<array>
 		<string>com.meta.ar.wearable</string>
 	</array>
 	<!-- End required section for Device Access Toolkit Apps -->
 	<key>NSCameraUsageDescription</key>
-	<string>GlassifAI uses the iPhone camera as an optional visual source for ChatGPT.</string>
+	<string>AutoLoom Media Glasses uses the iPhone camera, only when you choose it, so the assistant can answer questions about what you see.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>GlassifAI uses the microphone for your live ChatGPT voice conversation.</string>
+	<string>AutoLoom Media Glasses uses the microphone for your live voice conversation with the assistant.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

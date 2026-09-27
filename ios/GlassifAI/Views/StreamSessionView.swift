@@ -12,6 +12,7 @@ struct StreamSessionView: View {
   @State private var glassesAutoStarted = false
   @State private var glassesRegistered = false
   @State private var gestureSession: GlassesGestureSession?
+  @State private var lastActivatedSource: CaptureSource?
   @Environment(\.scenePhase) private var scenePhase
 
   private var captureSource: CaptureSource {
@@ -23,11 +24,11 @@ struct StreamSessionView: View {
     case .sdkUnavailable:
       ("Glasses unavailable", "Use the iPhone camera or try again on a supported device.")
     case .permissionNeeded:
-      ("Permission needed", "Allow camera access for GlassifAI in the Meta AI app.")
+      ("Permission needed", "Allow camera access for AutoLoom Media Glasses in the Meta AI app.")
     case .hingesClosed:
       ("Glasses folded", "Open the hinges to begin seeing through your glasses.")
     case .reconnecting:
-      ("Reconnecting", "GlassifAI will show your view as soon as the glasses wake up.")
+      ("Reconnecting", "Your view will appear as soon as the glasses wake up.")
     case nil:
       ("Waiting for glasses", "Open your glasses and keep them near your iPhone.")
     }
@@ -54,31 +55,27 @@ struct StreamSessionView: View {
       } else {
         GlassifAIExperienceView(
           captureSource: captureSource,
-          glassesImage: viewModel.currentVideoFrame,
+          glassesStream: viewModel,
           glassesPlaceholder: glassesPlaceholder,
           voice: voice,
-          camera: camera)
+          camera: camera,
+          glassesDeviceName: glassesDeviceName)
       }
     }
     .task {
-      camera.onVisionJPEG = { jpeg in voice.submitVisionJPEG(jpeg) }
-      viewModel.onVisionJPEG = { jpeg in voice.submitVisionJPEG(jpeg) }
       if gestureSession == nil, let wearables {
         gestureSession = GlassesGestureSession(wearables: wearables)
       }
       glassesRegistered =
         wearablesViewModel?.registrationState == .registered ||
         wearablesViewModel?.hasMockDevice == true
+      AudioRouteMonitor.shared.start()
       await activateCaptureSource()
       await updateGestureSession()
     }
     .onChange(of: captureSourceRaw) { _, _ in
       glassesAutoStarted = false
-      Task {
-        await gestureSession?.stop()
-        await voice.stop()
-        await activateCaptureSource()
-      }
+      Task { await switchCaptureSource() }
     }
     .onChange(of: voice.state) { _, _ in
       Task { await updateGestureSession() }
@@ -104,6 +101,34 @@ struct StreamSessionView: View {
     } message: {
       Text(viewModel.errorMessage)
     }
+  }
+
+  private var glassesDeviceName: String? {
+    guard let wearables,
+          let id = wearablesViewModel?.devices.first ?? wearables.devices.first,
+          let device = wearables.deviceForIdentifier(id) else { return nil }
+    return device.nameOrId()
+  }
+
+  /// Switching the camera no longer ends the conversation unless the audio
+  /// route has to change (for example Ray-Ban audio → iPhone speaker).
+  private func switchCaptureSource() async {
+    let previous = lastActivatedSource ?? captureSource
+    let route = AudioRoutePreference.current
+    let audioChanges = route.prefersGlassesAudio(for: previous) != route.prefersGlassesAudio(for: captureSource)
+    AssistantOrchestrator.shared.cancelAll(reason: "camera source changed", voiceOnly: false)
+    FrameStore.shared.reset()
+    if audioChanges && voice.isActive {
+      await gestureSession?.stop()
+      await voice.stop()
+      await activateCaptureSource()
+      await voice.start(
+        prefersBluetoothHFP: route.prefersGlassesAudio(for: captureSource),
+        forcesBuiltInAudio: route == .iPhone)
+    } else {
+      await activateCaptureSource()
+    }
+    await updateGestureSession()
   }
 
   private func updateGestureSession() async {
@@ -133,25 +158,31 @@ struct StreamSessionView: View {
   }
 
   private func activateCaptureSource() async {
-    if captureSource == .iPhoneCamera {
+    lastActivatedSource = captureSource
+    switch captureSource {
+    case .iPhoneCamera:
       glassesAutoStarted = false
       if viewModel.isStreaming { await viewModel.stopSession() }
       await camera.start()
-      return
+    case .off:
+      glassesAutoStarted = false
+      await camera.stop()
+      if viewModel.isStreaming { await viewModel.stopSession() }
+      FrameStore.shared.reset()
+    case .glasses:
+      await camera.stop()
+      guard let wearablesViewModel,
+            wearablesViewModel.registrationState == .registered ||
+              glassesRegistered ||
+              wearablesViewModel.hasMockDevice else { return }
+      guard !glassesAutoStarted else { return }
+      glassesAutoStarted = true
+      for _ in 0..<20 {
+        await viewModel.handleStartStreaming()
+        if viewModel.isStreaming || captureSource != .glasses { break }
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+      }
+      if !viewModel.isStreaming { glassesAutoStarted = false }
     }
-
-    await camera.stop()
-    guard let wearablesViewModel,
-          wearablesViewModel.registrationState == .registered ||
-            glassesRegistered ||
-            wearablesViewModel.hasMockDevice else { return }
-    guard !glassesAutoStarted else { return }
-    glassesAutoStarted = true
-    for _ in 0..<20 {
-      await viewModel.handleStartStreaming()
-      if viewModel.isStreaming || captureSource != .glasses { break }
-      try? await Task.sleep(nanoseconds: 3_000_000_000)
-    }
-    if !viewModel.isStreaming { glassesAutoStarted = false }
   }
 }

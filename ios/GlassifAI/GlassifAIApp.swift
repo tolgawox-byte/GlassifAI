@@ -106,13 +106,14 @@ private struct AuthenticationHeader: View {
     VStack(spacing: 18) {
       GlassifAIMark(size: 116)
       VStack(spacing: 8) {
-        Text("GlassifAI")
+        Text(AutoLoomBrand.appName)
           .font(.largeTitle.bold())
-        Text("See it. Ask it. Understand it.")
+          .multilineTextAlignment(.center)
+        Text(AutoLoomBrand.tagline)
           .font(.headline)
           .foregroundStyle(.secondary)
       }
-      Text("Live ChatGPT voice and vision for your iPhone and Meta glasses.")
+      Text("Natural voice, vision, and live web answers for your iPhone and Meta glasses, using your ChatGPT account.")
         .font(.body)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -231,13 +232,13 @@ struct ChatGPTConsentView: View {
         VStack(alignment: .leading, spacing: 8) {
           Text("Connect ChatGPT")
             .font(.title2.bold())
-          Text("GlassifAI uses your ChatGPT plan for live voice and visual requests.")
+          Text("AutoLoom Media Glasses uses your ChatGPT account for live voice, vision, and web search requests. It is an independent app, not an official OpenAI or Meta product.")
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
         VStack(alignment: .leading, spacing: 18) {
           consentRow("Credentials are protected by this iPhone’s Keychain", icon: "key.fill")
-          consentRow("Camera frames are sent only while you use the app", icon: "camera.fill")
+          consentRow("A camera frame is sent only when a question needs to see", icon: "camera.fill")
           consentRow("Disconnecting removes the local session", icon: "trash")
         }
         Spacer(minLength: 12)

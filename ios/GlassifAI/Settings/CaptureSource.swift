@@ -1,17 +1,28 @@
 import Foundation
 
-/// The camera GlassifAI uses for visual questions. The raw value is persisted
-/// in UserDefaults so changing it in Settings applies without a relaunch.
+/// The camera the assistant uses for visual questions. The raw value is
+/// persisted in UserDefaults so changing it applies without a relaunch.
+/// `off` keeps conversation, web search, and reasoning working with no camera.
 enum CaptureSource: String, CaseIterable {
-  case iPhoneCamera = "iphone"
   case glasses = "glasses"
+  case iPhoneCamera = "iphone"
+  case off = "off"
 
   static let defaultsKey = "captureSource"
 
   var label: String {
     switch self {
     case .iPhoneCamera: "iPhone"
-    case .glasses: "Glasses"
+    case .glasses: "Ray-Ban"
+    case .off: "Off"
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+    case .iPhoneCamera: "iphone"
+    case .glasses: "eyeglasses"
+    case .off: "video.slash"
     }
   }
 }

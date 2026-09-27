@@ -1,0 +1,409 @@
+import SwiftUI
+import UIKit
+
+enum AppInfo {
+  static var version: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+  }
+
+  static var build: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+  }
+
+  /// Stamped by CI (`AUTOLOOM_COMMIT_SHA`); empty for local Xcode builds.
+  static var commit: String {
+    let value = (Bundle.main.object(forInfoDictionaryKey: "AutoLoomCommitSHA") as? String ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return value.isEmpty || value.hasPrefix("$(") ? "local build" : value
+  }
+}
+
+// MARK: Memory
+
+struct MemorySettingsView: View {
+  @ObservedObject private var memory = LocalMemoryStore.shared
+  @State private var newItem = ""
+  @State private var confirmDeleteAll = false
+
+  var body: some View {
+    Form {
+      Section(footer: Text("Off by default. When on, the items below are stored only on this iPhone and are added as context to your own ChatGPT requests. Nothing is synced with ChatGPT's memory or chat history.")) {
+        Toggle("On-device memory", isOn: $memory.isEnabled)
+      }
+      if memory.isEnabled {
+        Section("Add") {
+          HStack {
+            TextField("Something to remember", text: $newItem)
+            Button("Add") {
+              if memory.add(newItem, source: "manual") { newItem = "" }
+            }
+            .disabled(newItem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }
+        }
+      }
+      Section(header: Text("Saved items (\(memory.items.count))")) {
+        if memory.items.isEmpty {
+          Text("Nothing saved.")
+            .foregroundStyle(.secondary)
+        }
+        ForEach(memory.items) { item in
+          NavigationLink {
+            MemoryItemEditor(item: item)
+          } label: {
+            VStack(alignment: .leading, spacing: 2) {
+              Text(item.text)
+              Text("\(item.source) · \(item.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+        .onDelete { offsets in
+          offsets.map { memory.items[$0].id }.forEach(memory.delete)
+        }
+      }
+      if !memory.items.isEmpty {
+        Section {
+          Button("Delete all memory", role: .destructive) { confirmDeleteAll = true }
+        }
+      }
+    }
+    .navigationTitle("Memory")
+    .confirmationDialog("Delete all saved memory?", isPresented: $confirmDeleteAll, titleVisibility: .visible) {
+      Button("Delete all", role: .destructive) { memory.deleteAll() }
+    }
+  }
+}
+
+private struct MemoryItemEditor: View {
+  let item: LocalMemoryStore.Item
+  @State private var text = ""
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    Form {
+      TextField("Memory", text: $text, axis: .vertical)
+        .lineLimit(2...6)
+      Button("Save") {
+        LocalMemoryStore.shared.update(item.id, text: text)
+        dismiss()
+      }
+      Button("Delete", role: .destructive) {
+        LocalMemoryStore.shared.delete(item.id)
+        dismiss()
+      }
+    }
+    .navigationTitle("Edit memory")
+    .onAppear { text = item.text }
+  }
+}
+
+// MARK: Privacy
+
+struct PrivacySettingsView: View {
+  @State private var confirmWipe = false
+  @State private var wiped = false
+
+  var body: some View {
+    Form {
+      Section("What leaves this iPhone") {
+        privacyRow("Voice", "Your microphone audio streams to ChatGPT's realtime voice service only while a conversation is active.", "waveform")
+        privacyRow("Camera", "A single camera frame is encoded and sent to ChatGPT only when a request needs to see. The preview itself never leaves the phone.", "camera")
+        privacyRow("Web search", "Search requests run through your ChatGPT account (OpenAI's servers). The app never fetches web pages itself.", "globe")
+        privacyRow("Account", "ChatGPT sign-in tokens are stored only in this iPhone's Keychain and sent only to OpenAI.", "key")
+      }
+      Section("What is stored on this iPhone") {
+        privacyRow("Conversation context", "Kept in memory for the current app session only; cleared when the app quits or you wipe it below.", "text.bubble")
+        privacyRow("On-device memory", "Only if you turn it on in Settings → Memory. Editable and deletable.", "brain")
+        privacyRow("Diagnostics", "In-memory metrics and sanitized error text; no audio, images, or tokens are logged.", "stethoscope")
+      }
+      Section("Safety") {
+        privacyRow("Untrusted content", "Text from web pages, images, signs, and QR codes is treated as information, never as instructions.", "shield")
+        privacyRow("Actions", "The app cannot send email or messages, buy things, change calendars, delete files, push code, or deploy. Such requests are declined.", "hand.raised")
+      }
+      Section {
+        Button("Delete all local data", role: .destructive) { confirmWipe = true }
+        if wiped {
+          Label("Local data deleted", systemImage: "checkmark.circle.fill")
+            .foregroundStyle(.green)
+        }
+      } footer: {
+        Text("Deletes on-device memory, the current conversation context, sources, and diagnostics. Your ChatGPT sign-in stays until you disconnect it under ChatGPT account.")
+      }
+    }
+    .navigationTitle("Privacy")
+    .confirmationDialog("Delete all local data?", isPresented: $confirmWipe, titleVisibility: .visible) {
+      Button("Delete", role: .destructive) {
+        LocalMemoryStore.shared.deleteAll()
+        AssistantOrchestrator.shared.wipeConversationData()
+        FrameStore.shared.reset()
+        wiped = true
+      }
+    }
+  }
+
+  private func privacyRow(_ title: String, _ detail: String, _ icon: String) -> some View {
+    HStack(alignment: .top, spacing: 12) {
+      Image(systemName: icon)
+        .foregroundStyle(AutoLoomTheme.electricBlue)
+        .frame(width: 22)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title).font(.subheadline.weight(.semibold))
+        Text(detail).font(.footnote).foregroundStyle(.secondary)
+      }
+    }
+    .padding(.vertical, 2)
+  }
+}
+
+// MARK: Diagnostics
+
+struct DiagnosticsView: View {
+  let voice: GlassifAIRealtimeSession?
+  let glassesStream: StreamSessionViewModel?
+  @ObservedObject private var orchestrator = AssistantOrchestrator.shared
+  @ObservedObject private var ledger = AssistantOrchestrator.shared.ledger
+  @ObservedObject private var audioRoute = AudioRouteMonitor.shared
+  @State private var metrics = FrameMetricsSnapshot()
+  @State private var sidebandStatus = "—"
+  @State private var copied = false
+
+  var body: some View {
+    List {
+      Section("App") {
+        row("App", AutoLoomBrand.appName)
+        row("Version", "\(AppInfo.version) (\(AppInfo.build))")
+        row("Commit", AppInfo.commit)
+        row("Native bridge", EmbeddedCodexBridge.bridgeVersion())
+      }
+      Section("ChatGPT") {
+        row("Provider", "ChatGPT account · chatgpt.com/backend-api/codex")
+        row("OAuth", oauthStatus)
+        row("Token", tokenExpiry)
+        row("Realtime model", "gpt-live-1-codex")
+        row("Realtime start", voice?.startMode?.rawValue ?? "not started")
+        row("Voice", AssistantPreferences.voice)
+        row("Vision model", ModelSelector.model(for: .vision, available: models) ?? "—")
+        row("Web model", ModelSelector.model(for: .webSearch, available: models, needsHostedWebSearch: true) ?? "—")
+        row("Models available", "\(models.count)")
+      }
+      Section("Realtime") {
+        row("Voice state", voiceState)
+        row("Sideband", sidebandStatus)
+        row("Last realtime error", voice?.lastRealtimeError ?? "none")
+      }
+      Section("Ray-Ban (Meta DAT)") {
+        row("Stream state", glassesStream?.lastStreamState ?? "—")
+        row("Profile", glassesStream.map { "\($0.streamProfile.label)" } ?? "—")
+        row("Last stream error", glassesStream?.lastStreamError ?? "none")
+      }
+      Section("Camera pipeline") {
+        row("Source", metrics.source)
+        row("Input resolution", "\(metrics.inputResolution) \(metrics.pixelFormat)")
+        row("Measured FPS", String(format: "%.1f", metrics.measuredFPS))
+        row("Frames received", "\(metrics.framesReceived)")
+        row("Preview rendered / dropped", "\(metrics.previewRendered) / \(metrics.previewDropped)")
+        row("Preview failures", "\(metrics.previewFailures)")
+        row("Phone processing (median / p95)", "\(ms(metrics.processingMedianMs)) / \(ms(metrics.processingP95Ms))")
+        row("Capture→phone (median / p95)", "\(ms(metrics.transportMedianMs)) / \(ms(metrics.transportP95Ms))")
+        row("Last frame age", metrics.lastFrameAgeMs.map { "\($0) ms" } ?? "—")
+        row("Preview", metrics.previewMode)
+        row("Preview resolution", metrics.previewResolution)
+        row("Per-frame work", metrics.conversionsPerFrame)
+      }
+      Section("Audio") {
+        row("Microphone", audioRoute.inputSummary)
+        row("Speaker", audioRoute.outputSummary)
+        row("Available inputs", audioRoute.availableInputs.map(\.name).joined(separator: ", ").ifEmpty("—"))
+        row("Interrupted", audioRoute.isInterrupted ? "yes" : "no")
+        row("Last audio event", audioRoute.lastEvent)
+        row("Route preference", AudioRoutePreference.current.label)
+      }
+      Section("Web search") {
+        row("Enabled", AssistantPreferences.webSearchEnabled ? "yes" : "no")
+        row("Last status", orchestrator.lastWebStatus)
+      }
+      Section("Recent tasks") {
+        if ledger.records.isEmpty {
+          Text("No tasks yet").foregroundStyle(.secondary)
+        }
+        ForEach(Array(ledger.records.suffix(6).reversed())) { record in
+          taskRow(record)
+        }
+      }
+      Section("Errors") {
+        row("Last task error", orchestrator.lastError ?? "none")
+      }
+      Section {
+        Button(copied ? "Copied" : "Copy diagnostics report") {
+          UIPasteboard.general.string = report()
+          copied = true
+        }
+      } footer: {
+        Text("The report is sanitized: no tokens, audio, images, or email addresses.")
+      }
+    }
+    .navigationTitle("Diagnostics")
+    .task {
+      while !Task.isCancelled {
+        metrics = FrameStore.shared.snapshot()
+        sidebandStatus = LogSanitizer.sanitize(EmbeddedCodexBridge.sidebandStatus(), limit: 160)
+        audioRoute.refresh()
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+      }
+    }
+  }
+
+  private var models: [String] { ChatGPTAuthSession.shared.availableModels }
+
+  private var oauthStatus: String {
+    switch ChatGPTAuthSession.shared.status {
+    case .authenticated(let user): "signed in" + (user.plan.map { " · plan \($0)" } ?? "")
+    case .unauthenticated: "signed out"
+    case .pending: "waiting for device code"
+    case .loading, .connecting: "connecting"
+    case .error(let message): "error: \(LogSanitizer.sanitize(message, limit: 120))"
+    }
+  }
+
+  private var tokenExpiry: String {
+    guard let expiresAt = (try? ChatGPTKeychain.load())?.expiresAt else { return "—" }
+    let minutes = Int((expiresAt / 1_000 - Date().timeIntervalSince1970) / 60)
+    return minutes > 0 ? "access token valid ~\(minutes) min (auto-refresh)" : "expired (refreshes on next request)"
+  }
+
+  private var voiceState: String {
+    guard let voice else { return "—" }
+    switch voice.state {
+    case .disconnected: return "disconnected"
+    case .connecting: return "connecting"
+    case .listening: return "listening"
+    case .thinking: return "thinking"
+    case .speaking: return "speaking"
+    case .failed(let message): return "failed: \(LogSanitizer.sanitize(message, limit: 120))"
+    }
+  }
+
+  private func taskRow(_ record: AssistantTaskRecord) -> some View {
+    VStack(alignment: .leading, spacing: 3) {
+      Text("\(record.kind?.rawValue ?? "ROUTING") · \(phaseLabel(record.phase))")
+        .font(.footnote.weight(.semibold))
+      Text("via \(record.routeOrigin?.rawValue ?? "—") · \(record.source.rawValue) · model \(record.model ?? "—")")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+      Text("session \(record.sessionID.uuidString.prefix(8)) · turn \(record.turnID) · task \(record.id.uuidString.prefix(8))")
+        .font(.caption2.monospaced())
+        .foregroundStyle(.secondary)
+      if let frame = record.frame {
+        Text("frame \(frame.source) \(frame.sourceWidth)×\(frame.sourceHeight) → \(frame.encodedWidth)×\(frame.encodedHeight), JPEG q\(String(format: "%.2f", frame.jpegQuality)) \(frame.jpegBytes / 1_024) KB, age \(frame.frameAgeMs) ms")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+      ForEach(record.timeline.breakdown, id: \.stage) { item in
+        Text("\(item.stage): \(item.ms) ms")
+          .font(.caption2.monospaced())
+      }
+    }
+    .padding(.vertical, 2)
+  }
+
+  private func phaseLabel(_ phase: AssistantTaskPhase) -> String {
+    switch phase {
+    case .routing: "routing"
+    case .capturingFrame: "capturing frame"
+    case .searching: "searching"
+    case .analyzing: "analyzing"
+    case .reasoning: "reasoning"
+    case .delivering: "delivering"
+    case .completed: "completed"
+    case .cancelled(let reason): "cancelled (\(reason))"
+    case .failed(let reason): "failed (\(LogSanitizer.sanitize(reason, limit: 100)))"
+    }
+  }
+
+  private func row(_ title: String, _ value: String) -> some View {
+    HStack(alignment: .top) {
+      Text(title)
+        .font(.footnote)
+      Spacer(minLength: 12)
+      Text(value)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.trailing)
+        .textSelection(.enabled)
+    }
+  }
+
+  private func ms(_ value: Double?) -> String {
+    value.map { String(format: "%.0f ms", $0) } ?? "—"
+  }
+
+  private func report() -> String {
+    var lines: [String] = [
+      "\(AutoLoomBrand.appName) diagnostics \(Date().formatted())",
+      "version \(AppInfo.version) (\(AppInfo.build)) commit \(AppInfo.commit) bridge \(EmbeddedCodexBridge.bridgeVersion())",
+      "oauth: \(oauthStatus); models: \(models.count); realtime start: \(voice?.startMode?.rawValue ?? "—")",
+      "voice: \(voiceState); sideband: \(sidebandStatus); realtime error: \(voice?.lastRealtimeError ?? "none")",
+      "glasses: \(glassesStream?.lastStreamState ?? "—"); profile \(glassesStream?.streamProfile.rawValue ?? "—"); stream error \(glassesStream?.lastStreamError ?? "none")",
+      "camera: \(metrics.source) \(metrics.inputResolution) \(metrics.pixelFormat) fps \(String(format: "%.1f", metrics.measuredFPS)) received \(metrics.framesReceived) rendered \(metrics.previewRendered) dropped \(metrics.previewDropped) failures \(metrics.previewFailures)",
+      "latency: processing \(ms(metrics.processingMedianMs))/\(ms(metrics.processingP95Ms)) capture→phone \(ms(metrics.transportMedianMs))/\(ms(metrics.transportP95Ms)) frame age \(metrics.lastFrameAgeMs.map(String.init) ?? "—") ms; preview \(metrics.previewMode)",
+      "audio: mic \(audioRoute.inputSummary); speaker \(audioRoute.outputSummary); interrupted \(audioRoute.isInterrupted); last \(audioRoute.lastEvent)",
+      "web: enabled \(AssistantPreferences.webSearchEnabled); \(orchestrator.lastWebStatus)",
+    ]
+    for record in ledger.records.suffix(6) {
+      let timeline = record.timeline.breakdown.map { "\($0.stage)=\($0.ms)" }.joined(separator: " ")
+      lines.append("task \(record.kind?.rawValue ?? "ROUTING") \(phaseLabel(record.phase)) via \(record.routeOrigin?.rawValue ?? "—") model \(record.model ?? "—") \(timeline)")
+    }
+    lines.append("last error: \(orchestrator.lastError ?? "none")")
+    return lines.map { LogSanitizer.sanitize($0, limit: 600) }.joined(separator: "\n")
+  }
+}
+
+private extension String {
+  func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
+}
+
+// MARK: About & licenses
+
+struct LicensesView: View {
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 18) {
+        Text("Open-source attribution")
+          .font(.title3.bold())
+        Text("\(AutoLoomBrand.appName) is built on GlassifAI by Marco Iannello, used under the MIT License below. The original copyright notice is preserved.")
+        Text(Self.mitLicense)
+          .font(.system(.caption, design: .monospaced))
+          .textSelection(.enabled)
+        Text("Third-party components")
+          .font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+          Text("• Meta Wearables Device Access Toolkit and camera-access sample code — Meta Wearables Developer Terms and Acceptable Use Policy (wearables.developer.meta.com). Upstream notices are preserved in the NOTICE file of the source repository.")
+          Text("• OpenAI Codex (codex-api, codex-http-client, codex-protocol crates) — Apache License 2.0.")
+          Text("• LiveKit WebRTC XCFramework — Apache License 2.0 (BSD-style WebRTC license for the underlying WebRTC code).")
+        }
+        .font(.footnote)
+        Text("Code licenses are separate from service terms. Using ChatGPT and Meta services remains subject to OpenAI's and Meta's own terms.")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+        Text(AutoLoomBrand.independenceNotice)
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      }
+      .padding(20)
+    }
+    .navigationTitle("Licenses")
+  }
+
+  static let mitLicense = """
+  MIT License
+
+  Copyright (c) 2026 Marco Iannello
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+  """
+}

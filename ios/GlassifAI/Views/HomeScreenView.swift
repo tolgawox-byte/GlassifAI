@@ -19,7 +19,7 @@ struct HomeScreenView: View {
               Text("Connect Meta glasses")
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
-              Text("Give GlassifAI your first-person camera view.")
+              Text("Give AutoLoom Media Glasses your first-person view.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -77,7 +77,7 @@ struct HomeScreenView: View {
           Button { showSettings = true } label: {
             Image(systemName: "gearshape")
           }
-          .accessibilityLabel("Open GlassifAI settings")
+          .accessibilityLabel("Open settings")
         }
       }
     }
