@@ -475,10 +475,9 @@ struct GlassifAIExperienceView: View {
         if voice.isActive {
           await voice.stop()
         } else {
-          let route = AudioRoutePreference.current
-          await voice.start(
-            prefersBluetoothHFP: route.prefersGlassesAudio(for: captureSource),
-            forcesBuiltInAudio: route == .iPhone)
+          // Same idempotent path as Siri/Meta invocations, so a button press
+          // during an invocation can never open a second session.
+          await VoiceStartCoordinator.shared.request(.button)
         }
       }
     } label: {

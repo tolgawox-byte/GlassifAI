@@ -77,6 +77,13 @@ struct SettingsView: View {
   @AppStorage(AssistantPreferences.webSearchKey) private var webSearchEnabled = true
   @AppStorage(AssistantPreferences.regionKey) private var region = ""
   @AppStorage(ModelSelector.overrideKey) private var modelOverride = ""
+  @AppStorage(GlassesVisionCaptureMode.defaultsKey) private var glassesVisionCapture = GlassesVisionCaptureMode.automatic.rawValue
+  @AppStorage(AssistantPreferences.addressedOnlyKey) private var addressedOnly = false
+  @State private var assistantNameDraft = AssistantIdentity.name
+
+  private func commitAssistantName() {
+    assistantNameDraft = AssistantIdentity.setName(assistantNameDraft)
+  }
 
   init(voice: GlassifAIRealtimeSession? = nil, glassesStream: StreamSessionViewModel? = nil) {
     self.voice = voice
@@ -129,6 +136,11 @@ struct SettingsView: View {
             Text("Low latency (new)").tag("lowLatency")
             Text("Legacy (original)").tag("legacy")
           }
+          Picker("Vision image", selection: $glassesVisionCapture) {
+            ForEach(GlassesVisionCaptureMode.allCases) { mode in
+              Text(mode.label).tag(mode.rawValue)
+            }
+          }
         }
 
         Section(
@@ -145,15 +157,33 @@ struct SettingsView: View {
         }
 
         Section(
-          header: Text("Voice"),
-          footer: Text("Juniper is the verified default. Other voices are experimental; if one is rejected, the app falls back to the original configuration automatically.")) {
+          header: Text("Assistant"),
+          footer: Text("The name is how you address the assistant in a conversation (\"\(AssistantIdentity.name), what am I looking at?\"). It is not a system wake word — see Hands-Free. Changes apply from the next conversation. Juniper is the verified voice; other voices are experimental and fall back automatically if rejected.")) {
+          HStack {
+            Text("Assistant name")
+            Spacer()
+            TextField(AssistantIdentity.defaultName, text: $assistantNameDraft)
+              .multilineTextAlignment(.trailing)
+              .textInputAutocapitalization(.words)
+              .autocorrectionDisabled()
+              .submitLabel(.done)
+              .onSubmit(commitAssistantName)
+          }
+          if assistantNameDraft.trimmingCharacters(in: .whitespaces) != AssistantIdentity.name,
+             !assistantNameDraft.isEmpty,
+             AssistantIdentity.sanitize(assistantNameDraft) == nil {
+            Text("Use letters (up to \(AssistantIdentity.maxLength) characters). Invalid names fall back to \(AssistantIdentity.defaultName).")
+              .font(.footnote)
+              .foregroundStyle(.orange)
+          }
+          Toggle("Only answer when called by name (experimental)", isOn: $addressedOnly)
           Picker("Voice", selection: $voiceName) {
             ForEach(AssistantPreferences.voices, id: \.self) { name in
               Text(name == AssistantPreferences.defaultVoice ? "\(name.capitalized) (default)" : name.capitalized)
                 .tag(name)
             }
           }
-          Picker("Answers", selection: $verbosity) {
+          Picker("Response style", selection: $verbosity) {
             Text("Short").tag("concise")
             Text("Detailed").tag("detailed")
           }
@@ -172,7 +202,12 @@ struct SettingsView: View {
             .textInputAutocapitalization(.words)
         }
 
-        Section("Memory & privacy") {
+        Section("Hands-free, memory & privacy") {
+          NavigationLink {
+            HandsFreeView()
+          } label: {
+            Label("Hands-Free", systemImage: "hand.wave")
+          }
           NavigationLink {
             MemorySettingsView()
           } label: {
@@ -233,6 +268,7 @@ struct SettingsView: View {
         audioRoute.refresh()
       }
     }
+    .onDisappear(perform: commitAssistantName)
     .tint(AutoLoomTheme.electricBlue)
   }
 

@@ -12,11 +12,18 @@ struct DelegationEnvelope: Equatable {
 
   let command: Command
   let query: String
+  /// Image detail the vision step should use (reading text, badges, VINs…).
+  var detail: VisionDetail = .standard
 }
 
 enum DelegationEnvelopeParser {
+  /// Vision tasks that need fine detail (text, labels, badges, screens).
+  private static let readTasks: Set<String> = ["vision_read", "read", "read_text", "vision_text", "ocr"]
+
   private static let aliases: [String: DelegationEnvelope.Command] = [
     "vision": .task(.vision), "see": .task(.vision), "camera": .task(.vision), "look": .task(.vision),
+    "vision_read": .task(.vision), "read": .task(.vision), "read_text": .task(.vision),
+    "vision_text": .task(.vision), "ocr": .task(.vision),
     "web": .task(.webSearch), "web_search": .task(.webSearch), "search": .task(.webSearch),
     "internet": .task(.webSearch), "browse": .task(.webSearch),
     "vision_web": .task(.visionPlusWeb), "vision+web": .task(.visionPlusWeb),
@@ -57,7 +64,11 @@ enum DelegationEnvelopeParser {
           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let task = (object["task"] ?? object["type"] ?? object["route"]) as? String else { return nil }
     let query = (object["query"] ?? object["request"] ?? object["prompt"]) as? String ?? ""
-    return make(task: task, query: query)
+    var envelope = make(task: task, query: query)
+    if (object["detail"] as? String)?.lowercased() == "high", envelope?.command == .task(.vision) {
+      envelope?.detail = .high
+    }
+    return envelope
   }
 
   private static func make(task: String, query: String) -> DelegationEnvelope? {
@@ -69,7 +80,47 @@ enum DelegationEnvelopeParser {
     let cleanedQuery = query
       .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'`")))
     if case .task = command, cleanedQuery.isEmpty { return nil }
-    return DelegationEnvelope(command: command, query: String(cleanedQuery.prefix(1_500)))
+    // Reading text and identifying a product to research both depend on fine
+    // detail, so they use the high-detail image profile.
+    let detail: VisionDetail = readTasks.contains(key) || command == .task(.visionPlusWeb) ? .high : .standard
+    return DelegationEnvelope(command: command, query: String(cleanedQuery.prefix(1_500)), detail: detail)
+  }
+}
+
+/// The user's personal name for the assistant (for example "Jarvis"). It is
+/// identity and conversation context only — the system wake phrase is
+/// controlled by Meta/Apple, not by this setting.
+enum AssistantIdentity {
+  static let nameKey = "autoloom.assistant.name"
+  static let defaultName = "AutoLoom"
+  static let maxLength = 24
+
+  /// Returns a cleaned name, or nil when the input is not a usable name.
+  static func sanitize(_ raw: String) -> String? {
+    let allowedPunctuation = CharacterSet(charactersIn: " -.'’")
+    let filtered = raw.unicodeScalars.filter {
+      CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0) || allowedPunctuation.contains($0)
+    }
+    let collapsed = String(String.UnicodeScalarView(filtered))
+      .split(whereSeparator: { $0 == " " })
+      .joined(separator: " ")
+      .trimmingCharacters(in: CharacterSet(charactersIn: " -.'’"))
+    guard !collapsed.isEmpty,
+          collapsed.count <= maxLength,
+          collapsed.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) }) else { return nil }
+    return collapsed
+  }
+
+  static var name: String {
+    sanitize(UserDefaults.standard.string(forKey: nameKey) ?? "") ?? defaultName
+  }
+
+  /// Stores a name; invalid input falls back to the default.
+  @discardableResult
+  static func setName(_ raw: String) -> String {
+    let value = sanitize(raw) ?? defaultName
+    UserDefaults.standard.set(value, forKey: nameKey)
+    return value
   }
 }
 
@@ -82,6 +133,14 @@ enum AssistantPreferences {
   static let regionKey = "autoloom.web.region"
   static let previewModeKey = "autoloom.camera.previewMode"
   static let debugOverlayKey = "autoloom.camera.debugOverlay"
+  static let addressedOnlyKey = "autoloom.assistant.addressedOnly"
+
+  /// Experimental: inside an active conversation, answer only when the user
+  /// addresses the assistant by name. Not a wake word — the microphone is
+  /// only live while a conversation is running.
+  static var respondsOnlyWhenAddressed: Bool {
+    UserDefaults.standard.bool(forKey: addressedOnlyKey)
+  }
 
   static let defaultVoice = "juniper"
   static let voices = [
@@ -131,12 +190,16 @@ enum AssistantPreferences {
 
 /// Instructions for the realtime voice model and the delegated executor.
 enum AssistantInstructions {
-  static func realtime(memory: [String]) -> String {
+  static func realtime(memory: [String], assistantName: String = AssistantIdentity.name) -> String {
     let detail = AssistantPreferences.prefersDetailedAnswers
       ? "Give fuller answers (up to about six sentences) unless the user asks for brevity."
       : "Default to short spoken answers of one to three sentences; go into detail only when asked (for example \"detaylı anlat\", \"tell me more\")."
     var text = """
-    You are AutoLoom Media Glasses, a warm, natural, general-purpose voice assistant on the user's iPhone and Meta smart glasses. You are an independent app by AutoLoom Media, not an official OpenAI, ChatGPT, Meta, or Ray-Ban product.
+    Your name is \(assistantName). You are a warm, natural, general-purpose voice assistant in the AutoLoom Media Glasses app on the user's iPhone and Meta smart glasses. It is an independent app by AutoLoom Media, not an official OpenAI, ChatGPT, Meta, or Ray-Ban product.
+
+    Your name:
+    - The user may address you by name ("\(assistantName), what am I looking at?", "Thanks \(assistantName)"). Treat the name as getting your attention, not as part of the request.
+    - Do not start answers with your name and do not keep introducing yourself; say your name only when asked who you are.
 
     How to talk:
     - Sound like a helpful friend: natural, fluent, relaxed. \(detail)
@@ -147,6 +210,7 @@ enum AssistantInstructions {
 
     You cannot see or browse on your own. Delegate to the client only when it is really needed:
     - vision: the answer depends on what the user is looking at right now.
+    - vision_read: the user wants something read or examined in fine detail — a sign, document, screen, label, badge, VIN, model number, price, menu, or warning message.
     - web: anything current or changeable (news, weather, prices, stock, store hours, schedules, sports, recent events) or an explicit request to look something up online.
     - vision_web: identify what the user is looking at, then research it online (prices, reviews, specs, where to buy).
     - reasoning: complex analysis, calculations, planning, or careful comparisons.
@@ -155,10 +219,13 @@ enum AssistantInstructions {
     Do not delegate ordinary conversation, opinions, explanations, or general knowledge — answer those yourself right away.
 
     When you delegate, the delegation text must be exactly one line in this format:
-    TASK: <vision|web|vision_web|reasoning|memory|cancel> | QUERY: <complete, self-contained request in the user's language, including relevant details from the conversation such as product, budget, city, and date>
+    TASK: <vision|vision_read|web|vision_web|reasoning|memory|cancel> | QUERY: <complete, self-contained request in the user's language, including relevant details from the conversation such as product, budget, city, and date>
 
-    When the client returns context, answer naturally and briefly from it. For web results, name the main source briefly (for example "Environment Canada'ya göre"). If the client reports that something is unavailable (camera off, no fresh frame, search failed, feature not supported), say so honestly. Never guess what the camera shows, never invent facts, prices, or sources, and never claim to have done something you did not do.
+    When the client returns context, answer naturally and briefly from it. For web results, name the main source briefly (for example "Environment Canada'ya göre"). If the client reports that something is unavailable (camera off, no fresh frame, search failed, feature not supported), say so honestly. Never guess what the camera shows, never describe an earlier image as the current view, never invent facts, prices, or sources, and never claim to have done something you did not do.
     """
+    if AssistantPreferences.respondsOnlyWhenAddressed {
+      text += "\n\nAddressed-only mode is on: respond only when the user clearly addresses you as \(assistantName). If speech is not addressed to you (for example the user is talking to someone else), stay silent and do not delegate."
+    }
     let region = AssistantPreferences.region
     if !region.isEmpty {
       text += "\n\nThe user is usually in \(region); use it for local questions unless they name another place."
@@ -169,7 +236,11 @@ enum AssistantInstructions {
     return text
   }
 
-  static func executor(kind: AssistantTaskKind?, detectedLanguage: String?) -> String {
+  static func executor(
+    kind: AssistantTaskKind?,
+    detectedLanguage: String?,
+    detail: VisionDetail = .standard
+  ) -> String {
     let formatter = DateFormatter()
     formatter.dateStyle = .full
     formatter.timeStyle = .short
@@ -188,9 +259,13 @@ enum AssistantInstructions {
     """
     let region = AssistantPreferences.region
     if !region.isEmpty { text += "\nThe user's usual location: \(region)." }
+    text += "\nThe user calls the assistant \"\(AssistantIdentity.name)\"; you do not need to mention that name."
     switch kind {
     case .vision:
       text += "\nAn image of the user's current first-person view is attached. Answer only from what is visible in it. Read visible text carefully. If the image is blurry, dark, or does not show what was asked, say so and suggest how to aim the camera."
+      if detail == .high {
+        text += " This is a reading request: transcribe the relevant text exactly as written, keeping letters, digits, units, and codes exact (for example VINs, model numbers, prices, warning messages). Say which parts are unreadable or cut off instead of guessing them; for long documents give the key lines."
+      }
     case .webSearch:
       text += "\nUse web search for this request. Base factual claims on the search results, prefer official and recent sources, include dates for time-sensitive facts, and mention the most relevant source name briefly (for example \"according to Environment Canada\"). If results conflict or are missing, say so."
     case .visionPlusWeb:
@@ -288,8 +363,13 @@ enum AssistantTools {
             "type": "boolean",
             "description": "True when the item in view must also be researched online (prices, reviews, specs).",
           ],
+          "detail": [
+            "type": "string",
+            "enum": ["standard", "high"],
+            "description": "high when text or fine detail must be read (signs, labels, screens, badges, VINs, prices); otherwise standard.",
+          ],
         ],
-        "required": ["focus", "also_search_web"],
+        "required": ["focus", "also_search_web", "detail"],
         "additionalProperties": false,
       ] as [String: Any],
     ]

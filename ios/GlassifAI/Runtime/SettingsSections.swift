@@ -156,6 +156,63 @@ struct PrivacySettingsView: View {
   }
 }
 
+// MARK: Hands-free
+
+/// Shows what hands-free invocation really works in this build, separating
+/// system invocation (Meta, Apple) from the assistant's own name.
+struct HandsFreeView: View {
+  @ObservedObject private var coordinator = VoiceStartCoordinator.shared
+  @Environment(\.openURL) private var openURL
+
+  var body: some View {
+    let name = AssistantIdentity.name
+    Form {
+      Section(
+        header: Text("Assistant name"),
+        footer: Text("Controlled by AutoLoom (Settings → Assistant). Use it while a conversation is active: \"\(name), what am I looking at?\" It does not wake the glasses or the iPhone.")) {
+        LabeledContent("Assistant", value: name)
+      }
+
+      Section(
+        header: Text("Meta glasses — system invocation"),
+        footer: Text(HandsFreeCapabilities.metaInvocationRequirement)) {
+        LabeledContent("System wake phrase", value: "Hey Meta")
+        LabeledContent("\"Hey Meta, start …\" for this app", value: "Not available in this build")
+        LabeledContent("Custom \"Hey \(name)\" wake word", value: "Not supported by the Meta API")
+        LabeledContent("During a conversation", value: "Temple tap mutes/unmutes; long-press or fold ends")
+      }
+
+      Section(
+        header: Text("iPhone — Siri"),
+        footer: Text("Official iOS invocation. To use your own phrase, create a shortcut in the Shortcuts app that runs \"Start Conversation\" and name it \"\(name)\" — then say \"Hey Siri, \(name)\". Siri opens the app and it starts listening.")) {
+        LabeledContent("Siri phrase", value: HandsFreeCapabilities.siriPhrase)
+        LabeledContent("Custom Siri phrase", value: "Hey Siri, \(name) (after creating the shortcut)")
+        Button("Open Shortcuts") {
+          if let url = URL(string: "shortcuts://") { openURL(url) }
+        }
+      }
+
+      Section("Background and locked phone") {
+        LabeledContent("Start while the app is closed", value: "Via Siri; the iPhone must be unlocked")
+        LabeledContent("Conversation already running", value: "Continues with the screen locked")
+        LabeledContent("Always-listening custom wake word", value: "Not supported by iOS — not implemented")
+      }
+
+      Section("Recent invocations") {
+        if coordinator.events.isEmpty {
+          Text("None yet").foregroundStyle(.secondary)
+        }
+        ForEach(Array(coordinator.events.reversed())) { event in
+          LabeledContent(
+            "\(event.reason.rawValue) · \(event.at.formatted(date: .omitted, time: .standard))",
+            value: event.outcome.rawValue)
+        }
+      }
+    }
+    .navigationTitle("Hands-Free")
+  }
+}
+
 // MARK: Diagnostics
 
 struct DiagnosticsView: View {
@@ -196,6 +253,21 @@ struct DiagnosticsView: View {
         row("Stream state", glassesStream?.lastStreamState ?? "—")
         row("Profile", glassesStream.map { "\($0.streamProfile.label)" } ?? "—")
         row("Last stream error", glassesStream?.lastStreamError ?? "none")
+      }
+      Section("Ray-Ban frames and vision images") {
+        row("Active glasses", AudioRouteMonitor.shared.glassesName ?? "—")
+        row("Delivered as", metrics.glassesCompressed.map { $0 ? "compressed (decoded by app)" : "raw (decoded by SDK)" } ?? "—")
+        row("Codec / pixel format", metrics.glassesCodec)
+        row("Sample size", metrics.glassesSampleSize)
+        row("Raw / compressed samples", "\(metrics.rawSamples) / \(metrics.compressedSamples)")
+        row("Decoded frames / failures", "\(metrics.decodedFrames) / \(metrics.decodeFailures)")
+        row("Copy fallbacks", "\(metrics.copyFailures)")
+        row("FrameStore sequence", "\(metrics.latestSequence)")
+        row("Vision image mode", GlassesVisionCaptureMode.current.label)
+        row("Still photo support", "In-stream capture (DAT 0.4.0); full-resolution photo needs DAT 1.0")
+        row("Photos requested / received / failed", "\(metrics.photosRequested) / \(metrics.photosReceived) / \(metrics.photoFailures)")
+        row("Last photo", "\(metrics.lastPhotoResolution)" + (metrics.lastPhotoLatencyMs.map { " in \($0) ms" } ?? ""))
+        row("Last AI image", metrics.lastVisionImage)
       }
       Section("Camera pipeline") {
         row("Source", metrics.source)
@@ -295,7 +367,7 @@ struct DiagnosticsView: View {
         .font(.caption2.monospaced())
         .foregroundStyle(.secondary)
       if let frame = record.frame {
-        Text("frame \(frame.source) \(frame.sourceWidth)×\(frame.sourceHeight) → \(frame.encodedWidth)×\(frame.encodedHeight), JPEG q\(String(format: "%.2f", frame.jpegQuality)) \(frame.jpegBytes / 1_024) KB, age \(frame.frameAgeMs) ms")
+        Text(frame.summary)
           .font(.caption2)
           .foregroundStyle(.secondary)
       }
@@ -346,6 +418,9 @@ struct DiagnosticsView: View {
       "voice: \(voiceState); sideband: \(sidebandStatus); realtime error: \(voice?.lastRealtimeError ?? "none")",
       "glasses: \(glassesStream?.lastStreamState ?? "—"); profile \(glassesStream?.streamProfile.rawValue ?? "—"); stream error \(glassesStream?.lastStreamError ?? "none")",
       "camera: \(metrics.source) \(metrics.inputResolution) \(metrics.pixelFormat) fps \(String(format: "%.1f", metrics.measuredFPS)) received \(metrics.framesReceived) rendered \(metrics.previewRendered) dropped \(metrics.previewDropped) failures \(metrics.previewFailures)",
+      "glasses samples: \(metrics.glassesCompressed.map { $0 ? "compressed" : "raw" } ?? "—") \(metrics.glassesCodec) \(metrics.glassesSampleSize) raw \(metrics.rawSamples) compressed \(metrics.compressedSamples) decoded \(metrics.decodedFrames) decodeFail \(metrics.decodeFailures) copyFallback \(metrics.copyFailures) seq \(metrics.latestSequence)",
+      "photos: requested \(metrics.photosRequested) received \(metrics.photosReceived) failed \(metrics.photoFailures) last \(metrics.lastPhotoResolution) \(metrics.lastPhotoLatencyMs.map { "\($0) ms" } ?? ""); vision mode \(GlassesVisionCaptureMode.current.rawValue); last AI image \(metrics.lastVisionImage)",
+      "assistant: \(AssistantIdentity.name); addressed-only \(AssistantPreferences.respondsOnlyWhenAddressed); invocations \(VoiceStartCoordinator.shared.events.map { "\($0.reason.rawValue)=\($0.outcome.rawValue)" }.joined(separator: ","))",
       "latency: processing \(ms(metrics.processingMedianMs))/\(ms(metrics.processingP95Ms)) capture→phone \(ms(metrics.transportMedianMs))/\(ms(metrics.transportP95Ms)) frame age \(metrics.lastFrameAgeMs.map(String.init) ?? "—") ms; preview \(metrics.previewMode)",
       "audio: mic \(audioRoute.inputSummary); speaker \(audioRoute.outputSummary); interrupted \(audioRoute.isInterrupted); last \(audioRoute.lastEvent)",
       "web: enabled \(AssistantPreferences.webSearchEnabled); \(orchestrator.lastWebStatus)",

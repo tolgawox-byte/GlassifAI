@@ -16,6 +16,17 @@
 	<string>AutoLoom Media Glasses</string>
 	<key>AutoLoomCommitSHA</key>
 	<string>$(AUTOLOOM_COMMIT_SHA)</string>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>AutoLoom Media Glasses</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Auto Loom</string>
+		</dict>
+	</array>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
