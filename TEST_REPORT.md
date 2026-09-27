@@ -17,9 +17,21 @@ Test names and counts come from the `.xcresult` bundle and are published as anno
   - `GlassesGestureInterpreterTests`: 3
 - **Rust: 5 passed, 0 failed.** `empty_options_keep_baseline_configuration`, `invalid_voice_falls_back_to_juniper`, `reconnect_delay_backs_off_and_caps`, `truncation_respects_char_boundaries`, `initial_items_are_bounded_and_typed`.
 
-### Ray-Ban vision + assistant name work
+### Run 36303697299 — commit `44f089d` (Ray-Ban vision + assistant name)
 
-Results are added after the CI run for this change. The new classes are:
+https://github.com/tolgawox-byte/GlassifAI/actions/runs/36303697299 — every step green.
+
+- **BUILD PASS:** Rust bridge, Swift Debug + Release, IPAs (artifact `AutoLoomMediaGlasses-unsigned-IPAs`, 49.6 MB).
+- **iOS: 49 passed, 0 failed, 0 skipped** (from xcresult).
+  - `AutoLoomCoreTests`: 23
+  - `AutoLoomVisionTests`: 10
+  - `AutoLoomTaskTests`: 7
+  - `AutoLoomAssistantTests`: 6
+  - `GlassesGestureInterpreterTests`: 3
+  - The compressed-frame test encoded a real H.264 keyframe on the simulator and was not skipped.
+- **Rust: 5 passed, 0 failed.**
+
+The new classes are:
 - `AutoLoomVisionTests`: raw frame to FrameStore, compressed frame decoded to FrameStore, wrong source, stale frame, switch clears, pending-only photo, late photo rejected, one capture in flight, photo pass-through/fit, vision profile limits, reading requests use high detail, high-detail encoder
 - `AutoLoomAssistantTests`: name validation, persistence and default, name in instructions, other settings unchanged, invocation cannot start two sessions, queued invocation runs once
 
