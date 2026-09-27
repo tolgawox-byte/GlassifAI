@@ -7,7 +7,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TESTS="${AUTOLOOM_UNIT_TESTS:-GlassifAITests/GlassesGestureInterpreterTests GlassifAITests/AutoLoomCoreTests GlassifAITests/AutoLoomTaskTests}"
+# Every XCTestCase class in the test target, except the Meta mock-device
+# integration tests. Discovered automatically so a new class cannot be missed.
+DISCOVERED="$(grep -hoE '^(final )?class [A-Za-z0-9_]+: XCTestCase' "$ROOT"/ios/GlassifAITests/*.swift \
+  | sed -E 's/^(final )?class ([A-Za-z0-9_]+):.*/\2/' \
+  | grep -v '^ViewModelIntegrationTests$' \
+  | sed 's#^#GlassifAITests/#' | tr '\n' ' ')"
+TESTS="${AUTOLOOM_UNIT_TESTS:-$DISCOVERED}"
+echo "Test classes: $TESTS"
 LOG="$ROOT/build-tests-output.log"
 RESULT="$ROOT/build-tests/UnitTests.xcresult"
 

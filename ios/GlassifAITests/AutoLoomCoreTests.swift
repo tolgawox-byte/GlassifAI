@@ -191,7 +191,7 @@ final class AutoLoomCoreTests: XCTestCase {
   func testRealtimeInstructionsCarryBrandRoutingAndHonesty() {
     let text = AssistantInstructions.realtime(memory: ["Budget is 500 CAD"])
     XCTAssertTrue(text.contains("AutoLoom Media Glasses"))
-    XCTAssertTrue(text.contains("TASK: <vision|web|vision_web|reasoning|memory|cancel>"))
+    XCTAssertTrue(text.contains("TASK: <vision|vision_read|web|vision_web|reasoning|memory|cancel>"))
     XCTAssertTrue(text.contains("not an official OpenAI"))
     XCTAssertTrue(text.contains("Budget is 500 CAD"))
     let executor = AssistantInstructions.executor(kind: .vision, detectedLanguage: "Turkish")
