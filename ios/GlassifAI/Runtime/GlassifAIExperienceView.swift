@@ -248,7 +248,7 @@ private extension GlassifAIRealtimeSession.State {
     case .listening: "Listening"
     case .thinking: "Thinking"
     case .speaking: "Speaking"
-    case .failed: "Error"
+    case .failed(let message): message
     }
   }
 }
