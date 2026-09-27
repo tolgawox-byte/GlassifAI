@@ -385,21 +385,30 @@ struct GlassifAIExperienceView: View {
 
   // MARK: Status and controls
 
+  /// Short status words; Turkish when the app language is Turkish or the
+  /// device runs in Turkish.
+  private func word(_ english: String, _ turkish: String) -> String {
+    let language = AssistantPreferences.language
+    if language == "tr" { return turkish }
+    if language == "en" { return english }
+    return Locale.current.language.languageCode?.identifier == "tr" ? turkish : english
+  }
+
   private var statusLabel: (label: String, symbol: String, isError: Bool) {
-    if voice.isMicrophoneMuted { return ("Mic muted", "mic.slash.fill", false) }
+    if voice.isMicrophoneMuted { return (word("Mic muted", "Mikrofon kapalı"), "mic.slash.fill", false) }
     if case .failed(let message) = voice.state { return (message, "exclamationmark.triangle.fill", true) }
     switch orchestrator.activity {
-    case .seeing: return ("Seeing", "eye", false)
-    case .searching: return ("Searching", "globe", false)
-    case .thinking: return ("Thinking", "ellipsis", false)
+    case .seeing: return (word("Seeing", "Görüntüyü inceliyor"), "eye", false)
+    case .searching: return (word("Searching", "Araştırıyor"), "globe", false)
+    case .thinking: return (word("Thinking", "Düşünüyor"), "ellipsis", false)
     case nil: break
     }
     switch voice.state {
-    case .disconnected: return ("Ready", "circle.fill", false)
-    case .connecting: return ("Connecting", "antenna.radiowaves.left.and.right", false)
-    case .listening: return ("Listening", "ear.fill", false)
-    case .thinking: return ("Thinking", "ellipsis", false)
-    case .speaking: return ("Speaking", "waveform", false)
+    case .disconnected: return (word("Ready", "Hazır"), "circle.fill", false)
+    case .connecting: return (word("Connecting", "Bağlanıyor"), "antenna.radiowaves.left.and.right", false)
+    case .listening: return (word("Listening", "Dinliyor"), "ear.fill", false)
+    case .thinking: return (word("Thinking", "Düşünüyor"), "ellipsis", false)
+    case .speaking: return (word("Speaking", "Konuşuyor"), "waveform", false)
     case .failed(let message): return (message, "exclamationmark.triangle.fill", true)
     }
   }
@@ -414,7 +423,7 @@ struct GlassifAIExperienceView: View {
           .foregroundStyle(status.isError ? Color.red : Color.white)
           .font(status.symbol == "circle.fill" ? .system(size: 7) : .footnote)
       }
-      Text(status.isError ? "Error" : status.label)
+      Text(status.isError ? word("Error", "Hata") : status.label)
         .font(.footnote.weight(.medium))
         .lineLimit(1)
     }

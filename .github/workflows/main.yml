@@ -35,8 +35,15 @@ jobs:
           rustup target add x86_64-apple-ios
           echo "RUSTC_VERSION_HASH=$(rustc -V | shasum | cut -c1-12)" >> "$GITHUB_ENV"
 
+      # Cargo judges path dependencies by file mtime, so a fresh checkout would
+      # rebuild every vendored Codex crate on each run. The vendored tree is
+      # never edited here and its content hash is part of the cache key, so a
+      # fixed timestamp is safe. native/ keeps checkout times and always rebuilds.
+      - name: Pin vendored source timestamps
+        run: find vendor/codex -type f -exec touch -t 202601010000 {} +
+
       # The native bridge takes ~17 minutes from scratch. Its dependency
-      # artifacts only change with Cargo.lock or the toolchain, so reuse them.
+      # artifacts only change with Cargo.lock, the vendored tree, or the toolchain.
       - name: Restore Rust build cache
         uses: actions/cache@v4
         with:
@@ -45,8 +52,9 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             native/GlassifAICodexBridge/target
-          key: rust-ios-host-${{ env.RUSTC_VERSION_HASH }}-${{ hashFiles('native/GlassifAICodexBridge/Cargo.lock') }}
+          key: rust-v3-${{ env.RUSTC_VERSION_HASH }}-${{ hashFiles('vendor/codex/codex-rs/**/Cargo.toml', 'vendor/codex/codex-rs/**/*.rs') }}-${{ hashFiles('native/GlassifAICodexBridge/Cargo.lock') }}
           restore-keys: |
+            rust-v3-${{ env.RUSTC_VERSION_HASH }}-${{ hashFiles('vendor/codex/codex-rs/**/Cargo.toml', 'vendor/codex/codex-rs/**/*.rs') }}-
             rust-ios-host-${{ env.RUSTC_VERSION_HASH }}-
             rust-ios-${{ env.RUSTC_VERSION_HASH }}-
 
@@ -93,4 +101,9 @@ jobs:
           ./scripts/ci-unit-tests.sh
 
       - name: Native bridge unit tests (host)
-        run: cargo test --manifest-path native/GlassifAICodexBridge/Cargo.toml --lib
+        run: |
+          set -o pipefail
+          cargo test --manifest-path native/GlassifAICodexBridge/Cargo.toml --lib 2>&1 | tee cargo-test.log
+          passed="$(grep -E '^test .* [.][.][.] ok$' cargo-test.log | awk '{print $2}' | paste -sd ';' - | sed 's/;/; /g')"
+          echo "::notice title=Rust unit tests::$(grep -E '^test result:' cargo-test.log | tail -n 1)"
+          echo "::notice title=Passed Rust tests::${passed}"
