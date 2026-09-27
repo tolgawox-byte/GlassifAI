@@ -250,8 +250,14 @@ struct DiagnosticsView: View {
         row("Last realtime error", voice?.lastRealtimeError ?? "none")
       }
       Section("Ray-Ban (Meta DAT)") {
+        row("DAT SDK", GlassesSDKInfo.datVersion)
+        row("Glasses", glassesStream?.deviceDescription ?? "—")
         row("Stream state", glassesStream?.lastStreamState ?? "—")
         row("Profile", glassesStream.map { "\($0.streamProfile.label)" } ?? "—")
+        row("Requested", requestedStream)
+        row("Actual", actualStream)
+        row("Transport", glassesStream?.activeTransport.shortLabel ?? "—")
+        if let note = glassesStream?.transportNote { row("Transport note", note) }
         row("Last stream error", glassesStream?.lastStreamError ?? "none")
       }
       Section("Ray-Ban frames and vision images") {
@@ -264,7 +270,7 @@ struct DiagnosticsView: View {
         row("Copy fallbacks", "\(metrics.copyFailures)")
         row("FrameStore sequence", "\(metrics.latestSequence)")
         row("Vision image mode", GlassesVisionCaptureMode.current.label)
-        row("Still photo support", "In-stream capture (DAT 0.4.0); full-resolution photo needs DAT 1.0")
+        row("Still photo support", "In-stream capture (DAT \(GlassesSDKInfo.datVersion)) = a frame of the video stream; full-resolution photo needs DAT 1.0")
         row("Photos requested / received / failed", "\(metrics.photosRequested) / \(metrics.photosReceived) / \(metrics.photoFailures)")
         row("Last photo", "\(metrics.lastPhotoResolution)" + (metrics.lastPhotoLatencyMs.map { " in \($0) ms" } ?? ""))
         row("Last AI image", metrics.lastVisionImage)
@@ -327,6 +333,17 @@ struct DiagnosticsView: View {
   }
 
   private var models: [String] { ChatGPTAuthSession.shared.availableModels }
+
+  private var requestedStream: String {
+    guard let glassesStream else { return "—" }
+    return "\(glassesStream.streamProfile.requestedSummary), \(glassesStream.activeTransport.shortLabel)"
+  }
+
+  /// What really arrives, measured from the frame store (Ray-Ban frames only).
+  private var actualStream: String {
+    guard metrics.source == FrameSourceKind.glasses.rawValue, metrics.inputWidth > 0 else { return "no Ray-Ban frames" }
+    return "\(metrics.inputResolution) @ \(String(format: "%.1f", metrics.measuredFPS)) fps \(metrics.pixelFormat)"
+  }
 
   private var oauthStatus: String {
     switch ChatGPTAuthSession.shared.status {
@@ -416,7 +433,7 @@ struct DiagnosticsView: View {
       "version \(AppInfo.version) (\(AppInfo.build)) commit \(AppInfo.commit) bridge \(EmbeddedCodexBridge.bridgeVersion())",
       "oauth: \(oauthStatus); models: \(models.count); realtime start: \(voice?.startMode?.rawValue ?? "—")",
       "voice: \(voiceState); sideband: \(sidebandStatus); realtime error: \(voice?.lastRealtimeError ?? "none")",
-      "glasses: \(glassesStream?.lastStreamState ?? "—"); profile \(glassesStream?.streamProfile.rawValue ?? "—"); stream error \(glassesStream?.lastStreamError ?? "none")",
+      "glasses: \(glassesStream?.lastStreamState ?? "—"); DAT \(GlassesSDKInfo.datVersion); device \(glassesStream?.deviceDescription ?? "—"); profile \(glassesStream?.streamProfile.rawValue ?? "—"); requested \(requestedStream); actual \(actualStream); transport note \(glassesStream?.transportNote ?? "none"); stream error \(glassesStream?.lastStreamError ?? "none")",
       "camera: \(metrics.source) \(metrics.inputResolution) \(metrics.pixelFormat) fps \(String(format: "%.1f", metrics.measuredFPS)) received \(metrics.framesReceived) rendered \(metrics.previewRendered) dropped \(metrics.previewDropped) failures \(metrics.previewFailures)",
       "glasses samples: \(metrics.glassesCompressed.map { $0 ? "compressed" : "raw" } ?? "—") \(metrics.glassesCodec) \(metrics.glassesSampleSize) raw \(metrics.rawSamples) compressed \(metrics.compressedSamples) decoded \(metrics.decodedFrames) decodeFail \(metrics.decodeFailures) copyFallback \(metrics.copyFailures) seq \(metrics.latestSequence)",
       "photos: requested \(metrics.photosRequested) received \(metrics.photosReceived) failed \(metrics.photoFailures) last \(metrics.lastPhotoResolution) \(metrics.lastPhotoLatencyMs.map { "\($0) ms" } ?? ""); vision mode \(GlassesVisionCaptureMode.current.rawValue); last AI image \(metrics.lastVisionImage)",

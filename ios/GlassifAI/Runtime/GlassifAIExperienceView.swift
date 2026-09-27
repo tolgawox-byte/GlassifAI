@@ -202,7 +202,10 @@ struct GlassifAIExperienceView: View {
 
   private var debugOverlay: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text("Camera \(metrics.source) · \(metrics.inputResolution) \(metrics.pixelFormat)")
+      if captureSource == .glasses {
+        Text("Requested \(glassesStream.streamProfile.requestedSummary) · \(glassesStream.activeTransport.shortLabel) · DAT \(GlassesSDKInfo.datVersion)")
+      }
+      Text("Actual \(metrics.source) · \(metrics.inputResolution) \(metrics.pixelFormat)")
       Text(String(format: "FPS %.1f · received %llu · dropped %llu", metrics.measuredFPS, metrics.framesReceived, metrics.previewDropped))
       Text("Phone processing median \(ms(metrics.processingMedianMs)) · p95 \(ms(metrics.processingP95Ms))")
       Text("Capture→phone median \(ms(metrics.transportMedianMs)) · p95 \(ms(metrics.transportP95Ms))")

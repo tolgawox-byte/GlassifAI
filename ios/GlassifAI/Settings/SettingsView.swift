@@ -68,7 +68,8 @@ struct SettingsView: View {
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AudioRoutePreference.defaultsKey) private var audioRouteRaw = AudioRoutePreference.automatic.rawValue
-  @AppStorage(GlassesStreamProfile.defaultsKey) private var streamProfileRaw = GlassesStreamProfile.balanced.rawValue
+  @AppStorage(GlassesStreamProfile.defaultsKey) private var streamProfileRaw = GlassesStreamProfile.recommended.rawValue
+  @AppStorage(GlassesVideoTransport.defaultsKey) private var transportRaw = GlassesVideoTransport.hevc.rawValue
   @AppStorage(AssistantPreferences.previewModeKey) private var previewMode = "lowLatency"
   @AppStorage(AssistantPreferences.debugOverlayKey) private var showsDebugOverlay = false
   @AppStorage(AssistantPreferences.voiceKey) private var voiceName = AssistantPreferences.defaultVoice
@@ -126,11 +127,21 @@ struct SettingsView: View {
 
         Section(
           header: Text("Ray-Ban"),
-          footer: Text("Changes apply the next time the glasses stream starts. Over Bluetooth the glasses compress harder at higher resolution and frame rate; the metrics overlay shows what actually arrives.")) {
+          footer: Text("Changes apply the next time the glasses stream starts (switch the camera to iPhone and back). Meta compresses every frame to fit the Bluetooth link, so fewer frames per second give sharper frames; the glasses may still lower the resolution on a weak link. Diagnostics shows requested and actual values.")) {
           Picker("Stream profile", selection: $streamProfileRaw) {
             ForEach(GlassesStreamProfile.allCases) { profile in
               Text(profile.label).tag(profile.rawValue)
             }
+          }
+          Picker("Video transport", selection: $transportRaw) {
+            ForEach(GlassesVideoTransport.allCases) { transport in
+              Text(transport.label).tag(transport.rawValue)
+            }
+          }
+          if let note = glassesStream?.transportNote {
+            Text(note)
+              .font(.footnote)
+              .foregroundStyle(.orange)
           }
           Picker("Preview", selection: $previewMode) {
             Text("Low latency (new)").tag("lowLatency")

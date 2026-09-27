@@ -87,8 +87,12 @@ final class VideoDecoder {
   }
 
   private func createDecompressionSession(formatDescription: CMFormatDescription) throws {
+    // Bi-planar 4:2:0 is the hardware decoder's native output: no colour
+    // conversion, a third of the memory of BGRA (the frame store keeps a few
+    // recent frames), and a luma plane the sharpness scorer reads directly.
+    // The display layer and Core Image both render it natively.
     let attrs: [CFString: Any] = [
-      kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+      kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
       kCVPixelBufferIOSurfacePropertiesKey: NSDictionary(),
     ]
 

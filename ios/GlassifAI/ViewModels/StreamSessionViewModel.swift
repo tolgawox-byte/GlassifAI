@@ -34,54 +34,124 @@ enum StreamingMode {
   case iPhone
 }
 
-/// Resolution / frame-rate trade-offs for the glasses stream. Over Bluetooth
-/// the glasses compress harder at higher resolution and frame rate, so fewer
-/// frames can mean sharper frames. `balanced` is the original configuration.
+/// The Meta Wearables Device Access Toolkit version this build links
+/// (see Package.resolved). Shown in Diagnostics.
+enum GlassesSDKInfo {
+  static let datVersion = "0.5.0"
+}
+
+/// Resolution / frame-rate trade-offs for the glasses stream. Meta's DAT
+/// documentation: frames are compressed per frame to fit the Bluetooth Classic
+/// bandwidth, and "requesting a lower resolution, a lower frame rate, or both
+/// can yield higher visual quality with less compression loss". The glasses
+/// may still step the resolution down on a weak link; Diagnostics shows what
+/// actually arrives next to what was requested.
 enum GlassesStreamProfile: String, CaseIterable, Identifiable {
-  case balanced
-  case smooth
+  /// 720p at 15 fps: full resolution with less compression per frame.
   case sharp
+  /// 720p at 7 fps: the least compression, for reading small text.
+  case maxDetail = "max"
+  /// 720p at 24 fps: the original GlassifAI configuration.
+  case balanced
+  /// 504p at 30 fps: smoothest preview, least detail.
+  case smooth
 
   static let defaultsKey = "autoloom.glasses.profile"
+  static let recommended: GlassesStreamProfile = .sharp
 
   static var current: GlassesStreamProfile {
-    GlassesStreamProfile(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .balanced
+    GlassesStreamProfile(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? recommended
   }
 
   var id: String { rawValue }
 
   var label: String {
     switch self {
-    case .balanced: "Balanced — 720p request, 24 fps (original)"
+    case .sharp: "Detail — 720p, 15 fps (recommended)"
+    case .maxDetail: "Max detail — 720p, 7 fps (text; choppier preview)"
+    case .balanced: "Balanced — 720p, 24 fps (original)"
     case .smooth: "Smooth — 504p, 30 fps"
-    case .sharp: "Sharper frames — 720p request, 15 fps"
     }
   }
 
   var resolution: StreamingResolution {
+    self == .smooth ? .medium : .high
+  }
+
+  var frameRate: UInt {
     switch self {
-    case .balanced, .sharp: .high
-    case .smooth: .medium
+    case .sharp: 15
+    case .maxDetail: 7
+    case .balanced: 24
+    case .smooth: 30
     }
   }
 
-  var frameRateLabel: String {
+  var requestedSize: (width: Int, height: Int) {
+    self == .smooth ? (504, 896) : (720, 1280)
+  }
+
+  var requestedSummary: String {
+    "\(requestedSize.width)×\(requestedSize.height) @ \(frameRate) fps"
+  }
+
+  func makeConfig(transport: GlassesVideoTransport) -> StreamSessionConfig {
+    StreamSessionConfig(videoCodec: transport.codec, resolution: resolution, frameRate: frameRate)
+  }
+}
+
+/// How glasses frames reach the phone. HEVC (DAT 0.5+) delivers compressed
+/// samples that this app decodes in hardware and keeps delivering while the
+/// app is in the background; raw frames are decoded by the SDK and pause when
+/// the app is backgrounded.
+enum GlassesVideoTransport: String, CaseIterable, Identifiable {
+  case hevc
+  case raw
+
+  static let defaultsKey = "autoloom.glasses.transport"
+
+  static var preferred: GlassesVideoTransport {
+    GlassesVideoTransport(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .hevc
+  }
+
+  var id: String { rawValue }
+
+  var label: String {
     switch self {
-    case .balanced: "24"
-    case .smooth: "30"
-    case .sharp: "15"
+    case .hevc: "HEVC — app decodes, works with the phone locked"
+    case .raw: "Raw — SDK decodes, foreground only (original)"
     }
   }
 
-  func makeConfig() -> StreamSessionConfig {
-    switch self {
-    case .balanced:
-      StreamSessionConfig(videoCodec: VideoCodec.raw, resolution: StreamingResolution.high, frameRate: 24)
-    case .smooth:
-      StreamSessionConfig(videoCodec: VideoCodec.raw, resolution: StreamingResolution.medium, frameRate: 30)
-    case .sharp:
-      StreamSessionConfig(videoCodec: VideoCodec.raw, resolution: StreamingResolution.high, frameRate: 15)
-    }
+  var shortLabel: String {
+    self == .hevc ? "HEVC (hvc1)" : "raw"
+  }
+
+  var codec: VideoCodec {
+    self == .hevc ? .hvc1 : .raw
+  }
+}
+
+/// Decides whether an HEVC stream that is "streaming" but yields no usable
+/// frames should fall back to the SDK-decoded raw transport. Counts are the
+/// samples seen since the stream reached `.streaming`.
+enum GlassesTransportWatchdog {
+  static let gracePeriodNanoseconds: UInt64 = 8_000_000_000
+
+  static func fallbackReason(
+    compressedSamples: UInt64,
+    decodedFrames: UInt64,
+    decodeFailures: UInt64,
+    rawSamples: UInt64
+  ) -> String? {
+    if decodedFrames > 0 || rawSamples > 0 { return nil }
+    if compressedSamples == 0 { return "no HEVC samples arrived within 8 s of streaming" }
+    return "\(compressedSamples) HEVC samples arrived but none decoded (\(decodeFailures) failures)"
+  }
+
+  /// Counter difference that survives a FrameStore reset in between.
+  static func delta(_ now: UInt64, since baseline: UInt64) -> UInt64 {
+    now >= baseline ? now - baseline : now
   }
 }
 
@@ -96,8 +166,15 @@ class StreamSessionViewModel: ObservableObject {
   @Published var hasActiveDevice: Bool = false
   @Published var streamingMode: StreamingMode = .glasses
   @Published var selectedResolution: StreamingResolution = .high
-  @Published private(set) var streamProfile: GlassesStreamProfile = .balanced
+  @Published private(set) var streamProfile: GlassesStreamProfile = .sharp
   @Published private(set) var lastStreamState = "stopped"
+  /// Transport the current stream session was created with (may differ from
+  /// the preference after an automatic fallback).
+  @Published private(set) var activeTransport: GlassesVideoTransport = .hevc
+  /// Why the app switched transports automatically, if it did.
+  @Published private(set) var transportNote: String?
+  /// Name, type and compatibility of the active glasses, for Diagnostics.
+  @Published private(set) var deviceDescription = "—"
 
   var isStreaming: Bool {
     streamingStatus != .stopped
@@ -133,6 +210,13 @@ class StreamSessionViewModel: ObservableObject {
   private let deviceSelector: AutoDeviceSelector?
   private var deviceMonitorTask: Task<Void, Never>?
   private var lifecycleObservers: [NSObjectProtocol] = []
+  /// Bumped whenever the stream session is replaced, so a late callback from
+  /// a previous session can never change the current state.
+  private var sessionGeneration = 0
+  /// Set when HEVC produced no usable frames; the preferred transport is
+  /// skipped until the user picks a different one.
+  private var fallbackFrom: GlassesVideoTransport?
+  private var watchdogTask: Task<Void, Never>?
   /// One app-requested still capture at a time; photos that do not answer a
   /// pending request (shutter button, late arrivals) never reach vision.
   let stillPhotos = StillPhotoCoordinator()
@@ -140,20 +224,25 @@ class StreamSessionViewModel: ObservableObject {
   init(wearables: WearablesInterface?) {
     self.wearables = wearables
     let profile = GlassesStreamProfile.current
+    let transport = GlassesVideoTransport.preferred
 
     if let wearables {
       // Let the SDK auto-select from available devices
       let selector = AutoDeviceSelector(wearables: wearables)
       self.deviceSelector = selector
-      // The profile's resolution is a request: DAT 0.4.0 cannot always honour
-      // `.high`, and the glasses step resolution down on weak Bluetooth links.
-      // Diagnostics shows the resolution that actually arrives.
-      streamSession = StreamSession(streamSessionConfig: profile.makeConfig(), deviceSelector: selector)
+      // The profile's resolution and frame rate are a request: the glasses
+      // step resolution down on weak Bluetooth links. Diagnostics shows the
+      // resolution and frame rate that actually arrive.
+      streamSession = StreamSession(
+        streamSessionConfig: profile.makeConfig(transport: transport), deviceSelector: selector)
 
       // Monitor device availability
-      deviceMonitorTask = Task { @MainActor in
+      deviceMonitorTask = Task { @MainActor [weak self] in
         for await device in selector.activeDeviceStream() {
+          guard let self else { return }
           self.hasActiveDevice = device != nil
+          self.deviceDescription = device.flatMap { wearables.deviceForIdentifier($0) }
+            .map(StreamSessionViewModel.describe) ?? "—"
         }
       }
     } else {
@@ -161,10 +250,23 @@ class StreamSessionViewModel: ObservableObject {
     }
 
     streamProfile = profile
+    activeTransport = transport
     selectedResolution = profile.resolution
     frameIngestor.configure(legacyPreview: AssistantPreferences.usesLegacyPreview)
     attachListeners()
     observeLifecycle()
+  }
+
+  private static func describe(_ device: Device) -> String {
+    "\(device.nameOrId()) · \(device.deviceType().rawValue) · \(String(describing: device.compatibility()))"
+  }
+
+  /// The transport to use for the next session: the user's preference unless
+  /// it already failed in this app run.
+  private var effectiveTransport: GlassesVideoTransport {
+    let preferred = GlassesVideoTransport.preferred
+    if let fallbackFrom, fallbackFrom == preferred { return .raw }
+    return preferred
   }
 
   /// Asks the glasses for a fresh still photo for one vision request.
@@ -196,40 +298,49 @@ class StreamSessionViewModel: ObservableObject {
     })
   }
 
-  /// Recreate the StreamSession with the current selectedResolution.
-  /// Only call when not actively streaming.
-  func updateResolution(_ resolution: StreamingResolution) {
-    guard !isStreaming, let deviceSelector else { return }
-    selectedResolution = resolution
-    let config = StreamSessionConfig(
-      videoCodec: VideoCodec.raw,
-      resolution: resolution,
-      frameRate: 24)
-    streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
-    attachListeners()
-    NSLog("[Stream] Resolution changed to %@", resolutionLabel)
-  }
-
-  /// Applies the stream profile chosen in Settings. The session is only
-  /// recreated when the profile changed and the stream is stopped, so the
-  /// original configuration is untouched unless the user picks another one.
+  /// Applies the stream profile and transport chosen in Settings. The session
+  /// is only recreated when one of them changed and the stream is stopped.
   func applyStreamProfileIfNeeded() {
     let profile = GlassesStreamProfile.current
+    let transport = effectiveTransport
     frameIngestor.configure(legacyPreview: AssistantPreferences.usesLegacyPreview)
-    guard profile != streamProfile, !isStreaming, let deviceSelector else { return }
-    streamSession = StreamSession(streamSessionConfig: profile.makeConfig(), deviceSelector: deviceSelector)
+    if fallbackFrom != nil, fallbackFrom != GlassesVideoTransport.preferred {
+      // The user picked another transport; a new attempt starts clean.
+      fallbackFrom = nil
+      transportNote = nil
+    }
+    guard profile != streamProfile || transport != activeTransport, !isStreaming, let deviceSelector else { return }
+    recreateSession(profile: profile, transport: transport, selector: deviceSelector)
+  }
+
+  private func recreateSession(
+    profile: GlassesStreamProfile,
+    transport: GlassesVideoTransport,
+    selector: AutoDeviceSelector
+  ) {
+    streamSession = StreamSession(
+      streamSessionConfig: profile.makeConfig(transport: transport), deviceSelector: selector)
     streamProfile = profile
+    activeTransport = transport
     selectedResolution = profile.resolution
     attachListeners()
-    NSLog("[Stream] Stream profile changed to %@", profile.rawValue)
+    NSLog("[Stream] Stream session: %@ %@", profile.requestedSummary, transport.shortLabel)
   }
 
   private func attachListeners() {
     guard let streamSession else { return }
+    sessionGeneration += 1
+    let generation = sessionGeneration
+    let previousTokens = [stateListenerToken, videoFrameListenerToken, errorListenerToken, photoDataListenerToken]
+    Task {
+      for token in previousTokens { await token?.cancel() }
+    }
+
     // Subscribe to session state changes using the DAT SDK listener pattern
     stateListenerToken = streamSession.statePublisher.listen { [weak self] state in
       Task { @MainActor [weak self] in
-        self?.updateStatusFromState(state)
+        guard let self, self.sessionGeneration == generation else { return }
+        self.updateStatusFromState(state)
       }
     }
 
@@ -263,7 +374,7 @@ class StreamSessionViewModel: ObservableObject {
     // Subscribe to streaming errors
     errorListenerToken = streamSession.errorPublisher.listen { [weak self] error in
       Task { @MainActor [weak self] in
-        guard let self else { return }
+        guard let self, self.sessionGeneration == generation else { return }
         // One voice: glasses-state conditions render as placeholder text on
         // the call screen, never as alert dialogs. Sleeping/absent glasses are
         // a plain wait; everything else maps to a typed issue.
@@ -274,6 +385,8 @@ class StreamSessionViewModel: ObservableObject {
           self.glassesIssue = .hingesClosed
         case .permissionDenied:
           self.glassesIssue = .permissionNeeded
+        case .thermalCritical:
+          self.glassesIssue = .thermal
         default:
           self.glassesIssue = .reconnecting
         }
@@ -298,6 +411,39 @@ class StreamSessionViewModel: ObservableObject {
     }
   }
 
+  /// HEVC is decoded by this app. If a stream reports `.streaming` but no
+  /// frame has been decoded after the grace period, fall back to the
+  /// SDK-decoded raw transport once, so the camera keeps working.
+  private func armTransportWatchdog() {
+    watchdogTask?.cancel()
+    guard activeTransport == .hevc, fallbackFrom == nil else { return }
+    let baseline = FrameStore.shared.snapshot()
+    let generation = sessionGeneration
+    watchdogTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: GlassesTransportWatchdog.gracePeriodNanoseconds)
+      guard let self, !Task.isCancelled, self.sessionGeneration == generation,
+            self.streamingStatus == .streaming, self.activeTransport == .hevc else { return }
+      let now = FrameStore.shared.snapshot()
+      let reason = GlassesTransportWatchdog.fallbackReason(
+        compressedSamples: GlassesTransportWatchdog.delta(now.compressedSamples, since: baseline.compressedSamples),
+        decodedFrames: GlassesTransportWatchdog.delta(now.decodedFrames, since: baseline.decodedFrames),
+        decodeFailures: GlassesTransportWatchdog.delta(now.decodeFailures, since: baseline.decodeFailures),
+        rawSamples: GlassesTransportWatchdog.delta(now.rawSamples, since: baseline.rawSamples))
+      guard let reason else { return }
+      await self.fallBackToRaw(reason: reason)
+    }
+  }
+
+  private func fallBackToRaw(reason: String) async {
+    guard let deviceSelector, activeTransport == .hevc else { return }
+    NSLog("[Stream] HEVC transport fallback to raw: %@", reason)
+    fallbackFrom = .hevc
+    transportNote = "Switched to raw automatically: \(reason)"
+    await streamSession?.stop()
+    recreateSession(profile: streamProfile, transport: .raw, selector: deviceSelector)
+    await streamSession?.start()
+  }
+
   /// Glasses-state conditions the call screen's placeholder can name --
   /// the app's own voice, replacing the sample's alert dialogs.
   enum GlassesIssue: Equatable {
@@ -305,6 +451,7 @@ class StreamSessionViewModel: ObservableObject {
     case permissionNeeded
     case hingesClosed
     case reconnecting
+    case thermal
   }
 
   @Published var glassesIssue: GlassesIssue?
@@ -378,12 +525,15 @@ class StreamSessionViewModel: ObservableObject {
       hasReceivedFirstFrame = false
       frameIngestor.resetFirstFrame()
       stillPhotos.cancel()
+      watchdogTask?.cancel()
       streamingStatus = .stopped
     case .waitingForDevice, .starting, .stopping, .paused:
       streamingStatus = .waiting
     case .streaming:
+      let wasStreaming = streamingStatus == .streaming
       streamingStatus = .streaming
       glassesIssue = nil
+      if !wasStreaming { armTransportWatchdog() }
     }
   }
 
@@ -399,8 +549,8 @@ class StreamSessionViewModel: ObservableObject {
       return "The operation timed out. Please try again."
     case .videoStreamingError:
       return "Video streaming failed. Please try again."
-    case .audioStreamingError:
-      return "Audio streaming failed. Please try again."
+    case .thermalCritical:
+      return "The glasses are too warm. The camera may slow down or stop until they cool down."
     case .permissionDenied:
       return "Camera permission denied. Please grant permission in Settings."
     case .hingesClosed:

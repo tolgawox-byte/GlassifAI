@@ -29,6 +29,8 @@ struct StreamSessionView: View {
       ("Glasses folded", "Open the hinges to begin seeing through your glasses.")
     case .reconnecting:
       ("Reconnecting", "Your view will appear as soon as the glasses wake up.")
+    case .thermal:
+      ("Glasses are warm", "The camera may slow down or pause until the glasses cool down.")
     case nil:
       ("Waiting for glasses", "Open your glasses and keep them near your iPhone.")
     }
