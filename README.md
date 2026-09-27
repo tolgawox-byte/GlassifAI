@@ -1,3 +1,5 @@
+> **AutoLoom Media Glasses** — this fork rebrands and extends GlassifAI for AutoLoom Media. It is a general-purpose assistant for iPhone and Ray-Ban Meta: natural voice, vision on request, live web search with sources, task routing and cancellation, and a low-latency camera pipeline. See [CAPABILITIES.md](CAPABILITIES.md), [BASELINE.md](BASELINE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/WINDOWS_INSTALL.md](docs/WINDOWS_INSTALL.md) and [TEST_REPORT.md](TEST_REPORT.md). It is an independent app, not affiliated with OpenAI, Meta, or Ray-Ban. The original GlassifAI README follows, and its MIT attribution is preserved.
+
 <p align="center">
   <img src="assets/glassifai-social.png" alt="GlassifAI — Your world. Understood." width="100%" />
 </p>
