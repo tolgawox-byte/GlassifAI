@@ -1,7 +1,14 @@
-name: Build GlassifAI IPA
+name: Build AutoLoom Media Glasses IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - autoloom-glasses-next
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -26,33 +33,60 @@ jobs:
           rustup target add aarch64-apple-ios
           rustup target add aarch64-apple-ios-sim
           rustup target add x86_64-apple-ios
+          echo "RUSTC_VERSION_HASH=$(rustc -V | shasum | cut -c1-12)" >> "$GITHUB_ENV"
+
+      # The native bridge takes ~17 minutes from scratch. Its dependency
+      # artifacts only change with Cargo.lock or the toolchain, so reuse them.
+      - name: Restore Rust build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            native/GlassifAICodexBridge/target
+          key: rust-ios-${{ env.RUSTC_VERSION_HASH }}-${{ hashFiles('native/GlassifAICodexBridge/Cargo.lock') }}
+          restore-keys: |
+            rust-ios-${{ env.RUSTC_VERSION_HASH }}-
 
       - name: Build native Codex framework
         run: |
           chmod +x ./scripts/build-native.sh
           ./scripts/build-native.sh
 
-      - name: Build unsigned iPhone app
+      - name: Build unsigned iPhone app (Debug and Release)
         run: |
-          xcodebuild \
-            -project ios/GlassifAI.xcodeproj \
-            -scheme GlassifAI \
-            -configuration Debug \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build
+          for configuration in Debug Release; do
+            xcodebuild \
+              -project ios/GlassifAI.xcodeproj \
+              -scheme GlassifAI \
+              -configuration "$configuration" \
+              -destination 'generic/platform=iOS' \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              AUTOLOOM_COMMIT_SHA="${GITHUB_SHA::12}" \
+              build
+          done
 
-      - name: Create unsigned IPA
+      - name: Create unsigned IPAs
         run: |
-          mkdir -p Payload
-          cp -R build/Build/Products/Debug-iphoneos/GlassifAI.app Payload/
-          zip -r GlassifAI-unsigned.ipa Payload
+          for configuration in Debug Release; do
+            rm -rf Payload
+            mkdir -p Payload
+            cp -R "build/Build/Products/${configuration}-iphoneos/GlassifAI.app" Payload/
+            zip -qr "AutoLoomMediaGlasses-${configuration}-unsigned.ipa" Payload
+          done
+          ls -la *.ipa
 
-      - name: Upload IPA
+      - name: Upload IPAs
         uses: actions/upload-artifact@v4
         with:
-          name: GlassifAI-unsigned-IPA
-          path: GlassifAI-unsigned.ipa
+          name: AutoLoomMediaGlasses-unsigned-IPAs
+          path: AutoLoomMediaGlasses-*-unsigned.ipa
+
+      - name: Unit tests (iOS Simulator)
+        run: |
+          chmod +x ./scripts/ci-unit-tests.sh
+          ./scripts/ci-unit-tests.sh
