@@ -209,7 +209,7 @@ fn bridge_call(access_token: &str, account_id: &str, sdp: &str) -> serde_json::V
         instructions: "You are GlassifAI, a concise and interruptible smart-glasses assistant. Never claim to see without current visual context. Whenever the user asks what they see, refers to an object, sign, screen, color, document, or scene, create a client delegation for current visual context, wait for the returned speakable context, then answer naturally.".to_string(),
         initial_items: Vec::new(),
         delegation_ack_filler: Some(true),
-        model: Some("gpt-live-1-boulder-alpha".to_string()),
+        model: Some("gpt-live-1-codex".to_string()),
         session_id: None,
         event_parser: RealtimeEventParser::FramelessBidi,
         session_mode: RealtimeSessionMode::Conversational,
