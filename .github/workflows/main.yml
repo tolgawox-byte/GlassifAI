@@ -1,0 +1,58 @@
+name: Build GlassifAI IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: xcode-27
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          uname -m
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add iOS Rust targets
+        run: |
+          rustup target add aarch64-apple-ios
+          rustup target add aarch64-apple-ios-sim
+          rustup target add x86_64-apple-ios
+
+      - name: Build native Codex framework
+        run: |
+          chmod +x ./scripts/build-native.sh
+          ./scripts/build-native.sh
+
+      - name: Build unsigned iPhone app
+        run: |
+          xcodebuild \
+            -project ios/GlassifAI.xcodeproj \
+            -scheme GlassifAI \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Create unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Debug-iphoneos/GlassifAI.app Payload/
+          zip -r GlassifAI-unsigned.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: GlassifAI-unsigned-IPA
+          path: GlassifAI-unsigned.ipa
