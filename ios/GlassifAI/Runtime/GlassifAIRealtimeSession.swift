@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import Foundation
 import LiveKitWebRTC
+import QuartzCore
 
 @MainActor
 final class GlassifAIRealtimeSession: NSObject, ObservableObject {
@@ -28,6 +29,13 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   @Published private(set) var startMode: StartMode?
   @Published private(set) var lastRealtimeError: String?
   @Published private(set) var isAssistantAudioSuppressed = false
+  /// Tap (or invocation) to listening, for the last successful start.
+  @Published private(set) var lastConnectMs: Int?
+  /// End of the user's turn to the first words of the answer (median of
+  /// recent turns).
+  @Published private(set) var responseLatencyMedianMs: Int?
+  @Published private(set) var reconnectCount = 0
+  @Published private(set) var lastReconnectReason: String?
 
   var isActive: Bool {
     switch state {
@@ -51,10 +59,19 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   private var userTurnOpen = false
   private var assistantTurnOpen = false
   private let orchestrator = AssistantOrchestrator.shared
+  private var connectStartedAt: CFTimeInterval?
+  private var userTurnEndedAt: CFTimeInterval?
+  private var responseLatencies: [Double] = []
+  /// Audio preferences of the running call, reused when reconnecting.
+  private var callAudio: (prefersBluetoothHFP: Bool, forcesBuiltInAudio: Bool)?
+  private var reconnectPolicy = RealtimeReconnectPolicy()
+  private var isReconnecting = false
 
   func start(prefersBluetoothHFP: Bool = false, forcesBuiltInAudio: Bool = false) async {
     guard !isActive else { return }
     state = .connecting
+    connectStartedAt = CACurrentMediaTime()
+    callAudio = (prefersBluetoothHFP, forcesBuiltInAudio)
     userTranscript = ""
     isMicrophoneMuted = false
     assistantCaption = ""
@@ -134,6 +151,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       }
       guard channel.readyState == .open else { throw RealtimeError.connectionTimedOut }
       state = .listening
+      if let connectStartedAt {
+        lastConnectMs = Int(((CACurrentMediaTime() - connectStartedAt) * 1_000).rounded())
+      }
       startSidebandEventLoop()
     } catch {
       await tearDown()
@@ -144,9 +164,51 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   }
 
   func stop() async {
+    callAudio = nil
     sendEvent(["type": "session.close"])
     await tearDown()
     state = .disconnected
+  }
+
+  /// Whether a call is established (not merely starting).
+  private var isConnected: Bool {
+    switch state {
+    case .listening, .thinking, .speaking: true
+    default: false
+    }
+  }
+
+  /// A running call broke (network switch, ICE failure, task channel ended,
+  /// iOS audio reset). Reconnects automatically within a small budget and
+  /// resumes with the conversation summary; otherwise asks for a tap. Runs
+  /// in its own task, so it never inherits the cancelled event loop.
+  private func handleMidCallFailure(reason: String, userMessage: String) {
+    guard !isReconnecting else { return }
+    isReconnecting = true
+    Task { @MainActor [weak self] in
+      await self?.reconnect(reason: reason, userMessage: userMessage)
+    }
+  }
+
+  private func reconnect(reason: String, userMessage: String) async {
+    defer { isReconnecting = false }
+    let audio = callAudio
+    await tearDown()
+    lastRealtimeError = LogSanitizer.sanitize(reason, limit: 160)
+    guard let audio, reconnectPolicy.allowsReconnect(now: Date()) else {
+      state = .failed(userMessage)
+      return
+    }
+    reconnectPolicy.record(Date())
+    reconnectCount += 1
+    lastReconnectReason = LogSanitizer.sanitize(reason, limit: 120)
+    NSLog("[AutoLoom] realtime reconnect %d: %@", reconnectCount, LogSanitizer.sanitize(reason, limit: 120))
+    state = .connecting
+    try? await Task.sleep(nanoseconds: RealtimeReconnectPolicy.delayNanoseconds)
+    // The user ended the call while waiting.
+    guard state == .connecting, callAudio != nil else { return }
+    state = .disconnected
+    await start(prefersBluetoothHFP: audio.prefersBluetoothHFP, forcesBuiltInAudio: audio.forcesBuiltInAudio)
   }
 
   /// Stops the current spoken answer. The V3 protocol has no interrupt
@@ -209,8 +271,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           let status = EmbeddedCodexBridge.sidebandStatus()
           self?.sidebandStatus = LogSanitizer.sanitize(status, limit: 160)
           if EmbeddedCodexBridge.isSidebandTerminal(status) {
-            self?.lastRealtimeError = LogSanitizer.sanitize(status, limit: 160)
-            self?.state = .failed("The assistant's task channel disconnected. Tap to reconnect.")
+            self?.handleMidCallFailure(
+              reason: "task channel \(status)",
+              userMessage: "The assistant's task channel disconnected. Tap to reconnect.")
             return
           }
         }
@@ -234,7 +297,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     orchestrator.handleDelegation(handoffID: handoffId, text: request) { [weak self] text in
       let delivered = EmbeddedCodexBridge.completeDelegation(handoffId: handoffId, text: text)
       if !delivered {
-        self?.state = .failed("The assistant's task channel disconnected. Tap to reconnect.")
+        self?.handleMidCallFailure(
+          reason: "delegation result could not be delivered",
+          userMessage: "The assistant's task channel disconnected. Tap to reconnect.")
       }
       return delivered
     }
@@ -242,8 +307,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
 
   private func handleMediaServicesReset() async {
     guard isActive else { return }
-    await tearDown()
-    state = .failed("iOS restarted the audio system. Tap to reconnect.")
+    handleMidCallFailure(
+      reason: "iOS restarted the audio system",
+      userMessage: "iOS restarted the audio system. Tap to reconnect.")
   }
 
   private func tearDown() async {
@@ -465,6 +531,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
         if !assistantTurnOpen {
           assistantTurnOpen = true
           assistantCaption = ""
+          recordResponseLatency()
         }
         assistantCaption += text
         state = .speaking
@@ -478,6 +545,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           userTurnOpen = false
           userTranscript = text
           state = .thinking
+          userTurnEndedAt = CACurrentMediaTime()
           orchestrator.noteUserTurn(text)
         }
         if role == "assistant" {
@@ -557,6 +625,18 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       state = .speaking
     }
   }
+  /// Time from the end of the user's turn to the first words of the answer.
+  private func recordResponseLatency() {
+    guard let ended = userTurnEndedAt else { return }
+    userTurnEndedAt = nil
+    let milliseconds = (CACurrentMediaTime() - ended) * 1_000
+    guard milliseconds >= 0, milliseconds < 60_000 else { return }
+    responseLatencies.append(milliseconds)
+    if responseLatencies.count > 20 { responseLatencies.removeFirst(responseLatencies.count - 20) }
+    let sorted = responseLatencies.sorted()
+    responseLatencyMedianMs = Int(sorted[sorted.count / 2].rounded())
+  }
+
   private func applyLegacyState(_ next: String) {
     switch next {
     case "listening", "listening_intently", "connected", "idle": state = .listening
@@ -576,9 +656,15 @@ extension GlassifAIRealtimeSession: LKRTCPeerConnectionDelegate {
   nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange newState: LKRTCIceConnectionState) {
     if newState == .failed {
       Task { @MainActor in
-        await tearDown()
-        lastRealtimeError = "ICE connection failed"
-        state = .failed("The voice connection was interrupted. Tap to reconnect.")
+        if isConnected {
+          handleMidCallFailure(
+            reason: "ICE connection failed",
+            userMessage: "The voice connection was interrupted. Tap to reconnect.")
+        } else {
+          await tearDown()
+          lastRealtimeError = "ICE connection failed"
+          state = .failed("The voice connection was interrupted. Tap to reconnect.")
+        }
       }
     }
   }
@@ -596,6 +682,25 @@ extension GlassifAIRealtimeSession: LKRTCDataChannelDelegate {
   }
 }
 
+
+/// Budget for automatic reconnects after a call breaks: a few quick attempts,
+/// never an endless loop.
+struct RealtimeReconnectPolicy {
+  static let maxReconnects = 3
+  static let window: TimeInterval = 120
+  static let delayNanoseconds: UInt64 = 1_000_000_000
+
+  private(set) var history: [Date] = []
+
+  func allowsReconnect(now: Date) -> Bool {
+    history.filter { now.timeIntervalSince($0) < Self.window }.count < Self.maxReconnects
+  }
+
+  mutating func record(_ date: Date) {
+    history.append(date)
+    history = history.filter { date.timeIntervalSince($0) < Self.window }
+  }
+}
 
 private enum RealtimeError: LocalizedError {
   case peerCreationFailed
