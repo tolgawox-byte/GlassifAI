@@ -88,6 +88,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   ///   (hands-free starts and voice previews).
   func start(prefersBluetoothHFP: Bool = false, forcesBuiltInAudio: Bool = false, greeting: String? = nil) async {
     guard !isActive else { return }
+    // Every start path frees the wake phrase listener's microphone first.
+    WakePhraseListener.shared.stopListening(reason: nil)
     state = .connecting
     connectStartedAt = CACurrentMediaTime()
     callAudio = (prefersBluetoothHFP, forcesBuiltInAudio)
@@ -199,6 +201,13 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     sendEvent(["type": "session.close"])
     await tearDown()
     state = .disconnected
+    // In the background the screen's state observers may not run, so the
+    // wake phrase listener is asked to take the microphone back. The short
+    // delay lets an immediate restart (camera switch) claim it first.
+    Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 400_000_000)
+      await WakePhraseListener.shared.refresh()
+    }
   }
 
   /// Whether a call is established (not merely starting).

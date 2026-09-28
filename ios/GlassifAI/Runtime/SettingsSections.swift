@@ -319,6 +319,7 @@ struct DiagnosticsView: View {
         row("Last stop", liveVision.lastStopReason ?? "—")
         row("Thermal state", thermalLabel)
         row("Battery", batteryLabel)
+        row("Power state", powerState)
       }
       Section("Camera pipeline") {
         row("Source", metrics.source)
@@ -381,6 +382,15 @@ struct DiagnosticsView: View {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
       }
     }
+  }
+
+  /// Idle, Hands-Free Ready, Conversation or Live Vision: what is using the
+  /// microphone and camera right now.
+  private var powerState: String {
+    if liveVision.isActive { return "Live Vision (camera notes during a conversation)" }
+    if voice?.isActive == true { return "Conversation" }
+    if WakePhraseListener.shared.status.isListening { return "Hands-Free Ready (on-device wake phrase)" }
+    return "Idle"
   }
 
   private var models: [String] { ChatGPTAuthSession.shared.availableModels }

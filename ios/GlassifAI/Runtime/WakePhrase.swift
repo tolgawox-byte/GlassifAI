@@ -158,6 +158,9 @@ final class WakePhraseListener: ObservableObject {
   /// never touches the audio hardware (the voice call owns it).
   private var engine: AVAudioEngine?
   private var tapInstalled = false
+  /// A start is in progress (permission prompts are async), so overlapping
+  /// refreshes never install a second microphone tap.
+  private var isStarting = false
   private var recognizer: SFSpeechRecognizer?
   private let feed = RecognitionFeed()
   private var task: SFSpeechRecognitionTask?
@@ -221,6 +224,7 @@ final class WakePhraseListener: ObservableObject {
       status = .listening(background: isBackground)
       return
     }
+    guard !isStarting else { return }
     if isBackground, readySince == nil { readySince = Date() }
     // In the background this only works while iOS still lets the app use
     // the microphone (right after a hands-free conversation); otherwise it
@@ -239,6 +243,8 @@ final class WakePhraseListener: ObservableObject {
   }
 
   private func startListening() async {
+    isStarting = true
+    defer { isStarting = false }
     let locale = Locale(identifier: "en-US")
     guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
       status = .unavailable(L.t("speech recognition is not available", "konuşma tanıma kullanılamıyor"))
