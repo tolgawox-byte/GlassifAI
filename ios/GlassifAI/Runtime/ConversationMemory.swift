@@ -72,3 +72,26 @@ enum ConversationSummarizer {
       endedAt: endedAt)
   }
 }
+
+/// Daily Briefing (off by default): the first conversation of a day starts
+/// with a short summary of the calendar, reminders and AutoLoom tasks. Only
+/// phone data is used; weather or news are not invented.
+enum DailyBriefing {
+  static let enabledKey = "autoloom.briefing.enabled"
+  static let lastDateKey = "autoloom.briefing.lastDate"
+
+  static var isEnabled: Bool {
+    UserDefaults.standard.bool(forKey: enabledKey)
+  }
+
+  /// True once per calendar day while the briefing is on.
+  static func isDue(now: Date = Date(), defaults: UserDefaults = .standard, calendar: Calendar = .current) -> Bool {
+    guard defaults.bool(forKey: enabledKey) else { return false }
+    guard let last = defaults.object(forKey: lastDateKey) as? Date else { return true }
+    return !calendar.isDate(last, inSameDayAs: now)
+  }
+
+  static func markGiven(now: Date = Date(), defaults: UserDefaults = .standard) {
+    defaults.set(now, forKey: lastDateKey)
+  }
+}

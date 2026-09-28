@@ -170,6 +170,38 @@ final class AutoLoomVoiceActionTests: XCTestCase {
     XCTAssertNotEqual(decide("Tamam peki hava nasıl", context), .confirmPending(true), "a new question is not a yes")
   }
 
+  /// The sentences of the physical tests in the brief (sections 76–82).
+  func testBriefScenarios() {
+    XCTAssertEqual(decide("Jarvis, benim adım Tolga, bunu hatırla."), .setName("Tolga"))
+    XCTAssertEqual(
+      decide("Jarvis, not al: yarın kamerayı yanıma alacağım."), .saveNote(text: "Yarın kamerayı yanıma alacağım"))
+    guard case .createReminder(let test, let testTime)? = decide("Jarvis, iki dakika sonra test hatırlatıcısı oluştur.") else {
+      return XCTFail("expected a reminder")
+    }
+    XCTAssertEqual(test, "Test")
+    XCTAssertEqual(testTime?.date, now.addingTimeInterval(120))
+    guard case .createReminder(let call, let callTime)? = decide("Yarın 10'a Ahmet'i aramamı hatırlat.") else {
+      return XCTFail("expected a reminder")
+    }
+    XCTAssertEqual(call, "Ahmet'i ara")
+    XCTAssertEqual(callTime?.date, local(9, 28, 10))
+    XCTAssertEqual(decide("Bir de not al, kamerayı götüreceğim."), .saveNote(text: "Kamerayı götüreceğim"))
+    XCTAssertNil(decide("Selam Jarvis."))
+    XCTAssertNil(decide("Bugün biraz yoğunum."))
+    XCTAssertNil(decide("Şu an önümdeki şeyi de bir kontrol et."), "vision stays with the voice model")
+    XCTAssertNil(decide("Bunun Kanada fiyatına bak."), "vision + web stays with the voice model")
+  }
+
+  func testDailyBriefingIsOffByDefaultAndOncePerDay() {
+    let defaults = UserDefaults(suiteName: "autoloom-briefing-\(UUID().uuidString)")!
+    XCTAssertFalse(DailyBriefing.isDue(now: now, defaults: defaults), "off by default")
+    defaults.set(true, forKey: DailyBriefing.enabledKey)
+    XCTAssertTrue(DailyBriefing.isDue(now: now, defaults: defaults))
+    DailyBriefing.markGiven(now: now, defaults: defaults)
+    XCTAssertFalse(DailyBriefing.isDue(now: now.addingTimeInterval(3_600), defaults: defaults))
+    XCTAssertTrue(DailyBriefing.isDue(now: now.addingTimeInterval(86_400), defaults: defaults))
+  }
+
   func testCommandStartsAreSpottedEarly() {
     XCTAssertTrue(VoiceActionIntentBridge.looksLikeCommandStart("Jarvis not al", assistantName: "Jarvis"))
     XCTAssertTrue(VoiceActionIntentBridge.looksLikeCommandStart("hey jarvis benim adım", assistantName: "Jarvis"))

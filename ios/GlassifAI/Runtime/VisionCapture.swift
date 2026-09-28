@@ -212,7 +212,14 @@ enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
   }
 
   func prefersPhoto(for detail: VisionDetail) -> Bool {
-    self == .photoFirst
+    switch self {
+    case .photoFirst: true
+    // A standalone photo (DAT 1.0 `Camera.photo`) is far larger than a video
+    // frame, so reading requests take it first; on DAT 0.5 an in-stream
+    // photo adds latency without detail.
+    case .automatic: detail == .high && GlassesSDKInfo.supportsFullResolutionPhoto
+    case .videoOnly: false
+    }
   }
 
   var allowsPhoto: Bool { self != .videoOnly }

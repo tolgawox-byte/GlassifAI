@@ -300,7 +300,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     return prefersGlasses ? "glasses route not selected; using \(output)" : output
   }
 
-  /// A new conversation is ready: chime and/or the chosen phrase, once.
+  /// A new conversation is ready: chime and/or the chosen phrase, once;
+  /// then, once a day and only if turned on, the daily briefing.
   private func announceReady(for reason: VoiceStartReason) {
     let feedback = ConnectionFeedback.current
     if feedback.playsChime { ChimePlayer.shared.play(.ready) }
@@ -308,6 +309,15 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       // Said by the voice model itself: hearing it proves the whole path
       // (ChatGPT, WebRTC, audio route) works.
       _ = sayExactly(phrase)
+    }
+    guard DailyBriefing.isDue() else { return }
+    DailyBriefing.markGiven()
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let outcome = await self.orchestrator.runVoiceIntent(
+        VoiceBridgeDecision(.routine(.briefing), "daily briefing (first conversation today)"),
+        transcript: "daily briefing")
+      _ = self.sayAppMessage(outcome.spoken)
     }
   }
 

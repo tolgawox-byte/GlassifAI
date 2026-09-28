@@ -38,6 +38,9 @@ enum StreamingMode {
 /// (see Package.resolved). Shown in Diagnostics.
 enum GlassesSDKInfo {
   static let datVersion = "0.5.0"
+  /// DAT 1.0 `Camera.photo`: standalone stills at up to the native sensor
+  /// resolution. Not in DAT 0.5.0 (in-stream photos are video frames).
+  static let supportsFullResolutionPhoto = false
 }
 
 /// Resolution / frame-rate trade-offs for the glasses stream. Meta's DAT

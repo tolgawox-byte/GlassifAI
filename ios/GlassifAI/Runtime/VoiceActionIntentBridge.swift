@@ -365,7 +365,11 @@ enum VoiceActionIntentBridge {
   private static let reminderTriggers: [[String]] = [
     ["hatirlatma", "olustur"], ["hatirlatma", "kur"], ["hatirlatma", "ekle"], ["hatirlatma", "ayarla"],
     ["hatirlatici", "olustur"], ["hatirlatici", "kur"], ["hatirlatici", "ekle"], ["animsatici", "olustur"],
-    ["animsatici", "kur"], ["animsatici", "ekle"], ["hatirlatir", "misin"], ["hatirlatabilir", "misin"],
+    ["animsatici", "kur"], ["animsatici", "ekle"],
+    // "test hatırlatıcısı oluştur", "bir hatırlatması kur"
+    ["hatirlaticisi", "olustur"], ["hatirlaticisi", "kur"], ["hatirlaticisi", "ekle"], ["hatirlatmasi", "olustur"],
+    ["hatirlatmasi", "kur"], ["animsaticisi", "olustur"], ["animsaticisi", "ekle"],
+    ["hatirlatir", "misin"], ["hatirlatabilir", "misin"],
     ["hatirlatsana"], ["hatirlatin"], ["hatirlat"],
     ["set", "a", "reminder"], ["create", "a", "reminder"], ["add", "a", "reminder"], ["make", "a", "reminder"],
     ["remind", "me"],

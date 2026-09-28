@@ -225,6 +225,7 @@ struct AssistantSettingsView: View {
   @AppStorage(AssistantPreferences.addressedOnlyKey) private var addressedOnly = false
   @AppStorage(ConversationCommands.enabledKey) private var stopCommands = true
   @AppStorage(ConversationTimeout.defaultsKey) private var timeout = ConversationTimeout.minutes2.rawValue
+  @AppStorage(DailyBriefing.enabledKey) private var dailyBriefing = false
   @State private var nameDraft = AssistantIdentity.name
 
   var body: some View {
@@ -265,6 +266,12 @@ struct AssistantSettingsView: View {
           "Yanıtı kesmek için “Dur”, “Sus”, “Bekle”; konuşmayı bitirmek için “Kapat”, “Konuşmayı bitir” ya da “\(AssistantIdentity.name) dur” deyin."))) {
         Toggle(L.t("Spoken stop commands", "Sesli durdurma komutları"), isOn: $stopCommands)
         Toggle(L.t("Only answer when called by name (experimental)", "Yalnızca adıyla seslenince yanıtla (deneysel)"), isOn: $addressedOnly)
+      }
+      Section(
+        footer: Text(L.t(
+          "The first conversation of each day starts with a short summary of your calendar, reminders and AutoLoom tasks. Only data on this iPhone; no weather or news. You can also say “günün özeti” or “İşe başlıyorum” any time.",
+          "Her günün ilk konuşması takviminiz, anımsatıcılarınız ve AutoLoom görevlerinizin kısa bir özetiyle başlar. Yalnızca bu iPhone'daki veriler; hava durumu veya haber yok. İstediğiniz zaman “günün özeti” ya da “İşe başlıyorum” da diyebilirsiniz."))) {
+        Toggle(L.t("Daily briefing", "Günlük özet"), isOn: $dailyBriefing)
       }
     }
     .navigationTitle(L.t("Name & conversation", "İsim ve konuşma"))
