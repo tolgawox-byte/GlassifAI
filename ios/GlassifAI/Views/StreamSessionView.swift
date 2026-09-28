@@ -4,13 +4,11 @@ import UIKit
 
 struct StreamSessionView: View {
   let wearables: WearablesInterface?
-  private let wearablesViewModel: WearablesViewModel?
+  @ObservedObject private var connection: WearableConnectionCoordinator
   @StateObject private var viewModel: StreamSessionViewModel
   @StateObject private var voice = GlassifAIRealtimeSession()
   @StateObject private var camera = GlassifAICamera()
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
-  @State private var glassesAutoStarted = false
-  @State private var glassesRegistered = false
   @State private var gestureSession: GlassesGestureSession?
   @State private var lastActivatedSource: CaptureSource?
   @Environment(\.scenePhase) private var scenePhase
@@ -19,39 +17,9 @@ struct StreamSessionView: View {
     CaptureSource(rawValue: captureSourceRaw) ?? .iPhoneCamera
   }
 
-  private var glassesPlaceholder: (title: String, caption: String) {
-    switch viewModel.glassesIssue {
-    case .sdkUnavailable:
-      (L.t("Glasses unavailable", "Gözlük kullanılamıyor"),
-       L.t("Use the iPhone camera or try again on a supported device.", "iPhone kamerasını kullanın veya desteklenen bir cihazda tekrar deneyin."))
-    case .permissionNeeded:
-      (L.t("Permission needed", "İzin gerekli"),
-       L.t("Allow camera access for AutoLoom Media Glasses in the Meta AI app.", "Meta AI uygulamasında AutoLoom Media Glasses için kamera izni verin."))
-    case .hingesClosed:
-      (L.t("Glasses folded", "Gözlük katlı"),
-       L.t("Open the hinges to begin seeing through your glasses.", "Gözlükten görmek için menteşeleri açın."))
-    case .reconnecting:
-      (L.t("Reconnecting", "Yeniden bağlanıyor"),
-       L.t("Your view will appear as soon as the glasses wake up.", "Gözlük uyanır uyanmaz görüntü gelecek."))
-    case .thermal:
-      (L.t("Glasses are warm", "Gözlük ısındı"),
-       L.t("The camera may slow down or pause until the glasses cool down.", "Gözlük soğuyana kadar kamera yavaşlayabilir veya duraklayabilir."))
-    case nil:
-      (L.t("Waiting for glasses", "Gözlük bekleniyor"),
-       L.t("Open your glasses and keep them near your iPhone.", "Gözlüğü açın ve iPhone'a yakın tutun."))
-    }
-  }
-
-  private var needsGlassesSetup: Bool {
-    guard captureSource == .glasses, let wearablesViewModel else { return false }
-    return wearablesViewModel.registrationState != .registered
-      && !glassesRegistered
-      && !wearablesViewModel.hasMockDevice
-  }
-
-  init(wearables: WearablesInterface?, wearablesVM: WearablesViewModel?) {
+  init(wearables: WearablesInterface?, connection: WearableConnectionCoordinator = .shared) {
     self.wearables = wearables
-    self.wearablesViewModel = wearablesVM
+    self._connection = ObservedObject(wrappedValue: connection)
     self._viewModel = StateObject(wrappedValue: StreamSessionViewModel(wearables: wearables))
   }
 
@@ -59,19 +27,14 @@ struct StreamSessionView: View {
     AppShellView(
       captureSource: captureSource,
       glassesStream: viewModel,
-      glassesPlaceholder: glassesPlaceholder,
       voice: voice,
       camera: camera,
-      glassesDeviceName: glassesDeviceName,
-      wearablesViewModel: wearablesViewModel,
-      needsGlassesSetup: needsGlassesSetup,
-      onGlassesRegistered: {
-        glassesRegistered = true
-        glassesAutoStarted = false
-        Task { await activateCaptureSource() }
-      })
+      connection: connection)
     .task {
       let stream = viewModel
+      // The glasses stream is part of the connection state; the coordinator
+      // starts it whenever the glasses are registered and linked.
+      connection.bind(stream: stream)
       AssistantOrchestrator.shared.glassesStillPhoto = { timeout in
         await stream.captureStillForVision(timeout: timeout)
       }
@@ -84,7 +47,7 @@ struct StreamSessionView: View {
       let voiceSession = voice
       LiveVisionController.shared.isVoiceActive = { voiceSession.isActive }
       WakePhraseListener.shared.isConversationActive = { voiceSession.isActive }
-      WakePhraseListener.shared.glassesConnected = wearablesViewModel?.glassesLinkConnected
+      WakePhraseListener.shared.glassesConnected = connection.glassesLinkConnected
       VoiceStartCoordinator.shared.register(isActive: { voiceSession.isActive }) { reason in
         // The conversation takes over the microphone.
         WakePhraseListener.shared.stopListening(reason: nil)
@@ -97,19 +60,15 @@ struct StreamSessionView: View {
           prefersBluetoothHFP: route.prefersGlassesAudio(for: source),
           forcesBuiltInAudio: route == .iPhone,
           reason: reason)
-        // A hands-free start in the background: bring the glasses camera
-        // back for visual questions (it pauses in the background when idle).
+        // A hands-free start: bring the glasses camera back now for visual
+        // questions if it is not running.
         if source == .glasses, !stream.isStreaming, voiceSession.isActive {
-          glassesAutoStarted = false
-          await activateCaptureSource()
+          WearableConnectionCoordinator.shared.requestStartSoon(reason: "conversation started")
         }
       }
       if gestureSession == nil, let wearables {
         gestureSession = GlassesGestureSession(wearables: wearables)
       }
-      glassesRegistered =
-        wearablesViewModel?.registrationState == .registered ||
-        wearablesViewModel?.hasMockDevice == true
       AudioRouteMonitor.shared.start()
       VoiceCatalog.migrateStoredSelection()
       ConnectionFeedback.migrateStoredValue()
@@ -118,7 +77,6 @@ struct StreamSessionView: View {
       await WakePhraseListener.shared.refresh()
     }
     .onChange(of: captureSourceRaw) { _, _ in
-      glassesAutoStarted = false
       Task { await switchCaptureSource() }
     }
     .onChange(of: voice.state) { _, _ in
@@ -127,10 +85,10 @@ struct StreamSessionView: View {
         await WakePhraseListener.shared.refresh()
       }
     }
-    .onChange(of: wearablesViewModel?.devices.first) { _, _ in
+    .onChange(of: connection.devices.first) { _, _ in
       Task { await updateGestureSession() }
     }
-    .onChange(of: wearablesViewModel?.glassesLinkConnected) { previous, connected in
+    .onChange(of: connection.glassesLinkConnected) { previous, connected in
       // A real SDK event: the glasses' link to the phone came up or dropped.
       WakePhraseListener.shared.glassesConnected = connected
       if previous == true, connected == false, voice.isActive, captureSource == .glasses {
@@ -140,11 +98,13 @@ struct StreamSessionView: View {
     .onChange(of: scenePhase) { _, phase in
       // The glasses stream is never stopped because the app left the
       // screen: with the HEVC transport it keeps delivering while the phone
-      // is locked, and vision reads those frames, not the UI.
-      guard phase == .active, captureSource == .glasses, !viewModel.isStreaming else { return }
-      // A stream that stopped while away is started again.
-      glassesAutoStarted = false
-      Task { await activateCaptureSource() }
+      // is locked, and vision reads those frames, not the UI. The
+      // coordinator only re-reads the SDK state and restarts what stopped.
+      switch phase {
+      case .active: connection.sceneBecameActive()
+      case .inactive, .background: connection.sceneResigned()
+      @unknown default: break
+      }
     }
     .onDisappear {
       VoiceStartCoordinator.shared.unregister()
@@ -160,13 +120,6 @@ struct StreamSessionView: View {
     } message: {
       Text(viewModel.errorMessage)
     }
-  }
-
-  private var glassesDeviceName: String? {
-    guard let wearables,
-          let id = wearablesViewModel?.devices.first ?? wearables.devices.first,
-          let device = wearables.deviceForIdentifier(id) else { return nil }
-    return device.nameOrId()
   }
 
   /// Switching the camera no longer ends the conversation unless the audio
@@ -195,7 +148,7 @@ struct StreamSessionView: View {
     guard captureSource == .glasses,
           voice.isActive,
           let gestureSession,
-          let deviceId = wearablesViewModel?.devices.first ?? wearables?.devices.first else {
+          let deviceId = connection.devices.first ?? wearables?.devices.first else {
       await gestureSession?.stop()
       return
     }
@@ -221,28 +174,20 @@ struct StreamSessionView: View {
     lastActivatedSource = captureSource
     switch captureSource {
     case .iPhoneCamera:
-      glassesAutoStarted = false
+      // Not wanted first, so the stop is not counted as a camera failure.
+      connection.setCameraWanted(false)
       if viewModel.isStreaming { await viewModel.stopSession() }
       await camera.start()
     case .off:
-      glassesAutoStarted = false
+      connection.setCameraWanted(false)
       await camera.stop()
       if viewModel.isStreaming { await viewModel.stopSession() }
       FrameStore.shared.reset()
     case .glasses:
       await camera.stop()
-      guard let wearablesViewModel,
-            wearablesViewModel.registrationState == .registered ||
-              glassesRegistered ||
-              wearablesViewModel.hasMockDevice else { return }
-      guard !glassesAutoStarted else { return }
-      glassesAutoStarted = true
-      for _ in 0..<20 {
-        await viewModel.handleStartStreaming()
-        if viewModel.isStreaming || captureSource != .glasses { break }
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-      }
-      if !viewModel.isStreaming { glassesAutoStarted = false }
+      // Started by the coordinator as soon as the glasses are registered
+      // and linked, and again whenever they come back.
+      connection.setCameraWanted(true)
     }
   }
 }

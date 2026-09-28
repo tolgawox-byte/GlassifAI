@@ -105,7 +105,7 @@ struct OnboardingView: View {
       Spacer(minLength: 20)
       if let symbol = item.symbol {
         ZStack {
-          AssistantOrb(mood: index.isMultiple(of: 2) ? .listening : .working, size: 170)
+          AssistantOrb(mood: index.isMultiple(of: 2) ? .listening : .thinking, size: 170)
           Image(systemName: symbol)
             .font(.system(size: 40, weight: .semibold))
             .foregroundStyle(.white)

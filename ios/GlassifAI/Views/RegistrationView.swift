@@ -9,40 +9,18 @@
 //
 // RegistrationView.swift
 //
-// Background view that handles callbacks from the Meta AI mobile app during
-// DAT SDK registration and permission flows. This invisible view processes deep links
-// that complete the OAuth authorization process initiated by the DAT SDK.
+// Meta AI's registration and permission callbacks used to be handled here,
+// inside the glasses screen. A cold launch by the callback happened while
+// sign-in was still restoring, when this view did not exist yet, and the
+// callback was lost. They are now handled at the app's root
+// (`GlassifAIApp` → `WearableConnectionCoordinator.handleOpenURL`). This
+// view is kept only so older layouts compile; it does nothing.
 //
 
-import MWDATCore
 import SwiftUI
 
 struct RegistrationView: View {
-  @ObservedObject var viewModel: WearablesViewModel
-
   var body: some View {
     EmptyView()
-      // Handle callback URLs from the Meta mobile app
-      // This is essential for completing DAT SDK registration and permission flows
-      .onOpenURL { url in
-        guard
-          let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-          // Check if this URL is related to DAT SDK workflows (contains metaWearablesAction query param)
-          components.queryItems?.contains(where: { $0.name == "metaWearablesAction" }) == true
-        else {
-          return // URL is not related to DAT SDK - ignore it
-        }
-        Task {
-          do {
-            // Pass the callback URL to the DAT SDK for processing
-            // This handles registration completion and permission grant responses
-            _ = try await Wearables.shared.handleUrl(url)
-          } catch let error as RegistrationError {
-            viewModel.showError(error.description)
-          } catch {
-            viewModel.showError("Unknown error: \(error.localizedDescription)")
-          }
-        }
-      }
   }
 }

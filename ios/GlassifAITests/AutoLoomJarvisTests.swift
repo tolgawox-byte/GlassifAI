@@ -66,7 +66,9 @@ final class AutoLoomJarvisTests: XCTestCase {
     XCTAssertEqual(AssistantPresence.resolve(state: .speaking, activity: nil, muted: false), .speaking)
     XCTAssertEqual(AssistantPresence.resolve(state: .failed("x"), activity: .searching, muted: false), .error("x"))
     XCTAssertEqual(AssistantPresence.speaking.mood, .speaking)
-    XCTAssertEqual(AssistantPresence.searching.mood, .working)
+    XCTAssertEqual(AssistantPresence.searching.mood, .searching)
+    XCTAssertEqual(AssistantPresence.reading.mood, .looking)
+    XCTAssertEqual(AssistantPresence.remembering.mood, .thinking)
   }
 
   func testFriendlyErrorsHideTechnicalText() {

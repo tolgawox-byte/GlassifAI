@@ -11,17 +11,20 @@ enum AppTab: String, Hashable {
 struct AppShellView: View {
   let captureSource: CaptureSource
   @ObservedObject var glassesStream: StreamSessionViewModel
-  let glassesPlaceholder: (title: String, caption: String)
   @ObservedObject var voice: GlassifAIRealtimeSession
   @ObservedObject var camera: GlassifAICamera
-  let glassesDeviceName: String?
-  var wearablesViewModel: WearablesViewModel?
-  /// Ray-Ban is the chosen camera but the glasses are not connected yet.
-  let needsGlassesSetup: Bool
-  let onGlassesRegistered: () -> Void
+  @ObservedObject var connection: WearableConnectionCoordinator
 
   @State private var tab: AppTab = .assistant
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// The connect screen only while Meta AI registration is really needed:
+  /// an app that is already registered goes straight to the Assistant, and
+  /// the first seconds after launch wait for the SDK to restore it.
+  private var needsGlassesSetup: Bool {
+    captureSource == .glasses && connection.phase.needsSetupScreen
+  }
 
   var body: some View {
     TabView(selection: $tab) {
@@ -34,26 +37,30 @@ struct AppShellView: View {
       TasksTabView()
         .tabItem { Label(L.t("Tasks", "Görevler"), systemImage: "checklist") }
         .tag(AppTab.tasks)
-      SettingsView(voice: voice, glassesStream: glassesStream, wearablesViewModel: wearablesViewModel)
+      SettingsView(voice: voice, glassesStream: glassesStream, connection: connection)
         .tabItem { Label(L.t("Settings", "Ayarlar"), systemImage: "gearshape") }
         .tag(AppTab.settings)
     }
     .tint(AutoLoomTheme.electricBlue)
     .preferredColorScheme(.dark)
+    .sensoryFeedback(.selection, trigger: tab)
   }
 
-  @ViewBuilder
   private var assistantTab: some View {
-    if needsGlassesSetup, let wearablesViewModel {
-      HomeScreenView(viewModel: wearablesViewModel, onRegistered: onGlassesRegistered)
-    } else {
-      AssistantHomeView(
-        captureSource: captureSource,
-        glassesStream: glassesStream,
-        glassesPlaceholder: glassesPlaceholder,
-        voice: voice,
-        camera: camera,
-        glassesDeviceName: glassesDeviceName)
+    ZStack {
+      if needsGlassesSetup {
+        HomeScreenView(connection: connection)
+          .transition(.opacity)
+      } else {
+        AssistantHomeView(
+          captureSource: captureSource,
+          glassesStream: glassesStream,
+          voice: voice,
+          camera: camera,
+          connection: connection)
+          .transition(.opacity)
+      }
     }
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: needsGlassesSetup)
   }
 }

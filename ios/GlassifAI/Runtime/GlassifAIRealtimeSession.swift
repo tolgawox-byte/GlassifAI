@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import LiveKitWebRTC
 import QuartzCore
+import UIKit
 
 @MainActor
 final class GlassifAIRealtimeSession: NSObject, ObservableObject {
@@ -53,6 +54,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
 
   private let factory = LKRTCPeerConnectionFactory()
   private var peer: LKRTCPeerConnection?
+  /// Samples the microphone and assistant voice levels for the orb.
+  private var levelSamplerTask: Task<Void, Never>?
   private var dataChannel: LKRTCDataChannel?
   private var audioTrack: LKRTCAudioTrack?
   private var audioRouteObserver: NSObjectProtocol?
@@ -250,6 +253,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       startSidebandEventLoop()
       noteActivity()
       startIdleMonitor()
+      startLevelSampler()
       orchestrator.speakInConversation = { [weak self] text in
         self?.sayAppMessage(text) ?? false
       }
@@ -654,7 +658,38 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       userMessage: "iOS restarted the audio system. Tap to reconnect.")
   }
 
+  /// WebRTC's own statistics carry an `audioLevel` for the microphone
+  /// (media-source) and the assistant's voice (inbound-rtp). Read about
+  /// eight times a second, only while the app is on screen; the orb reads
+  /// the smoothed value every frame.
+  private func startLevelSampler() {
+    levelSamplerTask?.cancel()
+    levelSamplerTask = Task { @MainActor [weak self] in
+      while !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: 125_000_000)
+        guard let self, let peer = self.peer else { return }
+        guard UIApplication.shared.applicationState == .active else { continue }
+        peer.statistics { @Sendable report in
+          var input: Double?
+          var output: Double?
+          for stat in report.statistics.values {
+            guard let level = (stat.values["audioLevel"] as? NSNumber)?.doubleValue else { continue }
+            if stat.type == "media-source" {
+              input = max(input ?? 0, level)
+            } else if stat.type == "inbound-rtp" {
+              output = max(output ?? 0, level)
+            }
+          }
+          AudioLevelMeter.shared.update(input: input, output: output)
+        }
+      }
+    }
+  }
+
   private func tearDown() async {
+    levelSamplerTask?.cancel()
+    levelSamplerTask = nil
+    AudioLevelMeter.shared.reset()
     sidebandEventTask?.cancel()
     sidebandEventTask = nil
     audioSuppressionTask?.cancel()

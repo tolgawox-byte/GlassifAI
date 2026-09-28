@@ -61,7 +61,7 @@ private struct ChatGPTAccountSection: View {
 struct SettingsView: View {
   var voice: GlassifAIRealtimeSession?
   var glassesStream: StreamSessionViewModel?
-  var wearablesViewModel: WearablesViewModel?
+  var connection: WearableConnectionCoordinator?
 
   @State private var chatGPT = ChatGPTAuthSession.shared
   @ObservedObject private var memory = MemoryStore.shared
@@ -72,15 +72,16 @@ struct SettingsView: View {
   @AppStorage(AssistantPreferences.webSearchKey) private var webSearchEnabled = true
   @AppStorage(AssistantPreferences.actionsKey) private var actionsEnabled = true
   @AppStorage(ModelSelector.overrideKey) private var modelOverride = ""
+  @State private var confirmForget = false
 
   init(
     voice: GlassifAIRealtimeSession? = nil,
     glassesStream: StreamSessionViewModel? = nil,
-    wearablesViewModel: WearablesViewModel? = nil
+    connection: WearableConnectionCoordinator? = nil
   ) {
     self.voice = voice
     self.glassesStream = glassesStream
-    self.wearablesViewModel = wearablesViewModel
+    self.connection = connection
   }
 
   var body: some View {
@@ -139,6 +140,10 @@ struct SettingsView: View {
           }
         }
 
+        if let connection {
+          GlassesConnectionSection(connection: connection, confirmForget: $confirmForget)
+        }
+
         Section(L.t("Memory", "Hafıza")) {
           NavigationLink { MemorySettingsView() } label: {
             row(L.t("Memory", "Hafıza"), "brain", value: memory.isEnabled ? "\(memory.memories.count)" : L.t("Off", "Kapalı"))
@@ -171,6 +176,11 @@ struct SettingsView: View {
           }
           NavigationLink { CameraDiagnosticsView(glassesStream: glassesStream) } label: {
             row(L.t("Camera diagnostics", "Kamera tanılaması"), "gauge.with.dots.needle.33percent", value: nil)
+          }
+          if let connection {
+            NavigationLink { ConnectionDiagnosticsView(connection: connection) } label: {
+              row(L.t("Ray-Ban connection", "Ray-Ban bağlantısı"), "antenna.radiowaves.left.and.right", value: nil)
+            }
           }
         }
 
@@ -212,6 +222,65 @@ struct SettingsView: View {
         Text(value)
           .foregroundStyle(.secondary)
           .lineLimit(1)
+      }
+    }
+  }
+}
+
+/// Settings → Ray-Ban glasses: the connection in plain words, one Try Again
+/// when it needs the user, and the only place that removes the Meta AI
+/// registration (a temporary disconnect never does).
+private struct GlassesConnectionSection: View {
+  @ObservedObject var connection: WearableConnectionCoordinator
+  @Binding var confirmForget: Bool
+
+  var body: some View {
+    let status = connection.status
+    Section(
+      header: Text(L.t("Ray-Ban glasses", "Ray-Ban gözlük")),
+      footer: Text(L.t(
+        "The registration with Meta AI stays when the glasses sleep, fold or lose Bluetooth; AutoLoom reconnects by itself. Forget glasses only to disconnect AutoLoom from Meta AI.",
+        "Gözlük uyuduğunda, katlandığında ya da Bluetooth koptuğunda Meta AI kaydı kalır; AutoLoom kendiliğinden yeniden bağlanır. Gözlüğü unut, yalnızca AutoLoom'u Meta AI'dan ayırmak içindir."))
+    ) {
+      HStack(spacing: 10) {
+        Circle()
+          .fill(status.tone.color)
+          .frame(width: 8, height: 8)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(status.title)
+          if let detail = status.detail {
+            Text(detail)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+        }
+        Spacer(minLength: 8)
+        if let name = connection.deviceName {
+          Text(name)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+      }
+      if status.showsTryAgain {
+        Button(L.t("Try Again", "Tekrar dene")) { connection.retry() }
+      }
+      if connection.phase.needsSetupScreen {
+        Button(L.t("Connect glasses", "Gözlüğü bağla")) { connection.connect() }
+          .disabled(connection.phase == .registrationStarting || connection.phase == .waitingForMetaAI)
+      }
+      if connection.isRegistered {
+        Button(L.t("Forget glasses…", "Gözlüğü unut…"), role: .destructive) { confirmForget = true }
+          .confirmationDialog(
+            L.t("Disconnect AutoLoom from Meta AI?", "AutoLoom Meta AI'dan ayrılsın mı?"),
+            isPresented: $confirmForget,
+            titleVisibility: .visible
+          ) {
+            Button(L.t("Forget glasses", "Gözlüğü unut"), role: .destructive) { connection.forgetGlasses() }
+          } message: {
+            Text(L.t("You will need to connect again through Meta AI to use the Ray-Ban camera.",
+                     "Ray-Ban kamerasını kullanmak için Meta AI üzerinden yeniden bağlanman gerekir."))
+          }
       }
     }
   }

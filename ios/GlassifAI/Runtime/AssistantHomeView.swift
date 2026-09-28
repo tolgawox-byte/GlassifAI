@@ -2,17 +2,16 @@ import AVFoundation
 import SwiftUI
 import UIKit
 
-/// The Assistant tab: brand, one state word and a subtle camera indicator at
-/// the top; the camera view (or the orb when the camera is off) in the
-/// middle; captions, confirmations and the voice button at the bottom.
-/// Technical metrics live in Settings → Developer.
+/// The Assistant tab. Top: the brand, the camera switch and the Ray-Ban
+/// status pill. Centre: the camera edge to edge, or the orb when the camera
+/// is off. Bottom: captions, confirmations, the assistant's state in one word
+/// and the controls. Technical metrics live in Settings → Developer.
 struct AssistantHomeView: View {
   let captureSource: CaptureSource
   @ObservedObject var glassesStream: StreamSessionViewModel
-  let glassesPlaceholder: (title: String, caption: String)
   @ObservedObject var voice: GlassifAIRealtimeSession
   @ObservedObject var camera: GlassifAICamera
-  let glassesDeviceName: String?
+  @ObservedObject var connection: WearableConnectionCoordinator
 
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
   @ObservedObject private var audioRoute = AudioRouteMonitor.shared
@@ -24,6 +23,9 @@ struct AssistantHomeView: View {
   @State private var typedText = ""
   @State private var metrics = FrameMetricsSnapshot()
   @State private var notice: String?
+  @State private var showConnectedToast = false
+  /// A short one-shot orb state (the confirmation after a save).
+  @State private var orbFlash: OrbMood?
   @FocusState private var textFieldFocused: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.openURL) private var openURL
@@ -32,15 +34,15 @@ struct AssistantHomeView: View {
     AssistantPresence.resolve(state: voice.state, activity: orchestrator.activity, muted: voice.isMicrophoneMuted)
   }
 
+  private var orbMood: OrbMood { orbFlash ?? presence.mood }
+
   var body: some View {
     ZStack {
       AutoLoomTheme.background.ignoresSafeArea()
-      if captureSource == .off {
-        orbStage
-      } else {
-        cameraLayer
+      stage
+      if captureSource != .off {
         LinearGradient(
-          colors: [.black.opacity(0.6), .clear, .clear, .black.opacity(0.8)],
+          colors: [.black.opacity(0.55), .clear, .clear, .black.opacity(0.78)],
           startPoint: .top,
           endPoint: .bottom)
           .ignoresSafeArea()
@@ -52,10 +54,21 @@ struct AssistantHomeView: View {
         chips
         Spacer(minLength: 8)
         conversationArea
+        presenceLine
         voiceBar
       }
       .padding(.horizontal, 16)
       .padding(.bottom, 8)
+
+      if showConnectedToast {
+        VStack {
+          ConnectedToast()
+            .padding(.top, 96)
+          Spacer()
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .allowsHitTesting(false)
+      }
     }
     .preferredColorScheme(.dark)
     .tint(AutoLoomTheme.electricBlue)
@@ -66,6 +79,9 @@ struct AssistantHomeView: View {
       default: nil
       }
     }
+    .sensoryFeedback(.success, trigger: connection.connectedNotice)
+    .sensoryFeedback(.impact(weight: .light), trigger: wake.detections)
+    .sensoryFeedback(.success, trigger: orbFlash) { _, flash in flash == .success }
     .task(id: captureSource) {
       while !Task.isCancelled {
         metrics = FrameStore.shared.snapshot()
@@ -77,8 +93,18 @@ struct AssistantHomeView: View {
       try? await Task.sleep(nanoseconds: 3_500_000_000)
       notice = nil
     }
+    .task(id: showConnectedToast) {
+      guard showConnectedToast else { return }
+      try? await Task.sleep(nanoseconds: 2_400_000_000)
+      withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { showConnectedToast = false }
+    }
+    .task(id: orbFlash) {
+      guard orbFlash != nil else { return }
+      try? await Task.sleep(nanoseconds: 1_100_000_000)
+      orbFlash = nil
+    }
     .onAppear {
-      audioRoute.glassesName = glassesDeviceName
+      audioRoute.glassesName = connection.deviceName
       UIApplication.shared.isIdleTimerDisabled = voice.isActive
     }
     .onChange(of: voice.isActive) { _, active in
@@ -95,37 +121,72 @@ struct AssistantHomeView: View {
         orchestrator.clearNotice()
       }
     }
-    .onChange(of: glassesDeviceName) { _, name in audioRoute.glassesName = name }
+    .onChange(of: connection.connectedNotice) { _, _ in
+      guard captureSource == .glasses else { return }
+      withAnimation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.82)) { showConnectedToast = true }
+    }
+    .onChange(of: presence) { old, new in
+      // A brief confirmation only after a save that really finished.
+      guard old == .saving else { return }
+      if case .error = new { return }
+      orbFlash = .success
+    }
+    .onChange(of: connection.deviceName) { _, name in audioRoute.glassesName = name }
     .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
   }
 
   // MARK: Header
 
   private var header: some View {
-    HStack(alignment: .center, spacing: 10) {
-      AutoLoomMark(size: 30)
-      VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(alignment: .center, spacing: 10) {
+        AutoLoomMark(size: 28)
         Text(AutoLoomBrand.appName)
           .font(.headline)
           .lineLimit(1)
           .minimumScaleFactor(0.8)
-        HStack(spacing: 6) {
-          Circle()
-            .fill(presence.color)
-            .frame(width: 7, height: 7)
-          Text(presence.word)
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(.white.opacity(0.85))
-            .contentTransition(.opacity)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(L.t("Status: ", "Durum: ") + presence.word)
+        Spacer(minLength: 8)
+        cameraMenu
       }
-      Spacer(minLength: 8)
-      cameraMenu
+      if captureSource == .glasses {
+        statusRow
+          .transition(.opacity)
+      }
     }
     .padding(.top, 6)
-    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: presence)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: captureSource)
+  }
+
+  /// "● Ray-Ban Connected": the pill is a button only when there is
+  /// something to try again.
+  @ViewBuilder
+  private var statusRow: some View {
+    let status = connection.status
+    HStack(spacing: 8) {
+      if status.showsTryAgain {
+        Button { connection.retry() } label: {
+          HStack(spacing: 6) {
+            ConnectionStatusPill(status: status)
+            Image(systemName: "arrow.clockwise")
+              .font(.caption.weight(.bold))
+              .foregroundStyle(.white.opacity(0.85))
+          }
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.96))
+        .accessibilityHint(L.t("Tries to connect again", "Yeniden bağlanmayı dener"))
+      } else {
+        ConnectionStatusPill(status: status)
+      }
+      if let detail = status.detail, status.tone != .idle {
+        Text(detail)
+          .font(.caption)
+          .foregroundStyle(.white.opacity(0.7))
+          .lineLimit(1)
+          .contentTransition(.opacity)
+      }
+      Spacer(minLength: 0)
+    }
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: status)
   }
 
   /// A small indicator of the camera source; tap to switch.
@@ -139,10 +200,11 @@ struct AssistantHomeView: View {
     } label: {
       HStack(spacing: 6) {
         Image(systemName: captureSource.systemImage)
+          .contentTransition(.symbolEffect(.replace))
         Text(captureSource.label)
         if captureSource != .off {
           Circle()
-            .fill(cameraIsLive ? Color.green : Color.orange)
+            .fill(cameraIsLive ? GlassesUserStatus.Tone.connected.color : GlassesUserStatus.Tone.attention.color)
             .frame(width: 6, height: 6)
         }
       }
@@ -151,6 +213,7 @@ struct AssistantHomeView: View {
       .padding(.horizontal, 10)
       .padding(.vertical, 7)
       .background(.ultraThinMaterial, in: Capsule())
+      .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
     }
     .accessibilityLabel(L.t("Camera: ", "Kamera: ") + captureSource.displayName)
     .accessibilityHint(L.t("Changes the camera the assistant uses", "Asistanın kullandığı kamerayı değiştirir"))
@@ -159,6 +222,12 @@ struct AssistantHomeView: View {
   private var cameraIsLive: Bool {
     guard let age = metrics.lastFrameAgeMs else { return false }
     return age < 1_500
+  }
+
+  /// No frame for two seconds: the last one is not shown as live.
+  private var glassesViewIsStale: Bool {
+    guard let age = metrics.lastFrameAgeMs else { return false }
+    return age > 2_000
   }
 
   // MARK: Chips
@@ -179,6 +248,7 @@ struct AssistantHomeView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: notice)
   }
 
   private func chip(_ text: String, systemImage: String, tint: Color = .white) -> some View {
@@ -196,47 +266,105 @@ struct AssistantHomeView: View {
 
   // MARK: Camera or orb
 
-  @ViewBuilder
-  private var cameraLayer: some View {
-    switch captureSource {
-    case .iPhoneCamera:
-      GlassifAICameraPreview(session: camera.captureSession)
-        .ignoresSafeArea()
-    case .glasses:
-      ZStack {
-        if glassesStream.frameIngestor.usesLegacyPreview {
-          if let image = glassesStream.currentVideoFrame {
-            Image(uiImage: image)
-              .resizable()
-              .scaledToFill()
-          }
-        } else {
-          LowLatencyPreviewView(renderer: glassesStream.frameIngestor.renderer)
+  /// One source at a time, crossfading when the source changes.
+  private var stage: some View {
+    ZStack {
+      switch captureSource {
+      case .off:
+        orbStage
+          .transition(.opacity)
+      case .iPhoneCamera:
+        GlassifAICameraPreview(session: camera.captureSession)
+          .ignoresSafeArea()
+          .transition(.opacity)
+      case .glasses:
+        glassesStage
+          .transition(.opacity)
+      }
+    }
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: captureSource)
+  }
+
+  private var glassesStage: some View {
+    ZStack {
+      if glassesStream.frameIngestor.usesLegacyPreview {
+        if let image = glassesStream.currentVideoFrame {
+          Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
         }
-        if !glassesStream.hasReceivedFirstFrame {
-          placeholder(systemImage: "eyeglasses", title: glassesPlaceholder.title, caption: glassesPlaceholder.caption)
-        } else if let age = metrics.lastFrameAgeMs, age > 2_000 {
-          VStack {
-            Spacer()
-            Label(L.t("Glasses view paused", "Gözlük görüntüsü duraklatıldı"), systemImage: "pause.circle")
-              .font(.footnote.weight(.medium))
-              .padding(.horizontal, 12)
-              .padding(.vertical, 8)
-              .background(.ultraThinMaterial, in: Capsule())
-              .padding(.bottom, 240)
+      } else {
+        LowLatencyPreviewView(renderer: glassesStream.frameIngestor.renderer)
+      }
+      if !glassesStream.hasReceivedFirstFrame {
+        glassesWaiting
+          .transition(.opacity)
+      } else if glassesViewIsStale {
+        staleVeil
+          .transition(.opacity)
+      }
+    }
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: glassesStream.hasReceivedFirstFrame)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: glassesViewIsStale)
+    .ignoresSafeArea()
+  }
+
+  /// Until the first frame: the link animation and the real state in plain
+  /// words, with one "Try Again" when recovery needs the user.
+  private var glassesWaiting: some View {
+    let status = connection.status
+    return ZStack {
+      AutoLoomTheme.background
+      VStack(spacing: 22) {
+        GlassesLinkAnimation(visual: GlassesLinkVisual.from(connection.phase), size: 180)
+        VStack(spacing: 6) {
+          Text(status.title)
+            .font(.title3.weight(.semibold))
+            .contentTransition(.opacity)
+          if let detail = status.detail {
+            Text(detail)
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+              .multilineTextAlignment(.center)
+              .contentTransition(.opacity)
           }
+        }
+        if status.showsTryAgain {
+          Button { connection.retry() } label: {
+            Label(L.t("Try Again", "Tekrar dene"), systemImage: "arrow.clockwise")
+              .font(.subheadline.weight(.semibold))
+              .foregroundStyle(.white)
+              .padding(.horizontal, 20)
+              .padding(.vertical, 11)
+              .background(AutoLoomTheme.electricBlue, in: Capsule())
+          }
+          .buttonStyle(PressableButtonStyle())
+          .transition(.scale.combined(with: .opacity))
         }
       }
-      .ignoresSafeArea()
-    case .off:
-      EmptyView()
+      .padding(.horizontal, 40)
+      .padding(.bottom, 140)
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: status)
+    }
+  }
+
+  /// The glasses stopped sending: a soft veil instead of a frozen frame
+  /// that looks live.
+  private var staleVeil: some View {
+    ZStack {
+      Rectangle().fill(.ultraThinMaterial)
+      Label(L.t("Glasses view paused", "Gözlük görüntüsü duraklatıldı"), systemImage: "pause.circle")
+        .font(.footnote.weight(.medium))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.thinMaterial, in: Capsule())
     }
   }
 
   private var orbStage: some View {
-    VStack(spacing: 18) {
+    VStack(spacing: 20) {
       Spacer()
-      AssistantOrb(mood: presence.mood, size: 230)
+      AssistantOrb(mood: orbMood, size: 240)
       Text(L.t("Camera off — conversation, web and memory still work.",
                "Kamera kapalı — sohbet, web ve hafıza çalışmaya devam eder."))
         .font(.footnote)
@@ -249,27 +377,6 @@ struct AssistantHomeView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  private func placeholder(systemImage: String, title: String, caption: String) -> some View {
-    AutoLoomTheme.background
-      .ignoresSafeArea()
-      .overlay {
-        VStack(spacing: 18) {
-          Image(systemName: systemImage)
-            .font(.system(size: 42, weight: .light))
-            .foregroundStyle(AutoLoomTheme.electricBlue)
-          VStack(spacing: 6) {
-            Text(title)
-              .font(.title3.bold())
-            Text(caption)
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-              .multilineTextAlignment(.center)
-          }
-        }
-        .padding(.horizontal, 40)
-      }
-  }
-
   // MARK: Conversation
 
   private var conversationArea: some View {
@@ -280,6 +387,7 @@ struct AssistantHomeView: View {
       }
       if case .failed(let message) = voice.state {
         errorCard(message)
+          .transition(.opacity)
       }
       if !orchestrator.sources.isEmpty { sourcesStrip }
       if let question = orchestrator.typedQuestion { typedAnswerCard(question: question) }
@@ -311,6 +419,7 @@ struct AssistantHomeView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(14)
       .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.06)))
       .transition(.opacity)
     } else if !voice.isActive && orchestrator.typedQuestion == nil {
       Text(idleHint)
@@ -334,7 +443,7 @@ struct AssistantHomeView: View {
     let friendly = FriendlyError.message(for: message)
     return HStack(alignment: .top, spacing: 12) {
       Image(systemName: "exclamationmark.triangle.fill")
-        .foregroundStyle(.orange)
+        .foregroundStyle(GlassesUserStatus.Tone.attention.color)
       VStack(alignment: .leading, spacing: 4) {
         Text(friendly.title).font(.subheadline.weight(.semibold))
         Text(friendly.detail).font(.footnote).foregroundStyle(.secondary)
@@ -360,10 +469,11 @@ struct AssistantHomeView: View {
         Image(systemName: "arrow.up.circle.fill")
           .font(.system(size: 32))
       }
-      .buttonStyle(.plain)
+      .buttonStyle(PressableButtonStyle())
       .disabled(typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       .accessibilityLabel(L.t("Send question", "Soruyu gönder"))
     }
+    .transition(.move(edge: .bottom).combined(with: .opacity))
   }
 
   private func sendTyped() {
@@ -386,7 +496,7 @@ struct AssistantHomeView: View {
             .font(.caption.bold())
             .frame(width: 28, height: 28)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(L.t("Dismiss answer", "Yanıtı kapat"))
       }
       Divider()
@@ -434,20 +544,41 @@ struct AssistantHomeView: View {
             .padding(10)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
           }
-          .buttonStyle(.plain)
+          .buttonStyle(PressableButtonStyle(scale: 0.97))
           .accessibilityLabel(L.t("Source: ", "Kaynak: ") + "\(source.title), \(source.host)")
         }
       }
     }
   }
 
-  // MARK: Voice bar
+  // MARK: State and controls
+
+  /// The assistant's state in one word, right above the controls.
+  private var presenceLine: some View {
+    HStack(spacing: 7) {
+      Circle()
+        .fill(presence.color)
+        .frame(width: 7, height: 7)
+      Text(presence.word)
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(.white.opacity(0.9))
+        .contentTransition(.opacity)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 5)
+    .background(.ultraThinMaterial, in: Capsule())
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: presence)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(L.t("Status: ", "Durum: ") + presence.word)
+  }
 
   private var voiceBar: some View {
     HStack(alignment: .center) {
       HStack(spacing: 10) {
-        roundButton(systemImage: "keyboard", label: showTextInput ? L.t("Hide keyboard", "Klavyeyi gizle") : L.t("Type a question", "Soru yaz")) {
-          showTextInput.toggle()
+        roundButton(
+          systemImage: showTextInput ? "keyboard.chevron.compact.down" : "keyboard",
+          label: showTextInput ? L.t("Hide keyboard", "Klavyeyi gizle") : L.t("Type a question", "Soru yaz")) {
+          withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { showTextInput.toggle() }
           textFieldFocused = showTextInput
         }
         if voice.isActive && captureSource != .off {
@@ -461,6 +592,7 @@ struct AssistantHomeView: View {
               _ = liveVision.start()
             }
           }
+          .transition(.scale.combined(with: .opacity))
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -472,6 +604,7 @@ struct AssistantHomeView: View {
       }
       .frame(maxWidth: .infinity, alignment: .trailing)
     }
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: voice.isActive)
   }
 
   private var mainVoiceButton: some View {
@@ -488,30 +621,29 @@ struct AssistantHomeView: View {
       } label: {
         ZStack {
           if voice.isActive {
-            AssistantOrb(mood: presence.mood, size: 92)
+            AssistantOrb(mood: orbMood, size: 104)
+              .transition(.scale(scale: 0.8).combined(with: .opacity))
           } else {
             Circle()
-              .fill(AutoLoomTheme.electricBlue)
-              .frame(width: 72, height: 72)
-              .shadow(color: AutoLoomTheme.electricBlue.opacity(0.5), radius: 14, y: 4)
-          }
-          if voice.state == .connecting {
-            ProgressView().tint(.white)
-          } else if !voice.isActive {
+              .fill(AutoLoomTheme.electricBlue.gradient)
+              .frame(width: 74, height: 74)
+              .shadow(color: AutoLoomTheme.electricBlue.opacity(0.45), radius: 16, y: 4)
+              .transition(.scale(scale: 0.8).combined(with: .opacity))
             Image(systemName: "waveform")
               .font(.system(size: 26, weight: .semibold))
               .foregroundStyle(.white)
           }
         }
-        .frame(width: 92, height: 92)
+        .frame(width: 104, height: 104)
         .contentShape(Circle())
       }
-      .buttonStyle(.plain)
+      .buttonStyle(PressableButtonStyle())
       .disabled(voice.state == .connecting)
       .accessibilityLabel(voice.isActive ? L.t("End conversation", "Konuşmayı bitir") : L.t("Start conversation", "Konuşmayı başlat"))
       Text(voice.isActive ? L.t("Tap to end", "Bitirmek için dokunun") : L.t("Tap to talk", "Konuşmak için dokunun"))
         .font(.caption2)
         .foregroundStyle(.white.opacity(0.7))
+        .contentTransition(.opacity)
     }
   }
 
@@ -546,11 +678,13 @@ struct AssistantHomeView: View {
     Button(action: action) {
       Image(systemName: systemImage)
         .font(.system(size: 17, weight: .semibold))
+        .contentTransition(.symbolEffect(.replace))
         .frame(width: 44, height: 44)
         .foregroundStyle(.white)
         .background(highlighted ? AnyShapeStyle(AutoLoomTheme.electricBlue.opacity(0.85)) : AnyShapeStyle(.thinMaterial), in: Circle())
+        .overlay(Circle().strokeBorder(.white.opacity(0.08)))
     }
-    .buttonStyle(.plain)
+    .buttonStyle(PressableButtonStyle())
     .accessibilityLabel(label)
   }
 }

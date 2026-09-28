@@ -227,6 +227,9 @@ class StreamSessionViewModel: ObservableObject {
   /// One app-requested still capture at a time; photos that do not answer a
   /// pending request (shutter button, late arrivals) never reach vision.
   let stillPhotos = StillPhotoCoordinator()
+  /// The HEVC to raw fallback is replacing the session: its stop is not a
+  /// camera failure (read by `WearableConnectionCoordinator`).
+  private(set) var isSwitchingTransport = false
 
   init(wearables: WearablesInterface?) {
     self.wearables = wearables
@@ -455,6 +458,8 @@ class StreamSessionViewModel: ObservableObject {
     NSLog("[Stream] HEVC transport fallback to raw: %@", reason)
     fallbackFrom = .hevc
     transportNote = "Switched to raw automatically: \(reason)"
+    isSwitchingTransport = true
+    defer { isSwitchingTransport = false }
     await streamSession?.stop()
     recreateSession(profile: streamProfile, transport: .raw, selector: deviceSelector)
     await streamSession?.start()
@@ -493,21 +498,27 @@ class StreamSessionViewModel: ObservableObject {
         return
       }
       glassesIssue = .permissionNeeded
-    } catch {
-      // Sleeping or out-of-range glasses are a wait state, not an error.
-      let text = String(describing: error).lowercased()
-      if text.contains("powered off") || text.contains("disconnected") || text.contains("no device") {
-        NSLog("[Stream] glasses unavailable, waiting: %@", String(describing: error))
+    } catch let error as PermissionError {
+      // Sleeping or out-of-range glasses are a wait state, not an error:
+      // permission checks report "no device" while nothing is connected.
+      switch error {
+      case .noDevice, .noDeviceWithConnection, .connectionError:
+        NSLog("[Stream] glasses unavailable, waiting: %@", error.description)
         glassesIssue = nil
-      } else {
+      default:
         glassesIssue = .reconnecting
       }
+    } catch {
+      glassesIssue = .reconnecting
     }
   }
 
+  /// Starts the stream only when it is stopped, so a second trigger never
+  /// starts it twice.
   func startSession() async {
+    guard let streamSession, streamSession.state == .stopped else { return }
     armStartWatchdog()
-    await streamSession?.start()
+    await streamSession.start()
   }
 
   /// If an HEVC stream has not started 12 s after a start request and the

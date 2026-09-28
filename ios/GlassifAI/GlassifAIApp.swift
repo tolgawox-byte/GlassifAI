@@ -29,13 +29,23 @@ struct GlassifAIApp: App {
 
   init() {
     var available: WearablesInterface?
+    var failure: Error?
     do {
       try Wearables.configure()
       available = Wearables.shared
     } catch {
+      failure = error
       NSLog("[GlassifAI] Wearables SDK unavailable: \(error)")
     }
     self.wearables = available
+    if !AppRuntime.isUnitTestHost {
+      // Registration, devices and the link are observed from launch, before
+      // any screen, so a Meta AI callback that launches the app is handled.
+      let configured = available
+      MainActor.assumeIsolated {
+        WearableConnectionCoordinator.shared.attach(wearables: configured, configureError: failure)
+      }
+    }
   }
 
   var body: some Scene {
@@ -48,6 +58,11 @@ struct GlassifAIApp: App {
       } else {
         VisionRootView(wearables: wearables)
           .preferredColorScheme(.dark)
+          // Meta AI's registration and permission callbacks, whatever screen
+          // is showing (sign-in may still be restoring after a cold launch).
+          .onOpenURL { url in
+            WearableConnectionCoordinator.shared.handleOpenURL(url)
+          }
       }
     }
   }
@@ -83,7 +98,7 @@ struct VisionRootView: View {
       } else if let wearables {
         GlassesCapableRootView(wearables: wearables)
       } else {
-        StreamSessionView(wearables: nil, wearablesVM: nil)
+        StreamSessionView(wearables: nil)
       }
     }
     .task {
@@ -282,25 +297,24 @@ struct ChatGPTConsentView: View {
 }
 
 
-/// The full app when the glasses SDK is available. Registration callbacks are
-/// handled alongside the same camera-first experience used in iPhone mode.
+/// The full app when the glasses SDK is available. The connection itself is
+/// owned by `WearableConnectionCoordinator` (attached at launch); Meta AI's
+/// callbacks are handled by the app's root `onOpenURL`.
 private struct GlassesCapableRootView: View {
   let wearables: WearablesInterface
-  @StateObject private var viewModel: WearablesViewModel
-
-  init(wearables: WearablesInterface) {
-    self.wearables = wearables
-    self._viewModel = StateObject(wrappedValue: WearablesViewModel(wearables: wearables))
-  }
+  @ObservedObject private var connection = WearableConnectionCoordinator.shared
 
   var body: some View {
-    StreamSessionView(wearables: wearables, wearablesVM: viewModel)
-      .alert("Glasses unavailable", isPresented: $viewModel.showError) {
-        Button("OK") { viewModel.dismissError() }
+    StreamSessionView(wearables: wearables, connection: connection)
+      .alert(
+        L.t("Ray-Ban", "Ray-Ban"),
+        isPresented: Binding(
+          get: { connection.userAlert != nil },
+          set: { if !$0 { connection.userAlert = nil } })
+      ) {
+        Button("OK") { connection.userAlert = nil }
       } message: {
-        Text(viewModel.errorMessage)
+        Text(connection.userAlert ?? "")
       }
-
-    RegistrationView(viewModel: viewModel)
   }
 }
