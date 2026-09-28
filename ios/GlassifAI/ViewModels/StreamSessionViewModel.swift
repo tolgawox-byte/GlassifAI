@@ -239,6 +239,14 @@ class StreamSessionViewModel: ObservableObject {
   private var photoStartRequested = false
   /// A standalone photo is being taken: the stream is set aside on purpose.
   private var isTakingStandalonePhoto = false
+  /// Photo-child startups tried on this session. Meta: startup is the most
+  /// common failure and the next attempt usually succeeds, so it is retried
+  /// once on a fresh camera.
+  private var photoStartAttempts = 0
+  private var photoStartTimeoutTask: Task<Void, Never>?
+  /// When bytes of a standalone photo last arrived, to tell a slow
+  /// full-resolution transfer from a stuck one.
+  private var lastTransferProgressAt: Date?
   /// One app-requested still capture at a time; photos that do not answer a
   /// pending request (shutter button, late arrivals) never reach vision.
   let stillPhotos = StillPhotoCoordinator()
@@ -439,6 +447,7 @@ class StreamSessionViewModel: ObservableObject {
     sessionTokens.clear()
     deviceSession = nil
     deviceSessionState = .stopped
+    photoStartAttempts = 0
   }
 
   // MARK: Camera
@@ -471,6 +480,7 @@ class StreamSessionViewModel: ObservableObject {
   /// Detaches the camera (idempotent) so a later `addCamera` can register a
   /// new one, and cancels its listeners.
   private func clearCamera() {
+    photoStartTimeoutTask?.cancel()
     camera?.stop()
     camera = nil
     streamTokens.clear()
@@ -541,9 +551,18 @@ class StreamSessionViewModel: ObservableObject {
     photo.statePublisher.listen { [weak self] state in
       Task { @MainActor [weak self] in
         guard let self, self.sessionGeneration == generation else { return }
+        let previous = self.photoStateValue
         self.photoStateValue = state
         self.photoState = String(describing: state)
+        if state == .started { self.photoStartTimeoutTask?.cancel() }
+        // Back to stopped while starting: the startup failed.
+        if previous == .starting, state == .stopped {
+          self.retryPhotoStartup(reason: "startup failed")
+        }
       }
+    }.store(in: photoTokens)
+    photo.transferProgressPublisher.listen { [weak self] _ in
+      Task { @MainActor [weak self] in self?.lastTransferProgressAt = Date() }
     }.store(in: photoTokens)
     // Standalone stills arrive here, including ones the wearer takes with
     // the shutter button; only a pending app request accepts one.
@@ -557,9 +576,33 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   private func startPhotoIfNeeded() {
-    guard !photoStartRequested, let photo = camera?.photo else { return }
+    guard !photoStartRequested, let camera else { return }
     photoStartRequested = true
-    photo.start()
+    photoStartAttempts += 1
+    camera.photo.start()
+    // A photo child that is not started in time counts as a failed startup.
+    photoStartTimeoutTask?.cancel()
+    photoStartTimeoutTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: 10_000_000_000)
+      guard let self, !Task.isCancelled, self.camera === camera,
+            self.photoStateValue != .started else { return }
+      self.retryPhotoStartup(reason: "not started after 10 s")
+    }
+  }
+
+  /// Meta's documented recovery for a photo child that would not start:
+  /// stop the camera, add a new one and retry once (a stopped camera cannot
+  /// be reused). The video stream pauses for a moment while it happens.
+  private func retryPhotoStartup(reason: String) {
+    guard photoStartAttempts < 2, !isTakingStandalonePhoto,
+          let session = deviceSession, session.state == .started, camera != nil else {
+      NSLog("[Stream] standalone photo unavailable (%@); video frames are used", reason)
+      return
+    }
+    NSLog("[Stream] standalone photo %@; retrying once on a fresh camera", reason)
+    clearCamera()
+    attachCameraIfNeeded(to: session)
+    camera?.stream.start()
   }
 
   private func handleStreamError(_ error: StreamError) {
@@ -594,7 +637,8 @@ class StreamSessionViewModel: ObservableObject {
   /// again however the capture ends. nil when it is not possible (the caller
   /// then uses the best video frame).
   func captureStillForVision(timeout: TimeInterval) async -> StillPhoto? {
-    guard streamingStatus == .streaming, let camera else { return nil }
+    // A paused session suspends transports; nothing would arrive.
+    guard streamingStatus == .streaming, deviceSessionState == .started, let camera else { return nil }
     guard photoStateValue == .started else {
       NSLog("[Stream] standalone photo not ready (%@)", photoState)
       return nil
@@ -605,12 +649,29 @@ class StreamSessionViewModel: ObservableObject {
     // Frames and stills compete for the sensor; a running stream wins.
     camera.stream.stop()
     _ = await waitUntil(timeout: 2) { camera.stream.state == .stopped }
-    // A full-resolution still takes a few seconds to cross the link (Meta's
-    // BirdSpotter sample allows 15 s).
-    let photo = await stillPhotos.capture(timeout: max(timeout, 15)) {
+    // A full-resolution still takes a few seconds to cross the link. Up to
+    // 15 s in any case, and up to 30 s while bytes are still arriving (Meta
+    // fails a capture after 30 s of silence).
+    let requestedAt = Date()
+    lastTransferProgressAt = nil
+    let photos = stillPhotos
+    let transferWatch = Task { @MainActor [weak self] in
+      while !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        guard let self, !Task.isCancelled else { return }
+        let elapsed = Date().timeIntervalSince(requestedAt)
+        let arriving = self.lastTransferProgressAt.map { Date().timeIntervalSince($0) < 3 } ?? false
+        if elapsed > max(timeout, 15), !arriving {
+          photos.cancel()
+          return
+        }
+      }
+    }
+    let photo = await stillPhotos.capture(timeout: 30) {
       camera.photo.capturePhoto(resolution: .full, quality: .high)
       return true
     }
+    transferWatch.cancel()
     FrameStore.shared.recordPhoto(
       width: photo?.width, height: photo?.height, latencyMs: photo?.latencyMs, success: photo != nil)
     // The session may have ended during the capture (glasses folded).
