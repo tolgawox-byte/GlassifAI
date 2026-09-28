@@ -36,7 +36,7 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 
-const BRIDGE_VERSION: &str = "autoloom-bridge-2";
+const BRIDGE_VERSION: &str = "autoloom-bridge-3";
 
 /// The exact instructions of the device-verified baseline build. Used by the
 /// original entry point and as the fallback when no options are supplied.
@@ -115,6 +115,9 @@ struct StartOptions {
     instructions: String,
     model: String,
     voice: RealtimeVoice,
+    /// Set when the requested voice was not a known voice name, so the app
+    /// can report the substitution instead of hiding it.
+    voice_note: Option<String>,
     delegation_ack_filler: bool,
     initial_items: Vec<ConversationTextParams>,
 }
@@ -125,6 +128,7 @@ impl Default for StartOptions {
             instructions: BASELINE_INSTRUCTIONS.to_string(),
             model: BASELINE_MODEL.to_string(),
             voice: RealtimeVoice::Juniper,
+            voice_note: None,
             delegation_ack_filler: true,
             initial_items: Vec::new(),
         }
@@ -157,10 +161,19 @@ fn parse_start_options(raw: &str) -> StartOptions {
     {
         options.model = model.trim().to_string();
     }
-    if let Some(voice) = value.get("voice").and_then(Value::as_str)
-        && let Ok(parsed) = serde_json::from_value::<RealtimeVoice>(json!(voice))
-    {
-        options.voice = parsed;
+    if let Some(voice) = value.get("voice").and_then(Value::as_str) {
+        let requested = voice.trim().to_lowercase();
+        match serde_json::from_value::<RealtimeVoice>(json!(requested.as_str())) {
+            Ok(parsed) => options.voice = parsed,
+            Err(_) if !requested.is_empty() => {
+                options.voice_note = Some(format!(
+                    "unknown voice '{}'; used {}",
+                    truncate_utf8(&requested, 40),
+                    options.voice.wire_name()
+                ));
+            }
+            Err(_) => {}
+        }
     }
     if let Some(filler) = value.get("delegation_ack_filler").and_then(Value::as_bool) {
         options.delegation_ack_filler = filler;
@@ -403,12 +416,30 @@ fn spawn_sideband(
     });
 }
 
+/// The voice and model a start request really used. Returned with every
+/// result so the app can show the selected and the active voice side by side
+/// and never hide a fallback.
+fn start_summary(
+    voice: RealtimeVoice,
+    model: &str,
+    voice_note: Option<&str>,
+) -> serde_json::Map<String, Value> {
+    let mut summary = serde_json::Map::new();
+    summary.insert("voice".to_string(), json!(voice.wire_name()));
+    summary.insert("model".to_string(), json!(model));
+    if let Some(note) = voice_note {
+        summary.insert("voice_note".to_string(), json!(note));
+    }
+    summary
+}
+
 fn bridge_call(
     access_token: &str,
     account_id: &str,
     sdp: &str,
     options: StartOptions,
 ) -> serde_json::Value {
+    let mut summary = start_summary(options.voice, &options.model, options.voice_note.as_deref());
     let mut headers = HeaderMap::new();
     headers.insert("openai-alpha", HeaderValue::from_static("quicksilver=v2"));
     headers.insert("originator", HeaderValue::from_static("codex_cli_rs"));
@@ -478,9 +509,16 @@ fn bridge_call(
                 response.call_id.clone(),
                 sideband_headers,
             );
-            json!({"ok": true, "sdp": response.sdp, "call_id": response.call_id})
+            summary.insert("ok".to_string(), json!(true));
+            summary.insert("sdp".to_string(), json!(response.sdp));
+            summary.insert("call_id".to_string(), json!(response.call_id));
+            Value::Object(summary)
         }
-        Err(error) => json!({"ok": false, "error": error.to_string()}),
+        Err(error) => {
+            summary.insert("ok".to_string(), json!(false));
+            summary.insert("error".to_string(), json!(error.to_string()));
+            Value::Object(summary)
+        }
     }
 }
 
@@ -624,6 +662,7 @@ pub unsafe extern "C" fn glassifai_codex_string_free(value: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use codex_protocol::protocol::RealtimeVoicesList;
 
     #[test]
     fn empty_options_keep_baseline_configuration() {
@@ -636,10 +675,44 @@ mod tests {
     }
 
     #[test]
-    fn invalid_voice_falls_back_to_juniper() {
+    fn invalid_voice_falls_back_to_juniper_and_is_reported() {
         let options = parse_start_options(r#"{"voice":"not-a-voice","instructions":"Hi"}"#);
         assert_eq!(options.voice, RealtimeVoice::Juniper);
         assert_eq!(options.instructions, "Hi");
+        let note = options.voice_note.unwrap_or_default();
+        assert!(note.contains("not-a-voice"), "{note}");
+    }
+
+    #[test]
+    fn requested_voice_is_applied() {
+        let options = parse_start_options(r#"{"voice":" Maple "}"#);
+        assert_eq!(options.voice, RealtimeVoice::Maple);
+        assert!(options.voice_note.is_none());
+    }
+
+    #[test]
+    fn start_summary_reports_the_applied_voice_and_model() {
+        let summary = start_summary(RealtimeVoice::Cove, "gpt-live-1-codex", None);
+        assert_eq!(summary.get("voice"), Some(&json!("cove")));
+        assert_eq!(summary.get("model"), Some(&json!("gpt-live-1-codex")));
+        assert!(!summary.contains_key("voice_note"));
+        let noted = start_summary(RealtimeVoice::Juniper, "m", Some("unknown voice 'x'; used juniper"));
+        assert_eq!(noted.get("voice_note"), Some(&json!("unknown voice 'x'; used juniper")));
+    }
+
+    #[test]
+    fn frameless_voices_match_the_app_catalog() {
+        // The app offers exactly the voices Codex accepts for the frameless
+        // (v3) realtime protocol that this bridge uses.
+        let voices: Vec<&str> = RealtimeVoicesList::builtin()
+            .v1
+            .iter()
+            .map(|voice| voice.wire_name())
+            .collect();
+        assert_eq!(
+            voices,
+            ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove"]
+        );
     }
 
     #[test]

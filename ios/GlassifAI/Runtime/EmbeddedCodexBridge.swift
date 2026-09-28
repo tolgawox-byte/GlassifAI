@@ -6,12 +6,20 @@ struct EmbeddedCodexResult: Decodable {
   let sdp: String?
   let callId: String?
   let error: String?
+  /// The voice and model the bridge really sent (bridge 3 and later).
+  var voice: String?
+  var model: String?
+  /// Set when the bridge replaced an unknown voice name.
+  var voiceNote: String?
 
   enum CodingKeys: String, CodingKey {
     case ok
     case sdp
     case callId = "call_id"
     case error
+    case voice
+    case model
+    case voiceNote = "voice_note"
   }
 }
 
