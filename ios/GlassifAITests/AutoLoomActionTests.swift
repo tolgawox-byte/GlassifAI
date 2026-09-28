@@ -49,7 +49,7 @@ final class AutoLoomActionTests: XCTestCase {
     XCTAssertEqual(plan.date, local(2026, 9, 28, 7, 0))
     XCTAssertEqual(plan.alternativeDate, local(2026, 9, 28, 19, 0), "morning or evening is asked, not guessed")
     XCTAssertNotNil(plan.ambiguityNote)
-    XCTAssertEqual(plan.kind.risk, .confirm)
+    XCTAssertEqual(plan.kind.risk, .safe, "an explicit reminder is saved at once; only the unclear time is asked")
   }
 
   func testModelTimestampsAreIgnored() throws {
@@ -106,11 +106,11 @@ final class AutoLoomActionTests: XCTestCase {
     for kind: DeviceActionKind in [.openMaps, .openURL, .shareText, .call, .message] {
       XCTAssertEqual(kind.risk, .strongConfirm, kind.rawValue)
     }
-    for kind: DeviceActionKind in [.createReminder, .createEvent, .forgetMemory] {
+    for kind: DeviceActionKind in [.forgetMemory, .agentTask] {
       XCTAssertEqual(kind.risk, .confirm, kind.rawValue)
     }
     for kind: DeviceActionKind in [.listReminders, .todayEvents, .upcomingEvents, .copyText, .saveNote,
-                                   .scheduleNotification, .findContact] {
+                                   .scheduleNotification, .findContact, .createReminder, .createEvent] {
       XCTAssertEqual(kind.risk, .safe, kind.rawValue)
     }
     XCTAssertFalse(DeviceActionKind.plannable.contains(.forgetMemory), "only the memory flow forgets")

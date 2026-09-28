@@ -119,10 +119,10 @@ final class AutoLoomJarvisTests: XCTestCase {
     XCTAssertFalse(ConversationTimeout.shouldEnd(idle: 31, limit: 30, busy: true))
     XCTAssertFalse(ConversationTimeout.shouldEnd(idle: 9_999, limit: nil, busy: false), "Never means never")
     XCTAssertEqual(ConversationTimeout.never.interval, nil)
-    XCTAssertEqual(GreetingStyle.jarvis.text(turkish: true, custom: ""), "Buyurun efendim.")
+    XCTAssertEqual(GreetingStyle.jarvis.text(turkish: true, custom: ""), "Bağlantı hazır. Sizi dinliyorum.")
     XCTAssertEqual(GreetingStyle.custom.text(turkish: true, custom: "  "), nil)
     XCTAssertEqual(GreetingStyle.custom.text(turkish: false, custom: "Ready, boss"), "Ready, boss")
-    XCTAssertNil(ActivationFeedback.greeting(for: .button, turkish: true), "button starts stay quiet")
+    XCTAssertNil(ConnectionFeedback.readyPhrase(for: .button, turkish: true), "button starts only chime")
   }
 
   // MARK: Wake phrase
@@ -318,7 +318,8 @@ final class AutoLoomJarvisTests: XCTestCase {
       XCTAssertNotNil(ToolRegistry.tool(for: kind), kind.rawValue)
     }
     XCTAssertEqual(ToolRegistry.tool(for: .call)?.risk, .strongConfirm)
-    XCTAssertEqual(ToolRegistry.tool(for: .createReminder)?.risk, .confirm)
+    XCTAssertEqual(ToolRegistry.tool(for: .createReminder)?.risk, .safe)
+    XCTAssertEqual(ToolRegistry.tool(for: .forgetMemory)?.risk, .confirm)
     XCTAssertEqual(ToolRegistry.tool(for: .saveNote)?.risk, .safe)
     let defaults = UserDefaults(suiteName: "autoloom-tools-\(UUID().uuidString)")!
     let phone = ToolRegistry.tool(for: .call)!
