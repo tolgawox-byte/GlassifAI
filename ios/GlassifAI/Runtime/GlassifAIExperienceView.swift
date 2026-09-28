@@ -283,7 +283,7 @@ struct GlassifAIExperienceView: View {
         Text("Requested \(glassesStream.streamProfile.requestedSummary) · \(glassesStream.activeTransport.shortLabel) · DAT \(GlassesSDKInfo.datVersion)")
       }
       Text("Actual \(metrics.source) · \(metrics.inputResolution) \(metrics.pixelFormat)")
-      Text(String(format: "FPS %.1f · received %llu · dropped %llu", metrics.measuredFPS, metrics.framesReceived, metrics.previewDropped))
+      Text(String(format: "FPS in %.1f · shown %.1f · received %llu · dropped %llu", metrics.measuredFPS, metrics.renderedFPS, metrics.framesReceived, metrics.previewDropped))
       Text("Phone processing median \(ms(metrics.processingMedianMs)) · p95 \(ms(metrics.processingP95Ms))")
       Text("Capture→phone median \(ms(metrics.transportMedianMs)) · p95 \(ms(metrics.transportP95Ms))")
       Text("Last frame age \(metrics.lastFrameAgeMs.map { "\($0) ms" } ?? "—") · \(metrics.previewMode)")

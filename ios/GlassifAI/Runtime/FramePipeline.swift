@@ -39,6 +39,8 @@ struct FrameMetricsSnapshot: Equatable {
   var inputHeight = 0
   var pixelFormat = "—"
   var measuredFPS: Double = 0
+  /// Frames actually handed to the preview layer per second.
+  var renderedFPS: Double = 0
   var framesReceived: UInt64 = 0
   var previewRendered: UInt64 = 0
   var previewDropped: UInt64 = 0
@@ -111,6 +113,7 @@ final class FrameStore: @unchecked Sendable {
   private var epoch: UInt64 = 0
   private var sequence: UInt64 = 0
   private var arrivals: [CFTimeInterval] = []
+  private var renders: [CFTimeInterval] = []
   private var framesReceived: UInt64 = 0
   private var previewRendered: UInt64 = 0
   private var previewDropped: UInt64 = 0
@@ -236,7 +239,14 @@ final class FrameStore: @unchecked Sendable {
 
   func recordPreview(rendered: Bool = false, dropped: Bool = false, failed: Bool = false) {
     lock.lock()
-    if rendered { previewRendered &+= 1 }
+    if rendered {
+      previewRendered &+= 1
+      let now = CACurrentMediaTime()
+      renders.append(now)
+      if let firstValid = renders.firstIndex(where: { $0 >= now - 2 }), firstValid > 0 {
+        renders.removeFirst(firstValid)
+      }
+    }
     if dropped { previewDropped &+= 1 }
     if failed { previewFailures &+= 1 }
     lock.unlock()
@@ -301,6 +311,7 @@ final class FrameStore: @unchecked Sendable {
     recent.removeAll()
     epoch &+= 1
     arrivals.removeAll()
+    renders.removeAll()
     framesReceived = 0
     previewRendered = 0
     previewDropped = 0
@@ -329,6 +340,10 @@ final class FrameStore: @unchecked Sendable {
     let recent = arrivals.filter { $0 >= now - 2 }
     if recent.count >= 2, let first = recent.first, let last = recent.last, last > first {
       snapshot.measuredFPS = Double(recent.count - 1) / (last - first)
+    }
+    let recentRenders = renders.filter { $0 >= now - 2 }
+    if recentRenders.count >= 2, let first = recentRenders.first, let last = recentRenders.last, last > first {
+      snapshot.renderedFPS = Double(recentRenders.count - 1) / (last - first)
     }
     snapshot.framesReceived = framesReceived
     snapshot.previewRendered = previewRendered

@@ -166,6 +166,20 @@ struct SettingsView: View {
               .font(.footnote)
               .foregroundStyle(.orange)
           }
+          if let glassesStream {
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+              let metrics = FrameStore.shared.snapshot()
+              let actual = metrics.source == FrameSourceKind.glasses.rawValue && metrics.inputWidth > 0
+                ? "\(metrics.inputResolution) @ \(String(format: "%.1f", metrics.measuredFPS)) fps"
+                : "no Ray-Ban frames yet"
+              VStack(alignment: .leading, spacing: 2) {
+                Text("Requested: \(glassesStream.streamProfile.requestedSummary), \(glassesStream.activeTransport.shortLabel)")
+                Text("Actual: \(actual)")
+              }
+              .font(.footnote.monospacedDigit())
+              .foregroundStyle(.secondary)
+            }
+          }
           Picker("Preview", selection: $previewMode) {
             Text("Low latency (new)").tag("lowLatency")
             Text("Legacy (original)").tag("legacy")

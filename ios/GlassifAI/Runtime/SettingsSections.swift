@@ -238,6 +238,20 @@ struct DiagnosticsView: View {
   @State private var sidebandStatus = "—"
   @State private var copied = false
 
+  private var batteryLabel: String {
+    let device = UIDevice.current
+    device.isBatteryMonitoringEnabled = true
+    let level = device.batteryLevel < 0 ? "unknown" : "\(Int((device.batteryLevel * 100).rounded()))%"
+    let state: String
+    switch device.batteryState {
+    case .charging: state = "charging"
+    case .full: state = "full"
+    case .unplugged: state = "on battery"
+    default: state = "unknown"
+    }
+    return "\(level), \(state)"
+  }
+
   private var thermalLabel: String {
     switch ProcessInfo.processInfo.thermalState {
     case .nominal: "nominal"
@@ -318,11 +332,12 @@ struct DiagnosticsView: View {
         row("Last error", liveVision.lastError ?? "none")
         row("Last stop", liveVision.lastStopReason ?? "—")
         row("Thermal state", thermalLabel)
+        row("Battery", batteryLabel)
       }
       Section("Camera pipeline") {
         row("Source", metrics.source)
         row("Input resolution", "\(metrics.inputResolution) \(metrics.pixelFormat)")
-        row("Measured FPS", String(format: "%.1f", metrics.measuredFPS))
+        row("Measured FPS (received / shown)", String(format: "%.1f / %.1f", metrics.measuredFPS, metrics.renderedFPS))
         row("Frames received", "\(metrics.framesReceived)")
         row("Preview rendered / dropped", "\(metrics.previewRendered) / \(metrics.previewDropped)")
         row("Preview failures", "\(metrics.previewFailures)")
@@ -516,6 +531,7 @@ struct DiagnosticsView: View {
       "audio: mic \(audioRoute.inputSummary); speaker \(audioRoute.outputSummary); interrupted \(audioRoute.isInterrupted); last \(audioRoute.lastEvent)",
       "web: enabled \(AssistantPreferences.webSearchEnabled); \(orchestrator.lastWebStatus)",
       "actions: \(AssistantPreferences.actionsEnabled ? "on" : "off"); pending \(orchestrator.pendingAction?.plan.kind.rawValue ?? "none"); agent gateway \(agentGatewayStatus)",
+      "power: thermal \(thermalLabel); battery \(batteryLabel)",
       "live vision: \(liveVision.status.label); notes \(liveVision.updateCount); stable skips \(liveVision.skippedStable); error \(liveVision.lastError ?? "none"); last stop \(liveVision.lastStopReason ?? "—"); thermal \(thermalLabel)",
     ]
     for record in ledger.records.suffix(6) {
