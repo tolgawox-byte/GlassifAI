@@ -1,39 +1,58 @@
 import Foundation
 import NaturalLanguage
 import SwiftData
+import UserNotifications
 
 /// What kind of thing a memory is.
 enum MemoryKind: String, CaseIterable, Codable, Identifiable {
+  case profile = "PROFILE"
+  case preference = "PREFERENCE"
   case fact = "FACT"
+  case person = "PERSON"
+  case place = "PLACE"
+  case vehicle = "VEHICLE"
   case episode = "EPISODE"
   case note = "NOTE"
-  case visual = "VISUAL_MEMORY"
-  case preference = "PREFERENCE"
   case taskContext = "TASK_CONTEXT"
+  case visual = "VISUAL_MEMORY"
+  case conversationSummary = "CONVERSATION_SUMMARY"
 
   var id: String { rawValue }
 
   var label: String {
     switch self {
+    case .profile: L.t("About me", "Hakkımda")
+    case .preference: L.t("Preference", "Tercih")
     case .fact: L.t("Fact", "Bilgi")
+    case .person: L.t("Person", "Kişi")
+    case .place: L.t("Place", "Yer")
+    case .vehicle: L.t("Vehicle", "Araç")
     case .episode: L.t("Moment", "An")
     case .note: L.t("Note", "Not")
-    case .visual: L.t("Visual", "Görsel")
-    case .preference: L.t("Preference", "Tercih")
     case .taskContext: L.t("Task context", "Görev bağlamı")
+    case .visual: L.t("Visual", "Görsel")
+    case .conversationSummary: L.t("Conversation", "Konuşma")
     }
   }
 
   var systemImage: String {
     switch self {
+    case .profile: "person.crop.circle"
+    case .preference: "heart"
     case .fact: "info.circle"
+    case .person: "person.2"
+    case .place: "mappin.and.ellipse"
+    case .vehicle: "car"
     case .episode: "clock.arrow.circlepath"
     case .note: "note.text"
-    case .visual: "eye"
-    case .preference: "heart"
     case .taskContext: "checklist"
+    case .visual: "eye"
+    case .conversationSummary: "bubble.left.and.bubble.right"
     }
   }
+
+  /// Kinds a user can pick when editing a memory by hand.
+  static var editable: [MemoryKind] { allCases.filter { $0 != .conversationSummary } }
 
   /// Deterministic guess from the saved words; the user can change it.
   static func classify(_ text: String) -> MemoryKind {
@@ -214,11 +233,99 @@ final class NoteRecord {
   }
 }
 
+/// An AutoLoom task (local, separate from Apple Reminders): "bunu görev
+/// olarak ekle", "yarın bu arabayı tekrar kontrol et görev oluştur".
+@Model
+final class TaskItem {
+  @Attribute(.unique) var id: UUID
+  var title: String
+  var notes: String
+  var createdAt: Date
+  var dueAt: Date?
+  /// False when only a day was given.
+  var dueHasTime: Bool
+  var completed: Bool
+  var completedAt: Date?
+  /// 0 normal, 1 high.
+  var priority: Int
+  /// voice, manual…
+  var source: String
+  var linkedMemoryID: UUID?
+  var linkedNoteID: UUID?
+  /// Identifier of the local notification for the due time, if any.
+  var notificationID: String?
+
+  init(
+    id: UUID = UUID(),
+    title: String,
+    notes: String = "",
+    createdAt: Date = Date(),
+    dueAt: Date? = nil,
+    dueHasTime: Bool = true,
+    priority: Int = 0,
+    source: String
+  ) {
+    self.id = id
+    self.title = title
+    self.notes = notes
+    self.createdAt = createdAt
+    self.dueAt = dueAt
+    self.dueHasTime = dueHasTime
+    self.completed = false
+    self.completedAt = nil
+    self.priority = priority
+    self.source = source
+    self.linkedMemoryID = nil
+    self.linkedNoteID = nil
+    self.notificationID = nil
+  }
+}
+
+/// What the user explicitly told AutoLoom about themselves. Each field is
+/// set only when the user says it or types it; nothing is inferred.
+struct UserProfile: Codable, Equatable {
+  var preferredName: String?
+
+  static let defaultsKey = "autoloom.profile"
+
+  static func load(_ defaults: UserDefaults = .standard) -> UserProfile {
+    guard let data = defaults.data(forKey: defaultsKey),
+          let profile = try? JSONDecoder().decode(UserProfile.self, from: data) else { return UserProfile() }
+    return profile
+  }
+
+  func save(_ defaults: UserDefaults = .standard) {
+    if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.defaultsKey) }
+  }
+
+  /// "tolga'yım", "Tolga." → "Tolga". Letters, spaces, hyphens and
+  /// apostrophes inside a name only; at most three words and 40 characters.
+  static func cleanName(_ raw: String) -> String? {
+    var words: [String] = []
+    for piece in raw.split(whereSeparator: { $0 == " " }) {
+      // A Turkish suffix after an apostrophe is not part of the name.
+      let stem = piece.split(whereSeparator: { $0 == "'" || $0 == "’" }).first.map(String.init) ?? ""
+      let letters = stem.filter { $0.isLetter || $0 == "-" }
+      guard !letters.isEmpty else { continue }
+      words.append(letters)
+      if words.count == 3 { break }
+    }
+    guard !words.isEmpty else { return nil }
+    let name = words.map { word -> String in
+      let first = String(word.prefix(1)).uppercased(with: Locale(identifier: "tr_TR"))
+      return first + word.dropFirst()
+    }.joined(separator: " ")
+    guard name.count <= 40, name.contains(where: \.isLetter) else { return nil }
+    return name
+  }
+}
+
 /// A search result over memories and notes.
 struct MemoryHit: Identifiable {
   enum Item {
     case memory(MemoryRecord)
     case note(NoteRecord)
+    case task(TaskItem)
   }
 
   let item: Item
@@ -228,6 +335,7 @@ struct MemoryHit: Identifiable {
     switch item {
     case .memory(let record): record.id
     case .note(let note): note.id
+    case .task(let task): task.id
     }
   }
 
@@ -240,6 +348,10 @@ struct MemoryHit: Identifiable {
       return "\(text) [\(record.kind.rawValue.lowercased()), \(record.createdAt.formatted(date: .abbreviated, time: .omitted))]"
     case .note(let note):
       return "\(L.t("Note", "Not")) \"\(note.title)\": \(note.content.prefix(300))"
+    case .task(let task):
+      let due = task.dueAt.map { " — " + TimePhraseParser.describe($0, hasTime: task.dueHasTime, turkish: L.isTurkish) } ?? ""
+      let state = task.completed ? L.t(" (done)", " (tamamlandı)") : ""
+      return "\(L.t("Task", "Görev")) \"\(task.title)\"\(due)\(state)"
     }
   }
 }
@@ -311,20 +423,72 @@ enum MemorySearch {
   }
 
   /// Combined score; `semantic` only adds evidence, it never finds a result
-  /// on its own below the threshold.
-  static func combined(lexical: Double, semantic: Double?, pinned: Bool) -> Double {
+  /// on its own below the threshold. Relevance first, then small boosts for
+  /// pinned items, exact names (people, brands, places) and recent items.
+  static func combined(
+    lexical: Double,
+    semantic: Double?,
+    pinned: Bool,
+    ageDays: Double = 0,
+    exactEntity: Bool = false
+  ) -> Double {
     var score = lexical
     if let semantic { score = max(score, lexical * 0.6 + max(0, semantic - 0.35) * 0.9) }
-    if pinned && score > 0 { score += 0.05 }
+    // The boosts only reorder results that are relevant on their own.
+    guard score >= threshold else { return score }
+    if pinned { score += 0.05 }
+    if exactEntity { score += 0.1 }
+    // Up to +0.05 for items from the last few days, fading over a month.
+    score += 0.05 * max(0, 1 - ageDays / 30)
     return score
+  }
+
+  /// Whether a capitalised word of the query (a name, brand or place)
+  /// appears as a whole word in the document.
+  static func hasExactEntity(query: String, document: String) -> Bool {
+    let names = query.split(separator: " ")
+      .map { $0.trimmingCharacters(in: .punctuationCharacters) }
+      .filter { $0.count >= 3 && ($0.first?.isUppercase ?? false) }
+    guard !names.isEmpty else { return false }
+    let words = Set(tokens(document))
+    return names.contains { words.contains(fold($0)) }
   }
 
   static let threshold = 0.34
 }
 
-/// The user's memories and notes. Explicit only: nothing is saved unless the
-/// user asks ("hatırla", "kaydet", "not al", "unutma", "remember…") or adds
-/// it on screen. Stored on this iPhone with SwiftData; never synced.
+/// A compact record of one AutoLoom conversation, written when a meaningful
+/// conversation ends (Settings → Memory → Conversation memory). Only this
+/// summary is kept, never the transcript.
+struct ConversationSummary: Equatable {
+  var summary: String
+  var topics: [String] = []
+  var decisions: [String] = []
+  var openTasks: [String] = []
+  var entities: [String] = []
+  var startedAt: Date
+  var endedAt: Date
+
+  /// The stored text: the summary first, then the labelled lists.
+  var storedText: String {
+    var lines = [summary]
+    if !topics.isEmpty { lines.append(L.t("Topics: ", "Konular: ") + topics.joined(separator: ", ")) }
+    if !decisions.isEmpty { lines.append(L.t("Decisions: ", "Kararlar: ") + decisions.joined(separator: "; ")) }
+    if !openTasks.isEmpty { lines.append(L.t("Open tasks: ", "Açık işler: ") + openTasks.joined(separator: "; ")) }
+    if !entities.isEmpty { lines.append(L.t("Mentioned: ", "Geçenler: ") + entities.joined(separator: ", ")) }
+    return lines.joined(separator: "\n")
+  }
+
+  var title: String {
+    topics.first.map { String($0.prefix(60)) } ?? MemoryStore.defaultTitle(for: summary)
+  }
+}
+
+/// The user's memories, notes, AutoLoom tasks and profile. Memory is
+/// explicit: nothing is saved unless the user asks ("hatırla", "kaydet",
+/// "not al", "unutma", "remember…") or adds it on screen; the only automatic
+/// entries are short conversation summaries, which the user can turn off.
+/// Stored on this iPhone with SwiftData; never synced.
 @MainActor
 final class MemoryStore: ObservableObject {
   static let shared = MemoryStore()
@@ -333,11 +497,20 @@ final class MemoryStore: ObservableObject {
   static let visualEnabledKey = "autoloom.memory.visual.enabled"
   static let visualPhotosKey = "autoloom.memory.visual.photos"
   static let locationKey = "autoloom.memory.location"
+  /// Short summaries of meaningful conversations (on by default).
+  static let conversationMemoryKey = "autoloom.memory.conversations"
+  /// The assistant may suggest things worth remembering (off by default;
+  /// even then nothing is saved without the user's yes).
+  static let smartMemoryKey = "autoloom.memory.smart"
   private static let migratedKey = "autoloom.memory.v2.migrated"
+  /// Conversation summaries kept; older unpinned ones are removed.
+  static let summaryLimit = 200
 
   let container: ModelContainer?
   @Published private(set) var memories: [MemoryRecord] = []
   @Published private(set) var notes: [NoteRecord] = []
+  @Published private(set) var tasks: [TaskItem] = []
+  @Published private(set) var profile: UserProfile
   @Published private(set) var storageError: String?
   @Published private(set) var isPersistent = false
 
@@ -356,6 +529,12 @@ final class MemoryStore: ObservableObject {
   @Published var attachLocation: Bool {
     didSet { defaults.set(attachLocation, forKey: Self.locationKey) }
   }
+  @Published var conversationMemoryEnabled: Bool {
+    didSet { defaults.set(conversationMemoryEnabled, forKey: Self.conversationMemoryKey) }
+  }
+  @Published var smartMemoryEnabled: Bool {
+    didSet { defaults.set(smartMemoryEnabled, forKey: Self.smartMemoryKey) }
+  }
 
   private let defaults: UserDefaults
 
@@ -365,7 +544,10 @@ final class MemoryStore: ObservableObject {
     visualMemoriesEnabled = defaults.bool(forKey: Self.visualEnabledKey)
     saveVisualPhotos = defaults.bool(forKey: Self.visualPhotosKey)
     attachLocation = defaults.bool(forKey: Self.locationKey)
-    let schema = Schema([MemoryRecord.self, NoteRecord.self])
+    conversationMemoryEnabled = defaults.object(forKey: Self.conversationMemoryKey) as? Bool ?? true
+    smartMemoryEnabled = defaults.bool(forKey: Self.smartMemoryKey)
+    profile = UserProfile.load(defaults)
+    let schema = Schema([MemoryRecord.self, NoteRecord.self, TaskItem.self])
     var created: ModelContainer?
     var error: String?
     if !inMemory, let url = Self.storeURL() {
@@ -410,22 +592,45 @@ final class MemoryStore: ObservableObject {
       if $0.pinned != $1.pinned { return $0.pinned }
       return $0.updatedAt > $1.updatedAt
     }
+    let loadedTasks = (try? context.fetch(FetchDescriptor<TaskItem>())) ?? []
+    tasks = loadedTasks.sorted(by: Self.taskOrder)
   }
 
-  private func save() {
+  /// Open tasks first (earliest due first, undated after dated), then
+  /// completed ones (most recently completed first).
+  static func taskOrder(_ a: TaskItem, _ b: TaskItem) -> Bool {
+    if a.completed != b.completed { return !a.completed }
+    if a.completed { return (a.completedAt ?? .distantPast) > (b.completedAt ?? .distantPast) }
+    switch (a.dueAt, b.dueAt) {
+    case let (x?, y?) where x != y: return x < y
+    case (.some, nil): return true
+    case (nil, .some): return false
+    default: return a.createdAt > b.createdAt
+    }
+  }
+
+  /// Saves pending changes. On failure the changes are rolled back, so
+  /// nothing is reported as saved that iOS did not store.
+  @discardableResult
+  private func save() -> Bool {
+    var saved = true
     do {
       try context?.save()
     } catch {
+      saved = false
+      context?.rollback()
       storageError = LogSanitizer.sanitize(error.localizedDescription, limit: 200)
       NSLog("[AutoLoom] memory save failed: %@", storageError ?? "")
     }
     refresh()
+    return saved
   }
 
   // MARK: Memories
 
   /// Saves an explicit memory. A memory with the same words is refreshed
-  /// instead of duplicated. Returns nil when memory is off or the text is empty.
+  /// instead of duplicated. Returns nil when memory is off, the text is
+  /// empty, or the store could not save it.
   @discardableResult
   func remember(
     _ text: String,
@@ -442,14 +647,14 @@ final class MemoryStore: ObservableObject {
     let folded = MemorySearch.fold(cleaned)
     if let existing = memories.first(where: { MemorySearch.fold($0.text) == folded }) {
       existing.updatedAt = Date()
-      save()
-      return existing
+      return save() ? existing : nil
     }
     let resolvedTitle = (title?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
       ?? Self.defaultTitle(for: cleaned)
+    let resolvedKind = kind ?? MemoryKind.classify(cleaned)
     let record = MemoryRecord(
-      kind: kind ?? MemoryKind.classify(cleaned),
-      category: category ?? MemoryCategory.classify(cleaned + " " + resolvedTitle),
+      kind: resolvedKind,
+      category: category ?? Self.category(for: resolvedKind) ?? MemoryCategory.classify(cleaned + " " + resolvedTitle),
       title: String(resolvedTitle.prefix(80)),
       text: cleaned,
       source: source,
@@ -461,11 +666,20 @@ final class MemoryStore: ObservableObject {
     }
     record.thumbnail = thumbnail
     context.insert(record)
-    save()
-    return record
+    return save() ? record : nil
   }
 
-  static func defaultTitle(for text: String) -> String {
+  /// People, places and vehicles are listed under their own category.
+  private static func category(for kind: MemoryKind) -> MemoryCategory? {
+    switch kind {
+    case .person: .people
+    case .place: .places
+    case .vehicle: .vehicles
+    default: nil
+    }
+  }
+
+  nonisolated static func defaultTitle(for text: String) -> String {
     let firstLine = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
     let words = firstLine.split(separator: " ").prefix(6).joined(separator: " ")
     return words.count < firstLine.count ? words + "…" : words
@@ -499,9 +713,75 @@ final class MemoryStore: ObservableObject {
     memories.first { $0.id == id }
   }
 
+  /// Memory → Clear all: every memory, conversation summary and the profile.
+  /// Notes and tasks are kept (they have their own delete).
   func deleteAllMemories() {
     for record in memories { context?.delete(record) }
     save()
+    clearProfile()
+  }
+
+  // MARK: Profile
+
+  /// What the user said their name is ("Benim adım Tolga"). Returns the
+  /// cleaned name, or nil when it is not a usable name.
+  @discardableResult
+  func setPreferredName(_ raw: String) -> String? {
+    guard let name = UserProfile.cleanName(raw) else { return nil }
+    profile.preferredName = name
+    profile.save(defaults)
+    return name
+  }
+
+  func clearProfile() {
+    profile = UserProfile()
+    profile.save(defaults)
+  }
+
+  /// Memories about the user that belong in "About me".
+  var profileMemories: [MemoryRecord] {
+    memories.filter { $0.kind == .profile }
+  }
+
+  // MARK: Conversation summaries
+
+  var conversationSummaries: [MemoryRecord] {
+    memories.filter { $0.kind == .conversationSummary }.sorted { $0.createdAt > $1.createdAt }
+  }
+
+  /// Stores a finished conversation's summary. Returns nil when memory or
+  /// conversation memory is off.
+  @discardableResult
+  func saveConversationSummary(_ summary: ConversationSummary) -> MemoryRecord? {
+    guard isEnabled, conversationMemoryEnabled, let context else { return nil }
+    // Line by line, so the labelled lists keep their own lines.
+    let text = summary.storedText
+      .split(separator: "\n")
+      .map { TaskTrace.redactUserText(String($0), limit: 500) }
+      .joined(separator: "\n")
+    guard !text.isEmpty else { return nil }
+    let tags = Array((summary.topics + summary.entities).prefix(8))
+    let record = MemoryRecord(
+      kind: .conversationSummary,
+      category: .other,
+      title: String(summary.title.prefix(80)),
+      text: text,
+      createdAt: summary.endedAt,
+      source: "conversation",
+      tags: tags)
+    context.insert(record)
+    // Keep the newest summaries; pinned ones are never removed.
+    let old = conversationSummaries.filter { !$0.pinned }.dropFirst(Self.summaryLimit - 1)
+    for record in old { context.delete(record) }
+    return save() ? record : nil
+  }
+
+  /// The latest conversation summary, if it is recent enough to help.
+  func recentConversationSummary(within days: Double = 14, now: Date = Date()) -> MemoryRecord? {
+    guard isEnabled, conversationMemoryEnabled,
+          let latest = conversationSummaries.first,
+          now.timeIntervalSince(latest.createdAt) < days * 86_400 else { return nil }
+    return latest
   }
 
   // MARK: Notes
@@ -528,8 +808,7 @@ final class MemoryStore: ObservableObject {
       note.placeName = location.placeName
     }
     context.insert(note)
-    save()
-    return note
+    return save() ? note : nil
   }
 
   func updateNote(_ note: NoteRecord, title: String, content: String, tags: [String]) {
@@ -555,26 +834,125 @@ final class MemoryStore: ObservableObject {
     save()
   }
 
-  /// Privacy center: removes every memory and note.
+  // MARK: AutoLoom tasks
+
+  /// Adds a local task. The due time comes from the app's time parser,
+  /// never from a model.
+  @discardableResult
+  func addTask(
+    title: String,
+    notes: String = "",
+    dueAt: Date? = nil,
+    dueHasTime: Bool = true,
+    priority: Int = 0,
+    source: String
+  ) -> TaskItem? {
+    let cleaned = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+    guard !cleaned.isEmpty, let context else { return nil }
+    let task = TaskItem(
+      title: cleaned, notes: String(notes.prefix(2_000)), dueAt: dueAt,
+      dueHasTime: dueAt == nil ? true : dueHasTime, priority: priority, source: source)
+    context.insert(task)
+    return save() ? task : nil
+  }
+
+  func updateTask(_ task: TaskItem, title: String, notes: String, dueAt: Date?, dueHasTime: Bool) {
+    let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !cleaned.isEmpty else { return }
+    task.title = String(cleaned.prefix(200))
+    task.notes = String(notes.prefix(2_000))
+    if task.dueAt != dueAt || task.dueHasTime != dueHasTime { cancelNotification(of: task) }
+    task.dueAt = dueAt
+    task.dueHasTime = dueHasTime
+    save()
+  }
+
+  func setCompleted(_ task: TaskItem, _ done: Bool) {
+    task.completed = done
+    task.completedAt = done ? Date() : nil
+    if done { cancelNotification(of: task) }
+    save()
+  }
+
+  func setNotificationID(_ task: TaskItem, _ id: String?) {
+    task.notificationID = id
+    save()
+  }
+
+  func deleteTask(_ task: TaskItem) {
+    cancelNotification(of: task)
+    context?.delete(task)
+    save()
+  }
+
+  func deleteAllTasks() {
+    for task in tasks {
+      cancelNotification(of: task)
+      context?.delete(task)
+    }
+    save()
+  }
+
+  func task(id: UUID) -> TaskItem? {
+    tasks.first { $0.id == id }
+  }
+
+  private func cancelNotification(of task: TaskItem) {
+    guard let id = task.notificationID else { return }
+    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+    task.notificationID = nil
+  }
+
+  /// Open tasks due today or overdue.
+  func todayTasks(now: Date = Date(), calendar: Calendar = .current) -> [TaskItem] {
+    let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+    return tasks.filter { !$0.completed && ($0.dueAt.map { $0 < end } ?? false) }
+  }
+
+  /// Open tasks due later, and open tasks without a date.
+  func upcomingTasks(now: Date = Date(), calendar: Calendar = .current) -> [TaskItem] {
+    let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+    return tasks.filter { !$0.completed && ($0.dueAt.map { $0 >= end } ?? true) }
+  }
+
+  var completedTasks: [TaskItem] {
+    tasks.filter(\.completed)
+  }
+
+  /// Privacy center: removes every memory, note, task and the profile.
   func deleteEverything() {
     for record in memories { context?.delete(record) }
     for note in notes { context?.delete(note) }
+    for task in tasks {
+      cancelNotification(of: task)
+      context?.delete(task)
+    }
     save()
+    clearProfile()
   }
 
   // MARK: Search and prompts
 
-  func search(_ query: String, limit: Int = 8, includeNotes: Bool = true) -> [MemoryHit] {
+  func search(
+    _ query: String,
+    limit: Int = 8,
+    includeNotes: Bool = true,
+    includeTasks: Bool = true,
+    now: Date = Date()
+  ) -> [MemoryHit] {
     let queryTokens = MemorySearch.tokens(query)
     guard !queryTokens.isEmpty else { return [] }
     let embedding = MemorySearch.looksEnglish(query) ? NLEmbedding.sentenceEmbedding(for: .english) : nil
+    func age(_ date: Date) -> Double { max(0, now.timeIntervalSince(date) / 86_400) }
     var hits: [MemoryHit] = []
     for record in memories {
       let recordText = record.title + " " + record.text + " " + record.tags.joined(separator: " ")
       let document = MemorySearch.tokens(recordText + " " + (record.placeName ?? ""))
       let lexical = MemorySearch.lexicalScore(query: queryTokens, document: document)
       let semantic = embedding.flatMap { MemorySearch.semanticScore(query, record.text, embedding: $0) }
-      let score = MemorySearch.combined(lexical: lexical, semantic: semantic, pinned: record.pinned)
+      let score = MemorySearch.combined(
+        lexical: lexical, semantic: semantic, pinned: record.pinned, ageDays: age(record.updatedAt),
+        exactEntity: MemorySearch.hasExactEntity(query: query, document: recordText))
       if score >= MemorySearch.threshold { hits.append(MemoryHit(item: .memory(record), score: score)) }
     }
     if includeNotes {
@@ -583,11 +961,35 @@ final class MemoryStore: ObservableObject {
         let document = MemorySearch.tokens(noteText)
         let lexical = MemorySearch.lexicalScore(query: queryTokens, document: document)
         let semantic = embedding.flatMap { MemorySearch.semanticScore(query, note.title + ". " + note.content, embedding: $0) }
-        let score = MemorySearch.combined(lexical: lexical, semantic: semantic, pinned: note.pinned) * 0.95
+        let score = MemorySearch.combined(
+          lexical: lexical, semantic: semantic, pinned: note.pinned, ageDays: age(note.updatedAt),
+          exactEntity: MemorySearch.hasExactEntity(query: query, document: noteText)) * 0.95
         if score >= MemorySearch.threshold { hits.append(MemoryHit(item: .note(note), score: score)) }
       }
     }
+    if includeTasks {
+      for task in tasks {
+        let taskText = task.title + " " + task.notes
+        let lexical = MemorySearch.lexicalScore(query: queryTokens, document: MemorySearch.tokens(taskText))
+        let score = MemorySearch.combined(
+          lexical: lexical, semantic: nil, pinned: false, ageDays: age(task.createdAt),
+          exactEntity: MemorySearch.hasExactEntity(query: query, document: taskText)) * 0.9
+        if score >= MemorySearch.threshold { hits.append(MemoryHit(item: .task(task), score: score)) }
+      }
+    }
     return Array(hits.sorted { $0.score > $1.score }.prefix(limit))
+  }
+
+  /// Conversation summaries that match a question about earlier talks
+  /// ("Geçen gün Ray-Ban kamerasıyla ne yapıyorduk?"), newest first when
+  /// the words say nothing specific.
+  func searchConversations(_ query: String, limit: Int = 3) -> [MemoryRecord] {
+    let matches = search(query, limit: 20, includeNotes: false, includeTasks: false).compactMap { hit -> MemoryRecord? in
+      if case .memory(let record) = hit.item, record.kind == .conversationSummary { return record }
+      return nil
+    }
+    if !matches.isEmpty { return Array(matches.prefix(limit)) }
+    return Array(conversationSummaries.prefix(limit))
   }
 
   /// Marks memories as used by a recall (for sorting and diagnostics).
@@ -603,16 +1005,18 @@ final class MemoryStore: ObservableObject {
   }
 
   /// A few memories the voice model always knows: pinned ones first, then
-  /// preferences and the most recent facts. Bounded so the realtime
-  /// instructions stay small.
+  /// what the user said about themselves, preferences and the most recent
+  /// facts. Bounded so the realtime instructions stay small; conversation
+  /// summaries and visual memories are retrieved on demand instead.
   var promptItems: [String] {
     guard isEnabled else { return [] }
-    let pinned = memories.filter(\.pinned)
+    let pinned = memories.filter { $0.pinned && $0.kind != .conversationSummary }
+    let about = memories.filter { !$0.pinned && $0.kind == .profile }
     let preferences = memories.filter { !$0.pinned && $0.kind == .preference }
-    let facts = memories.filter { !$0.pinned && $0.kind == .fact }
+    let facts = memories.filter { !$0.pinned && [.fact, .person, .place, .vehicle].contains($0.kind) }
     var items: [String] = []
     var characters = 0
-    for record in pinned + preferences + facts {
+    for record in pinned + about + preferences + facts {
       let line = String(record.text.prefix(200))
       guard characters + line.count <= 1_800, items.count < 12 else { break }
       if items.contains(line) { continue }
@@ -625,7 +1029,7 @@ final class MemoryStore: ObservableObject {
   /// Memories relevant to a delegated request, for the executor's context.
   func relevantItems(for query: String, limit: Int = 5) -> [String] {
     guard isEnabled else { return [] }
-    return search(query, limit: limit, includeNotes: false).map(\.line)
+    return search(query, limit: limit, includeNotes: false, includeTasks: false).map(\.line)
   }
 
   // MARK: Migration from the JSON files of earlier builds

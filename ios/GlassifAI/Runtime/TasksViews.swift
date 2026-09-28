@@ -165,11 +165,15 @@ final class RemindersBoard: ObservableObject {
   }
 }
 
-/// The Tasks tab: Apple Reminders (Today / Upcoming / Completed) and
-/// notifications the assistant scheduled.
+/// The Tasks tab: AutoLoom tasks and Apple Reminders together, in Today /
+/// Upcoming / Completed, plus notifications the assistant scheduled.
+/// Everything the assistant creates by voice appears here at once.
 struct TasksTabView: View {
   @ObservedObject private var board = RemindersBoard.shared
-  @State private var showNew = false
+  @ObservedObject private var store = MemoryStore.shared
+  @State private var showNewTask = false
+  @State private var showNewReminder = false
+  @State private var editingTask: TaskItem?
   @State private var rescheduling: RemindersBoard.Item?
   @State private var deleting: RemindersBoard.Item?
   @Environment(\.openURL) private var openURL
@@ -177,37 +181,10 @@ struct TasksTabView: View {
   var body: some View {
     NavigationStack {
       List {
-        switch board.access {
-        case .granted:
-          reminderSections
-        case .notAsked:
-          Section {
-            VStack(alignment: .leading, spacing: 10) {
-              Label(L.t("Connect Apple Reminders", "Apple Anımsatıcılar'ı bağlayın"), systemImage: "checklist")
-                .font(.headline)
-              Text(L.t("See and manage the reminders the assistant creates for you. iOS asks for permission once.",
-                       "Asistanın sizin için oluşturduğu anımsatıcıları görün ve yönetin. iOS bir kez izin ister."))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-              Button(L.t("Connect", "Bağlan")) { Task { await board.requestAccess() } }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding(.vertical, 6)
-          }
-        case .denied, .limited:
-          Section {
-            VStack(alignment: .leading, spacing: 10) {
-              Text(L.t("Reminders access is off.", "Anımsatıcı izni kapalı.")).font(.headline)
-              Text(L.t("Allow it in iOS Settings → AutoLoom → Reminders.", "iOS Ayarlar → AutoLoom → Anımsatıcılar'dan izin verin."))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-              Button(L.t("Open Settings", "Ayarları aç")) {
-                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-              }
-            }
-            .padding(.vertical, 6)
-          }
-        }
+        todaySection
+        upcomingSection
+        completedSection
+        remindersAccessSection
         if !board.notifications.isEmpty {
           Section(L.t("Scheduled notifications", "Planlanmış bildirimler")) {
             ForEach(board.notifications) { notification in
@@ -240,14 +217,32 @@ struct TasksTabView: View {
       .navigationTitle(L.t("Tasks", "Görevler"))
       .toolbar {
         ToolbarItem(placement: .primaryAction) {
-          Button { showNew = true } label: { Image(systemName: "plus") }
+          Menu {
+            Button { showNewTask = true } label: {
+              Label(L.t("New AutoLoom task", "Yeni AutoLoom görevi"), systemImage: "checklist")
+            }
+            Button { showNewReminder = true } label: {
+              Label(L.t("New Apple reminder", "Yeni Apple anımsatıcısı"), systemImage: "bell")
+            }
             .disabled(board.access != .granted)
-            .accessibilityLabel(L.t("New reminder", "Yeni anımsatıcı"))
+          } label: {
+            Image(systemName: "plus")
+          }
+          .accessibilityLabel(L.t("New task", "Yeni görev"))
         }
       }
-      .refreshable { await board.load() }
+      .refreshable {
+        store.refresh()
+        await board.load()
+      }
       .task { await board.load() }
-      .sheet(isPresented: $showNew) {
+      .sheet(isPresented: $showNewTask) {
+        NavigationStack { TaskEditorView(task: nil) }
+      }
+      .sheet(item: $editingTask) { task in
+        NavigationStack { TaskEditorView(task: task) }
+      }
+      .sheet(isPresented: $showNewReminder) {
         NavigationStack { ReminderEditorView(item: nil) }
       }
       .sheet(item: $rescheduling) { item in
@@ -268,28 +263,129 @@ struct TasksTabView: View {
     }
   }
 
+  // MARK: Sections
+
+  private var showsReminders: Bool { board.access == .granted }
+
   @ViewBuilder
-  private var reminderSections: some View {
+  private var todaySection: some View {
+    let tasks = store.todayTasks()
+    let reminders = showsReminders ? board.today : []
     Section(L.t("Today", "Bugün")) {
-      if board.today.isEmpty {
+      if tasks.isEmpty && reminders.isEmpty {
         Text(L.t("Nothing due today.", "Bugün için bir şey yok.")).foregroundStyle(.secondary)
       }
-      ForEach(board.today) { row($0) }
+      ForEach(tasks) { taskRow($0) }
+      ForEach(reminders) { reminderRow($0) }
     }
-    Section(L.t("Upcoming", "Yaklaşan")) {
-      if board.upcoming.isEmpty {
-        Text(L.t("No upcoming reminders.", "Yaklaşan anımsatıcı yok.")).foregroundStyle(.secondary)
+  }
+
+  @ViewBuilder
+  private var upcomingSection: some View {
+    let tasks = store.upcomingTasks()
+    let reminders = showsReminders ? board.upcoming : []
+    Section {
+      if tasks.isEmpty && reminders.isEmpty {
+        Text(L.t("Nothing upcoming. Say “görev oluştur: …” or “yarın 9'da hatırlat …”.",
+                 "Yaklaşan bir şey yok. “Görev oluştur: …” ya da “yarın 9'da hatırlat …” deyin."))
+          .foregroundStyle(.secondary)
       }
-      ForEach(board.upcoming) { row($0) }
+      ForEach(tasks) { taskRow($0) }
+      ForEach(reminders) { reminderRow($0) }
+    } header: {
+      Text(L.t("Upcoming", "Yaklaşan"))
     }
-    if !board.completed.isEmpty {
-      Section(L.t("Completed (last 7 days)", "Tamamlanan (son 7 gün)")) {
-        ForEach(board.completed) { row($0) }
+  }
+
+  @ViewBuilder
+  private var completedSection: some View {
+    let tasks = Array(store.completedTasks.prefix(20))
+    let reminders = showsReminders ? board.completed : []
+    if !tasks.isEmpty || !reminders.isEmpty {
+      Section(L.t("Completed", "Tamamlanan")) {
+        ForEach(tasks) { taskRow($0) }
+        ForEach(reminders) { reminderRow($0) }
       }
     }
   }
 
-  private func row(_ item: RemindersBoard.Item) -> some View {
+  @ViewBuilder
+  private var remindersAccessSection: some View {
+    switch board.access {
+    case .granted:
+      EmptyView()
+    case .notAsked:
+      Section {
+        VStack(alignment: .leading, spacing: 10) {
+          Label(L.t("Connect Apple Reminders", "Apple Anımsatıcılar'ı bağlayın"), systemImage: "checklist")
+            .font(.headline)
+          Text(L.t("See the reminders the assistant creates for you next to your AutoLoom tasks. iOS asks for permission once.",
+                   "Asistanın oluşturduğu anımsatıcıları AutoLoom görevlerinizin yanında görün. iOS bir kez izin ister."))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          Button(L.t("Connect", "Bağlan")) { Task { await board.requestAccess() } }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(.vertical, 6)
+      }
+    case .denied, .limited:
+      Section {
+        VStack(alignment: .leading, spacing: 10) {
+          Text(L.t("Apple Reminders access is off.", "Apple Anımsatıcılar izni kapalı.")).font(.headline)
+          Text(L.t("AutoLoom tasks still work. To see reminders too, allow access in iOS Settings → AutoLoom → Reminders.",
+                   "AutoLoom görevleri çalışmaya devam eder. Anımsatıcıları da görmek için iOS Ayarlar → AutoLoom → Anımsatıcılar'dan izin verin."))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          Button(L.t("Open Settings", "Ayarları aç")) {
+            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+          }
+        }
+        .padding(.vertical, 6)
+      }
+    }
+  }
+
+  // MARK: Rows
+
+  private func taskRow(_ task: TaskItem) -> some View {
+    HStack(spacing: 12) {
+      Button {
+        store.setCompleted(task, !task.completed)
+      } label: {
+        Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
+          .font(.title3)
+          .foregroundStyle(task.completed ? Color.green : AutoLoomTheme.electricBlue)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(task.completed ? L.t("Mark as not done", "Yapılmadı olarak işaretle") : L.t("Complete", "Tamamla"))
+      VStack(alignment: .leading, spacing: 2) {
+        Text(task.title)
+          .strikethrough(task.completed)
+          .foregroundStyle(task.completed ? .secondary : .primary)
+        HStack(spacing: 6) {
+          if let due = task.dueAt {
+            Text(due.formatted(date: .abbreviated, time: task.dueHasTime ? .shortened : .omitted))
+              .foregroundStyle(!task.completed && due < Date() ? Color.red : Color.secondary)
+          }
+          if task.notificationID != nil {
+            Image(systemName: "bell.fill").foregroundStyle(.secondary)
+          }
+          Text("AutoLoom").foregroundStyle(.tertiary)
+        }
+        .font(.caption)
+      }
+      Spacer(minLength: 0)
+    }
+    .contentShape(Rectangle())
+    .onTapGesture { editingTask = task }
+    .swipeActions(edge: .trailing) {
+      Button(role: .destructive) { store.deleteTask(task) } label: {
+        Label(L.t("Delete", "Sil"), systemImage: "trash")
+      }
+    }
+  }
+
+  private func reminderRow(_ item: RemindersBoard.Item) -> some View {
     HStack(spacing: 12) {
       Button {
         Task { await board.setCompleted(item, !item.completed) }
@@ -309,9 +405,7 @@ struct TasksTabView: View {
             Text(due.formatted(date: .abbreviated, time: item.hasTime ? .shortened : .omitted))
               .foregroundStyle(!item.completed && due < Date() ? Color.red : Color.secondary)
           }
-          if !item.list.isEmpty {
-            Text(item.list).foregroundStyle(.tertiary)
-          }
+          Text(item.list.isEmpty ? L.t("Reminders", "Anımsatıcılar") : item.list).foregroundStyle(.tertiary)
         }
         .font(.caption)
       }
@@ -325,6 +419,125 @@ struct TasksTabView: View {
         Label(L.t("Reschedule", "Ertele"), systemImage: "calendar")
       }
       .tint(.blue)
+    }
+  }
+}
+
+/// A new AutoLoom task, or an existing one. The time can be typed naturally
+/// ("yarın 9'da") and is shown resolved before saving.
+struct TaskEditorView: View {
+  let task: TaskItem?
+  @ObservedObject private var store = MemoryStore.shared
+  @State private var title = ""
+  @State private var notes = ""
+  @State private var hasDue = false
+  @State private var includeTime = true
+  @State private var due = Date().addingTimeInterval(3_600)
+  @State private var phrase = ""
+  @State private var loaded = false
+  @State private var confirmDelete = false
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    // A deleted task must not be read.
+    if let task, !store.tasks.contains(where: { $0 === task }) {
+      Text(L.t("This task was deleted.", "Bu görev silindi.")).foregroundStyle(.secondary)
+    } else {
+      form
+    }
+  }
+
+  private var form: some View {
+    Form {
+      Section {
+        TextField(L.t("Task", "Görev"), text: $title)
+        TextField(L.t("Notes", "Notlar"), text: $notes, axis: .vertical)
+          .lineLimit(2...6)
+      }
+      Section {
+        TextField(L.t("When, in your words (e.g. tomorrow at 9)", "Ne zaman, kendi sözlerinizle (ör. yarın 9'da)"), text: $phrase)
+          .onChange(of: phrase) { _, text in
+            if let parsed = TimePhraseParser.parse(text) {
+              hasDue = true
+              includeTime = parsed.hasTime
+              due = parsed.date
+            }
+          }
+        Toggle(L.t("Due date", "Tarih"), isOn: $hasDue)
+        if hasDue {
+          Toggle(L.t("Include time", "Saat ekle"), isOn: $includeTime)
+          DatePicker(
+            L.t("Due", "Zaman"), selection: $due,
+            displayedComponents: includeTime ? DatePickerComponents([.date, .hourAndMinute]) : DatePickerComponents.date)
+        }
+      } footer: {
+        Text(L.t("With a time, a notification is scheduled when notifications are allowed.",
+                 "Saat verilirse, bildirim izni varsa bir bildirim planlanır."))
+      }
+      if task != nil {
+        Section {
+          Button(L.t("Delete task", "Görevi sil"), role: .destructive) { confirmDelete = true }
+        }
+      }
+    }
+    .navigationTitle(task == nil ? L.t("New task", "Yeni görev") : L.t("Task", "Görev"))
+    .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button(L.t("Cancel", "Vazgeç")) { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button(L.t("Save", "Kaydet")) { save() }
+          .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }
+    }
+    .confirmationDialog(L.t("Delete this task?", "Bu görev silinsin mi?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+      Button(L.t("Delete", "Sil"), role: .destructive) {
+        // Leave the screen first; it must not render a deleted object.
+        dismiss()
+        let store = store
+        if let task {
+          Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            store.deleteTask(task)
+          }
+        }
+      }
+    }
+    .onAppear {
+      guard !loaded else { return }
+      loaded = true
+      if let task {
+        title = task.title
+        notes = task.notes
+        if let date = task.dueAt {
+          hasDue = true
+          due = date
+          includeTime = task.dueHasTime
+        }
+      }
+    }
+  }
+
+  private func save() {
+    let dueAt = hasDue ? due : nil
+    let saved: TaskItem?
+    if let task {
+      store.updateTask(task, title: title, notes: notes, dueAt: dueAt, dueHasTime: includeTime)
+      saved = task
+    } else {
+      saved = store.addTask(title: title, notes: notes, dueAt: dueAt, dueHasTime: includeTime, source: "manual")
+    }
+    dismiss()
+    guard let saved, saved.notificationID == nil, let date = saved.dueAt, saved.dueHasTime, date > Date() else { return }
+    let store = store
+    let taskTitle = saved.title
+    Task { @MainActor in
+      guard await PermissionCenter.state(.notifications) == .granted,
+            let id = try? await LocalNotifications.schedule(
+              title: taskTitle, body: L.t("AutoLoom task", "AutoLoom görevi"), at: date),
+            store.tasks.contains(where: { $0 === saved }) else { return }
+      store.setNotificationID(saved, id)
     }
   }
 }

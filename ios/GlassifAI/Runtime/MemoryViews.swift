@@ -1,8 +1,9 @@
 import SwiftUI
 import UIKit
 
-/// The Memory tab: what the user asked the assistant to remember, and their
-/// AutoLoom notes. Everything here is stored only on this iPhone.
+/// The Memory tab: what the user asked the assistant to remember, short
+/// summaries of earlier conversations, and AutoLoom notes. Everything here
+/// is stored only on this iPhone.
 struct MemoryTabView: View {
   enum Section: String, CaseIterable, Identifiable {
     case memories
@@ -15,6 +16,7 @@ struct MemoryTabView: View {
   @State private var query = ""
   @State private var showNewMemory = false
   @State private var showNewNote = false
+  @State private var editingProfile = false
   @State private var confirmDeleteAll = false
 
   var body: some View {
@@ -48,7 +50,7 @@ struct MemoryTabView: View {
         case .notes: notesContent
         }
       }
-      .searchable(text: $query, prompt: L.t("Search memories and notes", "Anılarda ve notlarda ara"))
+      .searchable(text: $query, prompt: L.t("Search memories, notes and tasks", "Anılarda, notlarda ve görevlerde ara"))
       .navigationTitle(L.t("Memory", "Hafıza"))
       .toolbar {
         ToolbarItem(placement: .primaryAction) {
@@ -60,11 +62,16 @@ struct MemoryTabView: View {
                     systemImage: "plus")
             }
             .disabled(section == .memories && !store.isEnabled)
+            if section == .memories {
+              Button { editingProfile = true } label: {
+                Label(L.t("Edit About me", "Hakkımda'yı düzenle"), systemImage: "person.crop.circle")
+              }
+            }
             Button(role: .destructive) { confirmDeleteAll = true } label: {
-              Label(section == .memories ? L.t("Delete all memories", "Tüm anıları sil") : L.t("Delete all notes", "Tüm notları sil"),
+              Label(section == .memories ? L.t("Clear all AutoLoom memory", "Tüm AutoLoom hafızasını temizle") : L.t("Delete all notes", "Tüm notları sil"),
                     systemImage: "trash")
             }
-            .disabled(section == .memories ? store.memories.isEmpty : store.notes.isEmpty)
+            .disabled(section == .memories ? store.memories.isEmpty && store.profile.preferredName == nil : store.notes.isEmpty)
           } label: {
             Image(systemName: "ellipsis.circle")
           }
@@ -72,20 +79,26 @@ struct MemoryTabView: View {
         }
       }
       .confirmationDialog(
-        section == .memories ? L.t("Delete all memories?", "Tüm anılar silinsin mi?") : L.t("Delete all notes?", "Tüm notlar silinsin mi?"),
+        section == .memories ? L.t("Clear all AutoLoom memory?", "Tüm AutoLoom hafızası temizlensin mi?") : L.t("Delete all notes?", "Tüm notlar silinsin mi?"),
         isPresented: $confirmDeleteAll, titleVisibility: .visible
       ) {
         Button(L.t("Delete all", "Tümünü sil"), role: .destructive) {
           if section == .memories { store.deleteAllMemories() } else { store.deleteAllNotes() }
         }
       } message: {
-        Text(L.t("This cannot be undone.", "Bu geri alınamaz."))
+        Text(section == .memories
+             ? L.t("Memories, conversation summaries and About me are deleted from this iPhone. Notes and tasks are kept. This cannot be undone.",
+                   "Anılar, konuşma özetleri ve Hakkımda bu iPhone'dan silinir. Notlar ve görevler kalır. Bu geri alınamaz.")
+             : L.t("This cannot be undone.", "Bu geri alınamaz."))
       }
       .sheet(isPresented: $showNewMemory) {
         NavigationStack { MemoryEditorView(record: nil) }
       }
       .sheet(isPresented: $showNewNote) {
         NavigationStack { NoteEditorView(note: nil) }
+      }
+      .sheet(isPresented: $editingProfile) {
+        NavigationStack { ProfileEditorView() }
       }
     }
   }
@@ -105,25 +118,29 @@ struct MemoryTabView: View {
           switch hit.item {
           case .memory(let record): memoryLink(record)
           case .note(let note): noteLink(note)
+          case .task(let task): TaskSearchRow(task: task)
           }
         }
       }
-    } else if store.memories.isEmpty {
-      SwiftUI.Section {
-        VStack(alignment: .leading, spacing: 8) {
-          Text(L.t("Nothing saved yet", "Henüz bir şey kaydedilmedi")).font(.headline)
-          Text(L.t("Say “remember that my car is on level P2” or “bunu hatırla” while looking at something. Only what you ask is saved.",
-                   "“Arabamın P2 katında olduğunu hatırla” ya da bir şeye bakarken “bunu hatırla” deyin. Yalnızca istediğiniz kaydedilir."))
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 6)
-      }
     } else {
-      let pinned = store.memories.filter(\.pinned)
+      aboutMeSection
+      let listed = listedMemories
+      if listed.isEmpty && store.conversationSummaries.isEmpty && visualMemories.isEmpty {
+        SwiftUI.Section {
+          VStack(alignment: .leading, spacing: 8) {
+            Text(L.t("Nothing saved yet", "Henüz bir şey kaydedilmedi")).font(.headline)
+            Text(L.t("Say “remember that my car is on level P2”, “my name is …” or “bunu hatırla” while looking at something. Only what you ask is saved.",
+                     "“Arabamın P2 katında olduğunu hatırla”, “benim adım …” ya da bir şeye bakarken “bunu hatırla” deyin. Yalnızca istediğiniz kaydedilir."))
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+          }
+          .padding(.vertical, 6)
+        }
+      }
+      let pinned = listed.filter(\.pinned)
       let weekAgo = Date().addingTimeInterval(-7 * 86_400)
-      let recent = store.memories.filter { !$0.pinned && $0.createdAt >= weekAgo }
-      let older = store.memories.filter { !$0.pinned && $0.createdAt < weekAgo }
+      let recent = listed.filter { !$0.pinned && $0.createdAt >= weekAgo }
+      let older = listed.filter { !$0.pinned && $0.createdAt < weekAgo }
       if !pinned.isEmpty {
         SwiftUI.Section(L.t("Pinned", "Sabitlenenler")) { ForEach(pinned) { memoryLink($0) } }
       }
@@ -136,6 +153,59 @@ struct MemoryTabView: View {
           SwiftUI.Section(category.label) { ForEach(items) { memoryLink($0) } }
         }
       }
+      let summaries = store.conversationSummaries
+      if !summaries.isEmpty {
+        SwiftUI.Section {
+          ForEach(summaries.prefix(15)) { memoryLink($0) }
+          if summaries.count > 15 {
+            NavigationLink(L.t("All conversations (\(summaries.count))", "Tüm konuşmalar (\(summaries.count))")) {
+              ConversationHistoryView()
+            }
+          }
+        } header: {
+          Text(L.t("Conversations", "Konuşmalar"))
+        } footer: {
+          Text(L.t("Short summaries of earlier AutoLoom conversations (not ChatGPT app chats). Turn them off in Settings → Memory.",
+                   "Önceki AutoLoom konuşmalarının kısa özetleri (ChatGPT uygulamasındaki sohbetler değil). Ayarlar → Hafıza'dan kapatılabilir."))
+        }
+      }
+      let visual = visualMemories
+      if !visual.isEmpty {
+        SwiftUI.Section(L.t("Visual memories", "Görsel anılar")) { ForEach(visual) { memoryLink($0) } }
+      }
+    }
+  }
+
+  /// Memories listed by group; About me, conversations and visual
+  /// memories have their own sections.
+  private var listedMemories: [MemoryRecord] {
+    let own: Set<MemoryKind> = [.profile, .conversationSummary, .visual]
+    return store.memories.filter { !own.contains($0.kind) }
+  }
+
+  private var visualMemories: [MemoryRecord] {
+    store.memories.filter { $0.kind == .visual }
+  }
+
+  @ViewBuilder
+  private var aboutMeSection: some View {
+    let about = store.profileMemories
+    SwiftUI.Section {
+      Button { editingProfile = true } label: {
+        HStack {
+          Label(L.t("Name", "Adınız"), systemImage: "person.crop.circle")
+            .foregroundStyle(.primary)
+          Spacer()
+          Text(store.profile.preferredName ?? L.t("Not set", "Belirtilmedi"))
+            .foregroundStyle(.secondary)
+        }
+      }
+      ForEach(about) { memoryLink($0) }
+    } header: {
+      Text(L.t("About me", "Hakkımda"))
+    } footer: {
+      Text(L.t("Only what you tell the assistant (“my name is …”) or type here.",
+               "Yalnızca asistana söylediğiniz (“benim adım …”) ya da buraya yazdığınız bilgiler."))
     }
   }
 
@@ -166,14 +236,14 @@ struct MemoryTabView: View {
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
     let notes = trimmed.isEmpty
       ? store.notes
-      : store.search(trimmed, limit: 40).compactMap { hit -> NoteRecord? in
+      : store.search(trimmed, limit: 40, includeTasks: false).compactMap { hit -> NoteRecord? in
         if case .note(let note) = hit.item { return note }
         return nil
       }
     SwiftUI.Section {
       if notes.isEmpty {
         Text(trimmed.isEmpty
-             ? L.t("No notes yet. Say “not al: …” or “save a note”.", "Henüz not yok. “Not al: …” deyin.")
+             ? L.t("No notes yet. Say “not al: …” or “take a note: …”.", "Henüz not yok. “Not al: …” deyin.")
              : L.t("Nothing found.", "Bir şey bulunamadı."))
           .foregroundStyle(.secondary)
       }
@@ -210,6 +280,96 @@ struct MemoryTabView: View {
   }
 }
 
+/// A task found by the Memory search (open it in the Tasks tab).
+private struct TaskSearchRow: View {
+  let task: TaskItem
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
+        .foregroundStyle(task.completed ? Color.green : AutoLoomTheme.electricBlue)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(task.title).strikethrough(task.completed)
+        Text(L.t("Task", "Görev") + (task.dueAt.map {
+          " · " + $0.formatted(date: .abbreviated, time: task.dueHasTime ? .shortened : .omitted)
+        } ?? ""))
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+/// Every stored conversation summary, newest first.
+struct ConversationHistoryView: View {
+  @ObservedObject private var store = MemoryStore.shared
+
+  var body: some View {
+    List {
+      ForEach(store.conversationSummaries) { record in
+        NavigationLink {
+          MemoryDetailView(record: record)
+        } label: {
+          MemoryRow(record: record)
+        }
+        .swipeActions(edge: .trailing) {
+          Button(role: .destructive) { store.delete(record) } label: {
+            Label(L.t("Delete", "Sil"), systemImage: "trash")
+          }
+        }
+      }
+    }
+    .navigationTitle(L.t("Conversations", "Konuşmalar"))
+  }
+}
+
+/// About me: the name the user gave. Nothing here is inferred.
+struct ProfileEditorView: View {
+  @ObservedObject private var store = MemoryStore.shared
+  @State private var name = ""
+  @State private var loaded = false
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    Form {
+      SwiftUI.Section {
+        TextField(L.t("Your name", "Adınız"), text: $name)
+          .textInputAutocapitalization(.words)
+      } footer: {
+        Text(L.t("The assistant uses it naturally, not in every sentence. You can also say “my name is …”.",
+                 "Asistan bunu doğal biçimde, her cümlede değil kullanır. “Benim adım …” da diyebilirsiniz."))
+      }
+      if store.profile.preferredName != nil {
+        SwiftUI.Section {
+          Button(L.t("Forget my name", "Adımı unut"), role: .destructive) {
+            store.clearProfile()
+            dismiss()
+          }
+        }
+      }
+    }
+    .navigationTitle(L.t("About me", "Hakkımda"))
+    .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button(L.t("Cancel", "Vazgeç")) { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button(L.t("Save", "Kaydet")) {
+          let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+          if trimmed.isEmpty { store.clearProfile() } else { store.setPreferredName(trimmed) }
+          dismiss()
+        }
+      }
+    }
+    .onAppear {
+      guard !loaded else { return }
+      loaded = true
+      name = store.profile.preferredName ?? ""
+    }
+  }
+}
+
 struct MemoryRow: View {
   let record: MemoryRecord
 
@@ -232,13 +392,28 @@ struct MemoryRow: View {
           Text(record.title).font(.subheadline.weight(.semibold)).lineLimit(1)
         }
         Text(record.text).font(.subheadline).lineLimit(2)
-        Text("\(record.kind.label) · \(record.createdAt.formatted(date: .abbreviated, time: .omitted))" +
+        Text("\(record.kind.label) · \(record.createdAt.formatted(date: .abbreviated, time: .omitted)) · \(MemorySource.label(record.source))" +
              (record.placeName.map { " · \($0)" } ?? ""))
           .font(.caption2)
           .foregroundStyle(.secondary)
       }
     }
     .padding(.vertical, 2)
+  }
+}
+
+/// Where a memory came from, for the memory card.
+enum MemorySource {
+  static func label(_ source: String) -> String {
+    switch source {
+    case "voice": L.t("Voice", "Sesle")
+    case "manual": L.t("Typed", "Elle")
+    case "visual": L.t("Camera", "Kamera")
+    case "conversation": L.t("Conversation summary", "Konuşma özeti")
+    case "shortcut": L.t("Shortcut", "Kestirme")
+    case "migrated": L.t("Earlier version", "Önceki sürüm")
+    default: source
+    }
   }
 }
 
@@ -337,7 +512,7 @@ struct MemoryEditorView: View {
       }
       SwiftUI.Section {
         Picker(L.t("Type", "Tür"), selection: $kind) {
-          ForEach(MemoryKind.allCases) { Text($0.label).tag($0) }
+          ForEach(MemoryKind.editable) { Text($0.label).tag($0) }
         }
         Picker(L.t("Group", "Grup"), selection: $category) {
           ForEach(MemoryCategory.allCases) { Text($0.label).tag($0) }
@@ -526,8 +701,25 @@ struct MemorySettingsView: View {
         Toggle(L.t("Memory", "Hafıza"), isOn: $store.isEnabled)
         LabeledContent(L.t("Saved memories", "Kayıtlı anılar"), value: "\(store.memories.count)")
         LabeledContent(L.t("Notes", "Notlar"), value: "\(store.notes.count)")
+        LabeledContent(L.t("AutoLoom tasks", "AutoLoom görevleri"), value: "\(store.tasks.count)")
         LabeledContent(L.t("Storage", "Depolama"),
                        value: store.isPersistent ? L.t("On this iPhone (SwiftData)", "Bu iPhone'da (SwiftData)") : L.t("Temporary (see error)", "Geçici (hataya bakın)"))
+      }
+      SwiftUI.Section(
+        header: Text(L.t("Conversation memory", "Konuşma hafızası")),
+        footer: Text(L.t(
+          "When a meaningful conversation ends, a short summary (topics, decisions, open tasks) is saved on this iPhone so later conversations can refer to it. Transcripts are never kept, and sensitive details are left out. These are AutoLoom conversations only, not your ChatGPT app chats.",
+          "Anlamlı bir konuşma bittiğinde kısa bir özet (konular, kararlar, açık işler) bu iPhone'a kaydedilir; sonraki konuşmalar buna başvurabilir. Konuşma dökümü asla saklanmaz, hassas ayrıntılar yazılmaz. Yalnızca AutoLoom konuşmaları; ChatGPT uygulamasındaki sohbetler değil."))) {
+        Toggle(L.t("Conversation summaries", "Konuşma özetleri"), isOn: $store.conversationMemoryEnabled)
+          .disabled(!store.isEnabled)
+        LabeledContent(L.t("Saved summaries", "Kayıtlı özetler"), value: "\(store.conversationSummaries.count)")
+      }
+      SwiftUI.Section(
+        footer: Text(L.t(
+          "Smart Memory lets the assistant offer to remember useful things you mention (a preference, a vehicle, a frequent place). It still saves nothing without your yes, and never offers to save health, money, passwords or codes.",
+          "Akıllı Hafıza, asistanın söz ettiğiniz yararlı şeyleri (bir tercih, bir araç, sık gidilen bir yer) hatırlamayı önermesini sağlar. Yine de onayınız olmadan hiçbir şey kaydetmez; sağlık, para, şifre veya kod kaydetmeyi asla önermez."))) {
+        Toggle(L.t("Smart Memory", "Akıllı Hafıza"), isOn: $store.smartMemoryEnabled)
+          .disabled(!store.isEnabled)
       }
       SwiftUI.Section(
         header: Text(L.t("Visual memories", "Görsel anılar")),
@@ -545,13 +737,16 @@ struct MemorySettingsView: View {
           }
       }
       SwiftUI.Section {
-        Button(L.t("Delete all memories", "Tüm anıları sil"), role: .destructive) { confirmDeleteAll = true }
-          .disabled(store.memories.isEmpty)
+        Button(L.t("Clear all AutoLoom memory", "Tüm AutoLoom hafızasını temizle"), role: .destructive) { confirmDeleteAll = true }
+          .disabled(store.memories.isEmpty && store.profile.preferredName == nil)
       }
     }
     .navigationTitle(L.t("Memory", "Hafıza"))
-    .confirmationDialog(L.t("Delete all memories?", "Tüm anılar silinsin mi?"), isPresented: $confirmDeleteAll, titleVisibility: .visible) {
+    .confirmationDialog(L.t("Clear all AutoLoom memory?", "Tüm AutoLoom hafızası temizlensin mi?"), isPresented: $confirmDeleteAll, titleVisibility: .visible) {
       Button(L.t("Delete all", "Tümünü sil"), role: .destructive) { store.deleteAllMemories() }
+    } message: {
+      Text(L.t("Memories, conversation summaries and About me are deleted from this iPhone. Notes and tasks are kept.",
+               "Anılar, konuşma özetleri ve Hakkımda bu iPhone'dan silinir. Notlar ve görevler kalır."))
     }
   }
 }
