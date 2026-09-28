@@ -30,6 +30,8 @@ enum AssistantActivity: Equatable {
   case acting
   /// Saving to or searching the user's memory.
   case remembering
+  /// Saving a note, reminder, task or event the user asked for.
+  case saving
   case thinking
 }
 
@@ -71,6 +73,28 @@ final class AssistantOrchestrator: ObservableObject {
   /// An iPhone action waiting for the user's yes or tap.
   @Published private(set) var pendingAction: PendingDeviceAction?
   @Published private(set) var lastActionResult: String?
+  /// A short message for the assistant screen (for example a command that
+  /// finished after a permission was granted outside a conversation).
+  @Published private(set) var notice: String?
+
+  /// A question the voice action bridge asked ("Neyi not alayım?"); the
+  /// next utterance answers it.
+  var bridgeAwaiting: VoiceIntent.Awaiting?
+  var bridgeAwaitingSince: Date?
+  /// A spoken command waiting for an iOS permission.
+  var pendingPermissionCommand: PendingPermissionCommand?
+  /// Speaks a line in the running conversation (set by the voice session;
+  /// returns false when no conversation can speak it).
+  var speakInConversation: ((String) -> Bool)?
+  /// Commands the app is saving itself (notes, reminders, tasks…).
+  private var localWork = 0
+  /// The current conversation's turns, in memory only until it ends; then
+  /// a short summary is saved (Settings → Memory → Conversation memory) and
+  /// the turns are dropped. Reconnects keep the same conversation.
+  private var conversationLog: [ConversationContext.Turn] = []
+  private var conversationStartedAt: Date?
+  private var conversationActions = 0
+  private var activeObserver: NSObjectProtocol?
 
   /// The camera source currently selected in the app (persisted setting).
   func captureSource() -> CaptureSource {
@@ -102,7 +126,32 @@ final class AssistantOrchestrator: ObservableObject {
   private var availableModels: [String] { ChatGPTAuthSession.shared.availableModels }
   private var catalog: [CatalogModel] { ChatGPTAuthSession.shared.modelCatalog }
 
-  private init() {}
+  private init() {
+    // A command that waited for a permission runs when the app is opened.
+    activeObserver = NotificationCenter.default.addObserver(
+      forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor in await self?.resumePendingPermissionCommand() }
+    }
+  }
+
+  func postNotice(_ text: String) {
+    notice = text
+  }
+
+  func clearNotice() {
+    notice = nil
+  }
+
+  func beginLocalWork() {
+    localWork += 1
+    refreshActivity()
+  }
+
+  func endLocalWork() {
+    localWork = max(0, localWork - 1)
+    refreshActivity()
+  }
 
   // MARK: Session lifecycle
 
@@ -124,10 +173,78 @@ final class AssistantOrchestrator: ObservableObject {
   func noteUserTurn(_ text: String) {
     turnID += 1
     context.addTurn(.user, text)
+    logConversationTurn(.user, text)
   }
 
   func noteAssistantTurn(_ text: String) {
     context.addTurn(.assistant, text)
+    logConversationTurn(.assistant, text)
+  }
+
+  // MARK: Conversation memory
+
+  /// A new conversation (not a reconnect of the running one).
+  func beginConversation() {
+    if conversationStartedAt == nil { conversationStartedAt = Date() }
+  }
+
+  func noteConversationAction() {
+    conversationActions += 1
+  }
+
+  private func logConversationTurn(_ role: ConversationContext.Turn.Role, _ text: String) {
+    let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !cleaned.isEmpty else { return }
+    if conversationStartedAt == nil { conversationStartedAt = Date() }
+    conversationLog.append(ConversationContext.Turn(role: role, text: String(cleaned.prefix(600)), at: Date()))
+    if conversationLog.count > 80 { conversationLog.removeFirst(conversationLog.count - 80) }
+  }
+
+  /// The conversation ended: a meaningful one is summarised (topics,
+  /// decisions, open tasks, names) and only that summary is kept.
+  func finishConversation() {
+    let turns = conversationLog
+    let startedAt = conversationStartedAt ?? turns.first?.at ?? Date()
+    let actions = conversationActions
+    conversationLog = []
+    conversationStartedAt = nil
+    conversationActions = 0
+    let store = MemoryStore.shared
+    guard store.isEnabled, store.conversationMemoryEnabled,
+          ConversationSummarizer.isMeaningful(turns, actions: actions) else { return }
+    // A little time to finish in the background (the conversation often
+    // ends with the phone locked).
+    let background = UIApplication.shared.beginBackgroundTask(withName: "AutoLoom conversation summary")
+    Task { @MainActor [weak self] in
+      defer {
+        if background != .invalid { UIApplication.shared.endBackgroundTask(background) }
+      }
+      let modelSummary = await self?.summarize(turns, startedAt: startedAt)
+      let summary = modelSummary ?? ConversationSummarizer.localSummary(turns, startedAt: startedAt)
+      store.saveConversationSummary(summary)
+      NSLog("[AutoLoom] conversation summary saved (%@)", modelSummary == nil ? "local" : "model")
+    }
+  }
+
+  /// One structured summary from the executor model (strict JSON).
+  private func summarize(_ turns: [ConversationContext.Turn], startedAt: Date) async -> ConversationSummary? {
+    guard let model = ModelSelector.model(
+      for: .generalChat, available: availableModels, catalog: catalog,
+      excluded: ModelHealth.shared.failedThisRun) else { return nil }
+    let transcript = turns
+      .map { "\($0.role == .user ? "User" : "Assistant"): \($0.text)" }
+      .joined(separator: "\n")
+    let info = catalog.first { $0.slug == model }
+    var request = ResponsesClient.Request(
+      model: model,
+      instructions: ConversationSummarizer.instructions,
+      input: [["role": "user", "content": [["type": "input_text", "text": String(transcript.suffix(12_000))]]]])
+    request.reasoningEffort = ModelRouting.effort("low", supported: info?.reasoningLevels ?? [])
+    request.verbosity = (info?.supportsVerbosity ?? true) ? "low" : nil
+    request.jsonSchema = ConversationSummarizer.schema
+    request.timeout = 25
+    guard let result = try? await client.send(request) else { return nil }
+    return ConversationSummarizer.decode(result.text, startedAt: startedAt, endedAt: Date())
   }
 
   /// Called when the voice model starts speaking; closes the T5 milestone of
@@ -217,10 +334,26 @@ final class AssistantOrchestrator: ObservableObject {
   func submitTyped(_ text: String) {
     let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !question.isEmpty else { return }
+    context.addTurn(.user, question)
+    // "not al: …", "yarın 9'da hatırlat …" typed: the same local actions as
+    // spoken commands.
+    if let decision = VoiceActionIntentBridge.decide(question, context: bridgeContext()) {
+      if !decision.intent.isConfirmationOrChoice {
+        cancelAll(reason: "superseded by typed question", voiceOnly: false)
+      }
+      typedQuestion = question
+      typedAnswer = nil
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        let outcome = await self.runVoiceIntent(decision, transcript: question)
+        self.typedAnswer = outcome.reply
+        self.context.addTurn(.assistant, outcome.reply)
+      }
+      return
+    }
     cancelAll(reason: "superseded by typed question", voiceOnly: false)
     typedQuestion = question
     typedAnswer = nil
-    context.addTurn(.user, question)
     let record = ledger.begin(
       sessionID: sessionID ?? UUID(),
       turnID: turnID,
@@ -657,6 +790,50 @@ final class AssistantOrchestrator: ObservableObject {
     }
   }
 
+  /// "Sabah" / "akşam": the chosen reading of an ambiguous time replaces
+  /// the pending action's time; the action then runs like any other.
+  func choosePendingTime(_ date: Date) async -> ActionStageResult? {
+    guard let pending = pendingAction, !pending.isExpired else {
+      pendingAction = nil
+      return nil
+    }
+    var plan = pending.plan
+    if let start = plan.date, let end = plan.endDate {
+      plan.endDate = date.addingTimeInterval(end.timeIntervalSince(start))
+    }
+    plan.date = date
+    plan.alternativeDate = nil
+    pendingAction = nil
+    return await stage(plan)
+  }
+
+  /// Runs one request kind for the voice action bridge (LEVEL 2 structured
+  /// classification, visual memory, translation) and returns its result
+  /// without delivering it; the bridge speaks it.
+  func runBridgeTask(
+    _ kind: AssistantTaskKind,
+    query: String,
+    detail: VisionDetail = .standard
+  ) async -> (speakable: String, display: String?, failed: String?) {
+    let record = ledger.begin(
+      sessionID: sessionID ?? UUID(), turnID: turnID, handoffID: nil, source: .voiceIntent, request: query)
+    let envelope = DelegationEnvelope(command: .task(kind), query: query, detail: detail)
+    refreshActivity()
+    let outcome = await execute(taskID: record.id, envelope: envelope, rawText: query)
+    ledger.update(record.id) { entry in
+      entry.timeline.delivered = Date()
+      entry.sourceCount = outcome.sources.count
+      entry.phase = outcome.failed.map { AssistantTaskPhase.failed($0) } ?? .completed
+    }
+    if let kind = outcome.kind, outcome.failed == nil, let display = outcome.display {
+      context.addFact(kind: kind, request: query, result: display, sources: outcome.sources.map(\.host))
+    }
+    if !outcome.sources.isEmpty { sources = outcome.sources }
+    if let failed = outcome.failed, failed != "cancelled" { lastError = LogSanitizer.sanitize(failed) }
+    refreshActivity()
+    return (outcome.speakable, outcome.display, outcome.failed)
+  }
+
   @discardableResult
   func cancelPendingAction() -> String {
     guard pendingAction != nil else { return "There was no action waiting." }
@@ -778,7 +955,7 @@ final class AssistantOrchestrator: ObservableObject {
         speakable: "From the user's saved memories and notes (answer naturally from them):\n" + lines,
         display: lines, kind: .localMemory)
     case .forget(let search):
-      let hits = store.search(search, limit: 3, includeNotes: false)
+      let hits = store.search(search, limit: 3, includeNotes: false, includeTasks: false)
       guard let best = hits.first, case .memory(let record) = best.item else {
         return Outcome(
           speakable: "No saved memory matches \"\(search)\", so nothing was forgotten. Tell the user.",
@@ -1377,6 +1554,10 @@ final class AssistantOrchestrator: ObservableObject {
   }
 
   private func refreshActivity() {
+    if localWork > 0 {
+      activity = .saving
+      return
+    }
     let active = ledger.active
     let phases = active.map { ($0.kind, $0.phase) }
     let visual = active.filter { $0.phase == .capturingFrame || ($0.phase == .analyzing && $0.kind?.usesCamera == true) }

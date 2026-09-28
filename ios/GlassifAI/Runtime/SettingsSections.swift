@@ -162,19 +162,47 @@ struct PrivacySettingsView: View {
 struct TaskTraceView: View {
   var voice: GlassifAIRealtimeSession?
   @ObservedObject private var ledger = AssistantOrchestrator.shared.ledger
+  @ObservedObject private var actions = ActionTraceLog.shared
   @State private var copied = false
 
   var body: some View {
     List {
       Section {
         Button(copied ? L.t("Copied", "Kopyalandı") : L.t("Copy sanitized task trace", "Temizlenmiş görev izini kopyala")) {
-          UIPasteboard.general.string = TaskTrace.text(records: ledger.records, start: voice?.startReport)
+          UIPasteboard.general.string = TaskTrace.text(records: ledger.records, start: voice?.startReport) +
+            "\n\nVoice actions:\n" + actions.text
           copied = true
         }
       } footer: {
         Text(L.t(
           "Requests are shortened; emails, long numbers, tokens and image data are removed. No audio or images.",
           "İstekler kısaltılır; e-postalar, uzun numaralar, anahtarlar ve görüntü verisi çıkarılır. Ses veya görüntü yoktur."))
+      }
+      Section {
+        if actions.entries.isEmpty {
+          Text(L.t("No spoken commands yet", "Henüz sesli komut yok")).foregroundStyle(.secondary)
+        }
+        ForEach(Array(actions.entries.reversed())) { entry in
+          VStack(alignment: .leading, spacing: 3) {
+            Text("\(entry.intent) · \(entry.result)")
+              .font(.footnote.weight(.semibold))
+            Text("“\(entry.transcript)”")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Text("Parser: \(entry.parser)").font(.caption2)
+            Text("Parsed: \(entry.parsed)").font(.caption2)
+            Text("Permission: \(entry.permission)").font(.caption2)
+            Text("Executor: \(entry.executor)" + (entry.durationMs.map { " · \($0) ms" } ?? "")).font(.caption2)
+          }
+          .foregroundStyle(.primary)
+          .padding(.vertical, 2)
+        }
+      } header: {
+        Text(L.t("Voice actions", "Sesli işlemler"))
+      } footer: {
+        Text(L.t(
+          "Transcript → intent → parser → permission → executor → result for notes, memory, reminders, tasks and the calendar. Text is shortened and numbers removed.",
+          "Notlar, hafıza, anımsatıcılar, görevler ve takvim için döküm → niyet → ayrıştırıcı → izin → yürütücü → sonuç. Metin kısaltılır, numaralar çıkarılır."))
       }
       Section(L.t("Recent turns", "Son adımlar")) {
         if ledger.records.isEmpty {
@@ -201,7 +229,7 @@ struct TaskTraceView: View {
         }
       }
     }
-    .navigationTitle(L.t("Task trace", "Görev izi"))
+    .navigationTitle(L.t("Action & task trace", "İşlem ve görev izi"))
   }
 }
 

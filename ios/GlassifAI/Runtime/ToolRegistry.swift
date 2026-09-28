@@ -30,13 +30,13 @@ enum ToolRegistry {
     NativeTool(
       id: "reminders", english: "Reminders", turkish: "Anımsatıcılar", systemImage: "checklist",
       kinds: [.createReminder, .listReminders], permission: .reminders,
-      englishDetail: "Apple Reminders. Times are read from your words by the app, never guessed by the model.",
-      turkishDetail: "Apple Anımsatıcılar. Saatler uygulama tarafından sözlerinizden okunur, model tahmin etmez."),
+      englishDetail: "Apple Reminders, saved at once. Times are read from your words by the app, never guessed by the model; an unclear time (\"7'de\") is asked first.",
+      turkishDetail: "Apple Anımsatıcılar, hemen kaydedilir. Saatler uygulama tarafından sözlerinizden okunur, model tahmin etmez; belirsiz saat (\"7'de\") önce sorulur."),
     NativeTool(
       id: "calendar", english: "Calendar", turkish: "Takvim", systemImage: "calendar",
       kinds: [.todayEvents, .upcomingEvents, .createEvent], permission: .calendars,
-      englishDetail: "Reads today and upcoming events; adds events after your yes.",
-      turkishDetail: "Bugünü ve yaklaşan etkinlikleri okur; onayınızdan sonra etkinlik ekler."),
+      englishDetail: "Reads today, tomorrow and upcoming events; adds events you ask for, and asks first when the time is unclear.",
+      turkishDetail: "Bugünü, yarını ve yaklaşan etkinlikleri okur; istediğiniz etkinliği ekler, saat belirsizse önce sorar."),
     NativeTool(
       id: "notes", english: "AutoLoom Notes", turkish: "AutoLoom Notları", systemImage: "note.text",
       kinds: [.saveNote], permission: nil,

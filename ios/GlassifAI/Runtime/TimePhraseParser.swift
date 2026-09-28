@@ -261,6 +261,12 @@ enum TimePhraseParser {
     if let match = firstMatch(#"\b(\d{1,2}) (?:de|da|te|ta)\b"#, in: s), take(match, hour: int(match.groups[1])) {
       return
     }
+    // "cuma 3'e toplantı", "yarın 10'a": an hour in the dative, only right
+    // after a day word ("3'e böl" is not a time).
+    let dayBefore = #"(?<=yarin |bugun |pazartesi |sali |carsamba |persembe |cuma |cumartesi |pazar gunu )"#
+    if let match = firstMatch(dayBefore + #"(\d{1,2}) (?:e|a|ye|ya)\b"#, in: s), take(match, hour: int(match.groups[1])) {
+      return
+    }
     // "sabah 9", "akşam sekizde", "ogleden sonra 3": the part of the day is
     // kept, because the match removes those words.
     let partWords = "(sabah|aksam|gece|oglen|ogleden sonra|morning|evening|night|afternoon)"
@@ -443,7 +449,11 @@ enum TimePhraseParser {
       }
     }
     if h == 12 { return (12, nil, 0) }
-    // No morning/evening word: 7–11 → morning first, 1–6 → afternoon first.
+    // No morning/evening word: 9–11 mean the morning and 1–5 the afternoon
+    // ("saat 10'da", "3'te"); 6, 7 and 8 are common both ways, so the other
+    // reading is kept and asked.
+    if (9...11).contains(h) { return (h, nil, 0) }
+    if (1...5).contains(h) { return (h + 12, nil, 0) }
     return h >= 7 ? (h, h + 12, 0) : (h + 12, h, 0)
   }
 

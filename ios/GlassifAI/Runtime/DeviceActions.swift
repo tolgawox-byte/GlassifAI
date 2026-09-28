@@ -40,10 +40,12 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
 
   var risk: Risk {
     switch self {
+    // An explicit reminder or event is saved at once; an ambiguous time is
+    // always asked first (see `DeviceActionPlan.ambiguityNote`).
     case .listReminders, .todayEvents, .upcomingEvents, .copyText, .saveNote, .scheduleNotification,
-         .findContact, .none:
+         .findContact, .createReminder, .createEvent, .none:
       .safe
-    case .createReminder, .createEvent, .forgetMemory, .agentTask:
+    case .forgetMemory, .agentTask:
       .confirm
     case .openMaps, .openURL, .shareText, .call, .message:
       .strongConfirm
@@ -623,6 +625,20 @@ final class DeviceActionExecutor {
         return "- \(reminder.title ?? "Untitled")\(due)"
       }
     return "Open reminders:\n" + lines.joined(separator: "\n")
+  }
+
+  /// Events of a day ("yarın ne var?": dayOffset 1) or of several days.
+  func readEvents(dayOffset: Int, days: Int) async throws -> String {
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let start = dayOffset == 0 && days > 1 ? Date() : calendar.date(byAdding: .day, value: dayOffset, to: today) ?? today
+    let label: String
+    switch (dayOffset, days) {
+    case (0, 1): label = "today"
+    case (1, 1): label = "tomorrow"
+    default: label = "in the next \(days) days"
+    }
+    return try await events(from: start, days: days, label: label)
   }
 
   private func events(from start: Date, days: Int, label: String) async throws -> String {

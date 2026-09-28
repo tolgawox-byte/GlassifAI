@@ -50,6 +50,8 @@ enum RouteOrigin: String, Codable, Equatable {
 enum AssistantTaskSource: String, Codable, Equatable {
   case voiceDelegation = "voice"
   case typedInput = "typed"
+  /// Started by the voice action bridge from the user's own words.
+  case voiceIntent = "voice intent"
 }
 
 enum AssistantTaskPhase: Equatable {

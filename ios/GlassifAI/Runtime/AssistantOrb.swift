@@ -10,6 +10,7 @@ enum AssistantPresence: Equatable {
   case reading
   case searching
   case remembering
+  case saving
   case acting
   case speaking
   case muted
@@ -27,6 +28,7 @@ enum AssistantPresence: Equatable {
     case .reading: return .reading
     case .searching: return .searching
     case .remembering: return .remembering
+    case .saving: return .saving
     case .acting: return .acting
     case .thinking: return .thinking
     case nil: break
@@ -51,6 +53,7 @@ enum AssistantPresence: Equatable {
     case .reading: L.t("Reading", "Okuyor")
     case .searching: L.t("Searching", "Arıyor")
     case .remembering: L.t("Remembering", "Hatırlıyor")
+    case .saving: L.t("Saving", "Kaydediyor")
     case .acting: L.t("Working on it", "Hallediyor")
     case .speaking: L.t("Speaking", "Konuşuyor")
     case .muted: L.t("Microphone off", "Mikrofon kapalı")
@@ -63,7 +66,7 @@ enum AssistantPresence: Equatable {
     case .ready: .idle
     case .connecting: .connecting
     case .listening: .listening
-    case .thinking, .looking, .reading, .searching, .remembering, .acting: .working
+    case .thinking, .looking, .reading, .searching, .remembering, .saving, .acting: .working
     case .speaking: .speaking
     case .muted: .muted
     case .error: .error

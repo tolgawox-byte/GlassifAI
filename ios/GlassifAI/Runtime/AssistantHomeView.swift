@@ -88,6 +88,13 @@ struct AssistantHomeView: View {
     .onChange(of: voice.lastEndReason) { _, reason in
       if let reason { notice = reason }
     }
+    .onChange(of: orchestrator.notice) { _, text in
+      // For example a note saved after a permission was granted.
+      if let text {
+        notice = text
+        orchestrator.clearNotice()
+      }
+    }
     .onChange(of: glassesDeviceName) { _, name in audioRoute.glassesName = name }
     .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
   }
