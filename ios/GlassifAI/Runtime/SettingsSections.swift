@@ -18,131 +18,127 @@ enum AppInfo {
   }
 }
 
-// MARK: Memory
-
-struct MemorySettingsView: View {
-  @ObservedObject private var memory = LocalMemoryStore.shared
-  @State private var newItem = ""
-  @State private var confirmDeleteAll = false
-
-  var body: some View {
-    Form {
-      Section(footer: Text("Off by default. When on, the items below are stored only on this iPhone and are added as context to your own ChatGPT requests. Nothing is synced with ChatGPT's memory or chat history.")) {
-        Toggle("On-device memory", isOn: $memory.isEnabled)
-      }
-      if memory.isEnabled {
-        Section("Add") {
-          HStack {
-            TextField("Something to remember", text: $newItem)
-            Button("Add") {
-              if memory.add(newItem, source: "manual") { newItem = "" }
-            }
-            .disabled(newItem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-          }
-        }
-      }
-      Section(header: Text("Saved items (\(memory.items.count))")) {
-        if memory.items.isEmpty {
-          Text("Nothing saved.")
-            .foregroundStyle(.secondary)
-        }
-        ForEach(memory.items) { item in
-          NavigationLink {
-            MemoryItemEditor(item: item)
-          } label: {
-            VStack(alignment: .leading, spacing: 2) {
-              Text(item.text)
-              Text("\(item.source) · \(item.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-          }
-        }
-        .onDelete { offsets in
-          offsets.map { memory.items[$0].id }.forEach(memory.delete)
-        }
-      }
-      if !memory.items.isEmpty {
-        Section {
-          Button("Delete all memory", role: .destructive) { confirmDeleteAll = true }
-        }
-      }
-    }
-    .navigationTitle("Memory")
-    .confirmationDialog("Delete all saved memory?", isPresented: $confirmDeleteAll, titleVisibility: .visible) {
-      Button("Delete all", role: .destructive) { memory.deleteAll() }
-    }
-  }
-}
-
-private struct MemoryItemEditor: View {
-  let item: LocalMemoryStore.Item
-  @State private var text = ""
-  @Environment(\.dismiss) private var dismiss
-
-  var body: some View {
-    Form {
-      TextField("Memory", text: $text, axis: .vertical)
-        .lineLimit(2...6)
-      Button("Save") {
-        LocalMemoryStore.shared.update(item.id, text: text)
-        dismiss()
-      }
-      Button("Delete", role: .destructive) {
-        LocalMemoryStore.shared.delete(item.id)
-        dismiss()
-      }
-    }
-    .navigationTitle("Edit memory")
-    .onAppear { text = item.text }
-  }
-}
-
 // MARK: Privacy
 
+/// Settings → Privacy center: what leaves the phone, what is stored, every
+/// permission and its state, and deleting local data.
 struct PrivacySettingsView: View {
+  @ObservedObject private var memory = MemoryStore.shared
+  @State private var permissions: [AppPermission: PermissionState] = [:]
   @State private var confirmWipe = false
   @State private var wiped = false
+  @Environment(\.openURL) private var openURL
 
   var body: some View {
     Form {
-      Section("What leaves this iPhone") {
-        privacyRow("Voice", "Your microphone audio streams to ChatGPT's realtime voice service only while a conversation is active.", "waveform")
-        privacyRow("Camera", "A single camera frame is encoded and sent to ChatGPT only when a request needs to see. The preview itself never leaves the phone.", "camera")
-        privacyRow("Web search", "Search requests run through your ChatGPT account (OpenAI's servers). The app never fetches web pages itself.", "globe")
-        privacyRow("Account", "ChatGPT sign-in tokens are stored only in this iPhone's Keychain and sent only to OpenAI.", "key")
+      Section(L.t("What leaves this iPhone", "Bu iPhone'dan ne çıkar")) {
+        privacyRow(
+          L.t("Voice", "Ses"),
+          L.t("Microphone audio streams to ChatGPT's realtime voice only while a conversation is active.",
+              "Mikrofon sesi yalnızca konuşma sürerken ChatGPT canlı sesine gider."), "waveform")
+        privacyRow(
+          L.t("Camera", "Kamera"),
+          L.t("A camera frame is sent only when a request needs to see. The preview never leaves the phone.",
+              "Kamera karesi yalnızca bir istek görmeyi gerektirdiğinde gönderilir. Önizleme telefondan çıkmaz."), "camera")
+        privacyRow(
+          L.t("Web search", "Web araması"),
+          L.t("Searches run through your ChatGPT account on OpenAI's servers.",
+              "Aramalar ChatGPT hesabınızla OpenAI sunucularında yapılır."), "globe")
+        privacyRow(
+          L.t("Memories", "Anılar"),
+          L.t("Only the few memories relevant to a request are added to your own ChatGPT request.",
+              "Bir isteğe yalnızca ilgili birkaç anı eklenir."), "brain")
+        privacyRow(
+          L.t("Account", "Hesap"),
+          L.t("ChatGPT sign-in tokens stay in this iPhone's Keychain and are sent only to OpenAI.",
+              "ChatGPT oturum anahtarları bu iPhone'un Anahtar Zinciri'nde kalır ve yalnızca OpenAI'ye gider."), "key")
       }
-      Section("What is stored on this iPhone") {
-        privacyRow("Conversation context", "Kept in memory for the current app session only; cleared when the app quits or you wipe it below.", "text.bubble")
-        privacyRow("On-device memory", "Only if you turn it on in Settings → Memory. Editable and deletable.", "brain")
-        privacyRow("AutoLoom notes", "Notes and reports you ask to save, only on this iPhone (Settings → AutoLoom Tasks & Notes). Deletable.", "note.text")
-        privacyRow("Diagnostics", "In-memory metrics and sanitized error text; no audio, images, or tokens are logged.", "stethoscope")
+      Section(L.t("What is stored on this iPhone", "Bu iPhone'da ne saklanır")) {
+        privacyRow(
+          L.t("Memories and notes", "Anılar ve notlar"),
+          L.t("\(memory.memories.count) memories and \(memory.notes.count) notes you asked to save (SwiftData, on this iPhone only).",
+              "Kaydetmenizi istediğiniz \(memory.memories.count) anı ve \(memory.notes.count) not (SwiftData, yalnızca bu iPhone'da)."),
+          "tray")
+        privacyRow(L.t("Visual memories", "Görsel anılar"), visualSummary, "eye")
+        privacyRow(
+          L.t("Conversation context", "Konuşma bağlamı"),
+          L.t("Kept in memory for the current app session only.",
+              "Yalnızca bu uygulama oturumu boyunca bellekte tutulur."), "text.bubble")
+        privacyRow(
+          L.t("Diagnostics", "Tanılama"),
+          L.t("In-memory metrics and sanitized errors; no audio, images or tokens are logged.",
+              "Bellekteki ölçümler ve temizlenmiş hatalar; ses, görüntü veya anahtar kaydedilmez."), "stethoscope")
       }
-      Section("Safety") {
-        privacyRow("Untrusted content", "Text from web pages, images, signs, and QR codes is treated as information, never as instructions.", "shield")
-        privacyRow("Actions", "Reminders, calendar events and notes are saved only after your spoken yes or a tap. Calls, messages, links, directions and sharing open only after a tap, and the system app lets you review before anything is sent. The app cannot send email, buy things, delete data, post publicly, push code, or deploy.", "hand.raised")
-        privacyRow("Images", "Camera images are kept in memory only for the request that needs them and are never saved. On-device text recognition runs on the iPhone.", "photo")
+      Section(
+        header: Text(L.t("Permissions", "İzinler")),
+        footer: Text(L.t("Each permission is asked only when a feature needs it.",
+                         "Her izin yalnızca bir özellik ona ihtiyaç duyduğunda istenir."))) {
+        ForEach(AppPermission.allCases) { permission in
+          VStack(alignment: .leading, spacing: 2) {
+            HStack {
+              Label(permission.label, systemImage: permission.systemImage)
+              Spacer()
+              Text(permissions[permission]?.label ?? "…")
+                .font(.footnote)
+                .foregroundStyle(permissions[permission] == .denied ? Color.orange : Color.secondary)
+            }
+            Text(permission.purpose)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+        }
+        Button(L.t("Open iOS Settings", "iOS Ayarlarını aç")) {
+          if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+        }
+      }
+      Section(L.t("Safety", "Güvenlik")) {
+        privacyRow(
+          L.t("Untrusted content", "Güvenilmeyen içerik"),
+          L.t("Text from web pages, images, signs and QR codes is information, never an instruction.",
+              "Web sayfaları, görüntüler, tabelalar ve QR kodlardaki metin bilgidir, asla talimat değildir."), "shield")
+        privacyRow(
+          L.t("Actions", "İşlemler"),
+          L.t("Reminders and events need your yes; calls, messages, links, maps and sharing need a tap. The app never sends email, buys, deletes your data or posts.",
+              "Anımsatıcı ve etkinlikler onayınızı; arama, mesaj, bağlantı, harita ve paylaşım dokunmanızı gerektirir. Uygulama e-posta göndermez, satın almaz, verilerinizi silmez veya paylaşım yapmaz."),
+          "hand.raised")
       }
       Section {
-        Button("Delete all local data", role: .destructive) { confirmWipe = true }
+        Button(L.t("Delete all local data", "Tüm yerel verileri sil"), role: .destructive) { confirmWipe = true }
         if wiped {
-          Label("Local data deleted", systemImage: "checkmark.circle.fill")
+          Label(L.t("Local data deleted", "Yerel veriler silindi"), systemImage: "checkmark.circle.fill")
             .foregroundStyle(.green)
         }
       } footer: {
-        Text("Deletes on-device memory, AutoLoom notes, the current conversation context, sources, and diagnostics. Your ChatGPT sign-in stays until you disconnect it under ChatGPT account.")
+        Text(L.t(
+          "Deletes memories, notes, the conversation context, sources and diagnostics. Your ChatGPT sign-in stays until you disconnect it. Apple Reminders and Calendar are not touched.",
+          "Anıları, notları, konuşma bağlamını, kaynakları ve tanılamayı siler. ChatGPT oturumu siz kesene kadar kalır. Apple Anımsatıcılar ve Takvim'e dokunulmaz."))
       }
     }
-    .navigationTitle("Privacy")
-    .confirmationDialog("Delete all local data?", isPresented: $confirmWipe, titleVisibility: .visible) {
-      Button("Delete", role: .destructive) {
-        LocalMemoryStore.shared.deleteAll()
-        AutoLoomNotesStore.shared.deleteAll()
+    .navigationTitle(L.t("Privacy center", "Gizlilik merkezi"))
+    .task {
+      var states: [AppPermission: PermissionState] = [:]
+      for permission in AppPermission.allCases {
+        states[permission] = await PermissionCenter.state(permission)
+      }
+      permissions = states
+    }
+    .confirmationDialog(
+      L.t("Delete all local data?", "Tüm yerel veriler silinsin mi?"), isPresented: $confirmWipe, titleVisibility: .visible
+    ) {
+      Button(L.t("Delete", "Sil"), role: .destructive) {
+        MemoryStore.shared.deleteEverything()
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()
         wiped = true
       }
     }
+  }
+
+  private var visualSummary: String {
+    guard memory.visualMemoriesEnabled else { return L.t("Off.", "Kapalı.") }
+    let photos = memory.saveVisualPhotos ? L.t("on", "açık") : L.t("off", "kapalı")
+    let places = memory.attachLocation ? L.t("on", "açık") : L.t("off", "kapalı")
+    return L.t("On. Photos: ", "Açık. Fotoğraf: ") + photos + L.t(". Places: ", ". Konum: ") + places + "."
   }
 
   private func privacyRow(_ title: String, _ detail: String, _ icon: String) -> some View {
@@ -159,69 +155,53 @@ struct PrivacySettingsView: View {
   }
 }
 
-// MARK: Hands-free
+// MARK: Task trace
 
-/// Shows what hands-free invocation really works in this build, separating
-/// system invocation (Meta, Apple) from the assistant's own name.
-struct HandsFreeView: View {
-  @ObservedObject private var coordinator = VoiceStartCoordinator.shared
-  @ObservedObject private var wake = WakePhraseListener.shared
-  @Environment(\.openURL) private var openURL
+/// Settings → Developer → Task trace: recent turns with routes, models,
+/// timings and image metadata, copyable in sanitized form.
+struct TaskTraceView: View {
+  var voice: GlassifAIRealtimeSession?
+  @ObservedObject private var ledger = AssistantOrchestrator.shared.ledger
+  @State private var copied = false
 
   var body: some View {
-    let name = AssistantIdentity.name
-    Form {
-      Section(
-        header: Text("Assistant name"),
-        footer: Text("Controlled by AutoLoom (Settings → Assistant). Use it while a conversation is active: \"\(name), what am I looking at?\" It does not wake the glasses or the iPhone.")) {
-        LabeledContent("Assistant", value: name)
-      }
-
-      Section(
-        header: Text("Listen for the name while the app is open (experimental)"),
-        footer: Text("Mode B. When on and the app is open on screen, on-device speech recognition listens for \"\(name)\" or \"Hey \(name)\" and then starts a conversation. It stops when the app leaves the screen, never runs in the background, and never sends audio anywhere while waiting; the orange microphone dot shows while it listens. Useful with the phone mounted and unlocked, for example in a car.")) {
-        Toggle("Listen for \"\(name)\"", isOn: $wake.isArmed)
-        LabeledContent("Status", value: wake.status.label)
-        LabeledContent("Starts by name", value: "\(wake.detections)")
-      }
-
-      Section(
-        header: Text("Meta glasses — system invocation"),
-        footer: Text(HandsFreeCapabilities.metaInvocationRequirement)) {
-        LabeledContent("System wake phrase", value: "Hey Meta")
-        LabeledContent("\"Hey Meta, start …\" for this app", value: "Not available in this build")
-        LabeledContent("Custom \"Hey \(name)\" wake word", value: "Not supported by the Meta API")
-        LabeledContent("During a conversation", value: "Temple tap mutes/unmutes; long-press or fold ends")
-      }
-
-      Section(
-        header: Text("iPhone — Siri"),
-        footer: Text("Official iOS invocation. To use your own phrase, create a shortcut in the Shortcuts app that runs \"Start Conversation\" and name it \"\(name)\" — then say \"Hey Siri, \(name)\". Siri opens the app and it starts listening.")) {
-        LabeledContent("Siri phrase", value: HandsFreeCapabilities.siriPhrase)
-        LabeledContent("Custom Siri phrase", value: "Hey Siri, \(name) (after creating the shortcut)")
-        Button("Open Shortcuts") {
-          if let url = URL(string: "shortcuts://") { openURL(url) }
+    List {
+      Section {
+        Button(copied ? L.t("Copied", "Kopyalandı") : L.t("Copy sanitized task trace", "Temizlenmiş görev izini kopyala")) {
+          UIPasteboard.general.string = TaskTrace.text(records: ledger.records, start: voice?.startReport)
+          copied = true
         }
+      } footer: {
+        Text(L.t(
+          "Requests are shortened; emails, long numbers, tokens and image data are removed. No audio or images.",
+          "İstekler kısaltılır; e-postalar, uzun numaralar, anahtarlar ve görüntü verisi çıkarılır. Ses veya görüntü yoktur."))
       }
-
-      Section("Background and locked phone") {
-        LabeledContent("Start while the app is closed", value: "Via Siri; the iPhone must be unlocked")
-        LabeledContent("Conversation already running", value: "Continues with the screen locked")
-        LabeledContent("Always-listening custom wake word", value: "Not supported by iOS — only while the app is open (above)")
-      }
-
-      Section("Recent invocations") {
-        if coordinator.events.isEmpty {
-          Text("None yet").foregroundStyle(.secondary)
+      Section(L.t("Recent turns", "Son adımlar")) {
+        if ledger.records.isEmpty {
+          Text(L.t("No tasks yet", "Henüz görev yok")).foregroundStyle(.secondary)
         }
-        ForEach(Array(coordinator.events.reversed())) { event in
-          LabeledContent(
-            "\(event.reason.rawValue) · \(event.at.formatted(date: .omitted, time: .standard))",
-            value: event.outcome.rawValue)
+        ForEach(Array(ledger.records.suffix(15).reversed())) { record in
+          VStack(alignment: .leading, spacing: 3) {
+            Text("\(record.kind?.displayName ?? "Routing") · turn \(record.turnID)")
+              .font(.footnote.weight(.semibold))
+            Text(TaskTrace.redactUserText(record.request))
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Text("via \(record.routeOrigin?.rawValue ?? "—") · model \(record.model ?? "—")")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            ForEach(record.notes, id: \.self) { note in
+              Text(note).font(.caption2).foregroundStyle(.orange)
+            }
+            ForEach(record.timeline.breakdown, id: \.stage) { item in
+              Text("\(item.stage): \(item.ms) ms").font(.caption2.monospaced())
+            }
+          }
+          .padding(.vertical, 2)
         }
       }
     }
-    .navigationTitle("Hands-Free")
+    .navigationTitle(L.t("Task trace", "Görev izi"))
   }
 }
 
@@ -274,9 +254,13 @@ struct DiagnosticsView: View {
         row("Provider", "ChatGPT account · chatgpt.com/backend-api/codex")
         row("OAuth", oauthStatus)
         row("Token", tokenExpiry)
-        row("Realtime model", ModelSelector.realtimeModel)
-        row("Realtime start", voice?.startMode?.rawValue ?? "not started")
-        row("Voice", AssistantPreferences.voice)
+        row("Realtime model (requested / active)", "\(ModelSelector.realtimeModel) / \(voice?.startReport?.activeModel ?? "—")")
+        row("Voice (selected / active)", "\(AssistantPreferences.voice) / \(voice?.startReport?.activeVoice ?? "—")")
+        row("Realtime start", voice?.startReport?.step?.label ?? voice?.startMode?.rawValue ?? "not started")
+        row("Voice fallback reason", voice?.startReport?.fallbackReason ?? "none")
+        ForEach(Array((voice?.startReport?.attempts ?? []).enumerated()), id: \.offset) { item in
+          row("Start attempt \(item.offset + 1)", item.element)
+        }
         row("Service default model", catalog.first(where: \.isListed)?.slug ?? models.first ?? "—")
         row("General model", pick(.generalChat))
         row("Vision model", pick(.vision, images: true))
@@ -290,6 +274,8 @@ struct DiagnosticsView: View {
         row("Voice state", voiceState)
         row("Sideband", sidebandStatus)
         row("Connect time", voice?.lastConnectMs.map { "\($0) ms" } ?? "—")
+        row("Last end reason", voice?.lastEndReason ?? "—")
+        row("Wake phrase", "\(WakePhraseSettings.phrase) — \(WakePhraseListener.shared.status.label)")
         row("Response latency (median)", voice?.responseLatencyMedianMs.map { "\($0) ms" } ?? "—")
         row("Auto-reconnects", "\(voice?.reconnectCount ?? 0)" + (voice?.lastReconnectReason.map { " — last: \($0)" } ?? ""))
         row("Last realtime error", voice?.lastRealtimeError ?? "none")
@@ -518,7 +504,7 @@ struct DiagnosticsView: View {
     var lines: [String] = [
       "\(AutoLoomBrand.appName) diagnostics \(Date().formatted())",
       "version \(AppInfo.version) (\(AppInfo.build)) commit \(AppInfo.commit) bridge \(EmbeddedCodexBridge.bridgeVersion())",
-      "oauth: \(oauthStatus); models: \(models.count) [\(models.prefix(12).joined(separator: ","))]; realtime \(ModelSelector.realtimeModel) start: \(voice?.startMode?.rawValue ?? "—")",
+      "oauth: \(oauthStatus); models: \(models.count) [\(models.prefix(12).joined(separator: ","))]; realtime \(ModelSelector.realtimeModel) start: \(voice?.startReport?.step?.rawValue ?? "—"); voice selected \(AssistantPreferences.voice) active \(voice?.startReport?.activeVoice ?? "—"); fallback \(voice?.startReport?.fallbackReason ?? "none")",
       "model picks: general \(pick(.generalChat)); vision \(pick(.vision, images: true)); reasoning \(pick(.deepReasoning)); web \(pick(.webSearch, web: true)); status \(modelHealthSummary)",
       "gpt-6 astra: \(ModelRouting.gpt6AstraStatus(catalog: catalog, health: ModelHealth.shared.entries))",
       "voice: \(voiceState); sideband: \(sidebandStatus); connect \(voice?.lastConnectMs.map { "\($0) ms" } ?? "—"); response median \(voice?.responseLatencyMedianMs.map { "\($0) ms" } ?? "—"); reconnects \(voice?.reconnectCount ?? 0) (\(voice?.lastReconnectReason ?? "—")); realtime error: \(voice?.lastRealtimeError ?? "none")",

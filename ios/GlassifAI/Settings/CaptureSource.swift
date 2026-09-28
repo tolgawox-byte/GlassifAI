@@ -18,6 +18,14 @@ enum CaptureSource: String, CaseIterable {
     }
   }
 
+  var displayName: String {
+    switch self {
+    case .iPhoneCamera: L.t("iPhone camera", "iPhone kamerası")
+    case .glasses: "Ray-Ban Meta"
+    case .off: L.t("Camera off", "Kamera kapalı")
+    }
+  }
+
   var systemImage: String {
     switch self {
     case .iPhoneCamera: "iphone"

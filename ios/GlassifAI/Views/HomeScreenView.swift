@@ -4,7 +4,6 @@ import SwiftUI
 struct HomeScreenView: View {
   @ObservedObject var viewModel: WearablesViewModel
   let onRegistered: () -> Void
-  @State private var showSettings = false
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.glasses.rawValue
 
   var body: some View {
@@ -16,19 +15,19 @@ struct HomeScreenView: View {
             Spacer(minLength: 36)
             GlassifAIMark(size: 104)
             VStack(spacing: 10) {
-              Text("Connect Meta glasses")
+              Text(L.t("Connect Meta glasses", "Meta gözlüğü bağlayın"))
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
-              Text("Give AutoLoom Media Glasses your first-person view.")
+              Text(L.t("Give AutoLoom Media Glasses your first-person view.", "AutoLoom Media Glasses gözünüzden görsün."))
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             }
 
             VStack(alignment: .leading, spacing: 18) {
-              capability("Ask hands-free visual questions", icon: "viewfinder")
-              capability("Hear live, interruptible answers", icon: "waveform")
-              capability("Keep credentials on your iPhone", icon: "lock.fill")
+              capability(L.t("Ask hands-free visual questions", "Eller serbest görsel sorular sorun"), icon: "viewfinder")
+              capability(L.t("Hear live answers you can interrupt", "Sözünü kesebileceğiniz canlı yanıtlar"), icon: "waveform")
+              capability(L.t("Credentials stay on your iPhone", "Kimlik bilgileri iPhone'unuzda kalır"), icon: "lock.fill")
             }
             .padding(.vertical, 8)
 
@@ -38,7 +37,7 @@ struct HomeScreenView: View {
               } label: {
                 HStack {
                   Image(systemName: "eyeglasses")
-                  Text(viewModel.registrationState == .registering ? "Connecting…" : "Connect glasses")
+                  Text(viewModel.registrationState == .registering ? L.t("Connecting…", "Bağlanıyor…") : L.t("Connect glasses", "Gözlüğü bağla"))
                   if viewModel.registrationState == .registering {
                     Spacer()
                     ProgressView()
@@ -54,7 +53,7 @@ struct HomeScreenView: View {
               Button {
                 captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
               } label: {
-                Label("Use iPhone camera", systemImage: "iphone")
+                Label(L.t("Use iPhone camera", "iPhone kamerasını kullan"), systemImage: "iphone")
                   .frame(maxWidth: .infinity)
               }
               .buttonStyle(.bordered)
@@ -62,7 +61,7 @@ struct HomeScreenView: View {
               .controlSize(.large)
             }
 
-            Text("Meta AI opens briefly to approve the connection.")
+            Text(L.t("Meta AI opens briefly to approve the connection.", "Bağlantıyı onaylamak için Meta AI kısa süre açılır."))
               .font(.footnote)
               .foregroundStyle(.secondary)
           }
@@ -72,16 +71,7 @@ struct HomeScreenView: View {
         }
         .scrollIndicators(.hidden)
       }
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button { showSettings = true } label: {
-            Image(systemName: "gearshape")
-          }
-          .accessibilityLabel("Open settings")
-        }
-      }
     }
-    .sheet(isPresented: $showSettings) { SettingsView() }
     .onChange(of: viewModel.registrationState) { _, state in
       if state == .registered { onRegistered() }
     }

@@ -61,10 +61,13 @@ private enum GlassifAIPreviewMode {
 struct VisionRootView: View {
   let wearables: WearablesInterface?
   @State private var auth = ChatGPTAuthSession.shared
+  @AppStorage(OnboardingView.completedKey) private var onboardingCompleted = false
 
   var body: some View {
     Group {
-      if GlassifAIPreviewMode.showsOnboarding || !auth.isAuthenticated {
+      if !onboardingCompleted {
+        OnboardingView { onboardingCompleted = true }
+      } else if GlassifAIPreviewMode.showsOnboarding || !auth.isAuthenticated {
         AccessCodeView()
       } else if let wearables {
         GlassesCapableRootView(wearables: wearables)
@@ -87,7 +90,7 @@ struct AccessCodeView: View {
           Spacer(minLength: 72)
           AuthenticationHeader()
           ChatGPTLoginView()
-          Label("Credentials stay on this iPhone", systemImage: "lock.fill")
+          Label(L.t("Credentials stay on this iPhone", "Kimlik bilgileri bu iPhone'da kalır"), systemImage: "lock.fill")
             .font(.footnote)
             .foregroundStyle(.secondary)
           Spacer(minLength: 40)
@@ -113,7 +116,7 @@ private struct AuthenticationHeader: View {
           .font(.headline)
           .foregroundStyle(.secondary)
       }
-      Text("Natural voice, vision, and live web answers for your iPhone and Meta glasses, using your ChatGPT account.")
+      Text(L.t("Natural voice, vision, and live web answers for your iPhone and Meta glasses, using your ChatGPT account.", "ChatGPT hesabınızla iPhone ve Meta gözlüğünüz için doğal ses, görüntü ve canlı web yanıtları."))
         .font(.body)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -136,13 +139,13 @@ private struct ChatGPTLoginView: View {
     VStack(spacing: 16) {
       switch displayStatus {
       case .loading, .connecting:
-        ProgressView("Connecting securely…")
+        ProgressView(L.t("Connecting securely…", "Güvenli bağlanılıyor…"))
           .frame(maxWidth: .infinity, minHeight: 72)
       case .pending(let login):
         VStack(spacing: 18) {
-          Text("Finish connecting")
+          Text(L.t("Finish connecting", "Bağlantıyı tamamlayın"))
             .font(.headline)
-          Text("Enter this one-time code on OpenAI’s verification page.")
+          Text(L.t("Enter this one-time code on OpenAI’s verification page.", "Bu tek kullanımlık kodu OpenAI doğrulama sayfasına girin."))
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -157,14 +160,14 @@ private struct ChatGPTLoginView: View {
             Button {
               UIPasteboard.general.string = login.userCode
             } label: {
-              Label("Copy", systemImage: "doc.on.doc")
+              Label(L.t("Copy", "Kopyala"), systemImage: "doc.on.doc")
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             Button {
               openURL(login.verificationUrl)
             } label: {
-              Label("Open OpenAI", systemImage: "arrow.up.right")
+              Label(L.t("Open OpenAI", "OpenAI'yi aç"), systemImage: "arrow.up.right")
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -178,14 +181,14 @@ private struct ChatGPTLoginView: View {
           .frame(maxWidth: .infinity, minHeight: 64)
       case .error(let message):
         VStack(spacing: 14) {
-          Label("Couldn’t connect", systemImage: "exclamationmark.triangle.fill")
+          Label(L.t("Couldn’t connect", "Bağlanılamadı"), systemImage: "exclamationmark.triangle.fill")
             .font(.headline)
             .foregroundStyle(.red)
           Text(message)
             .font(.footnote)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-          Button("Try Again") { showConsent = true }
+          Button(L.t("Try Again", "Tekrar dene")) { showConsent = true }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
@@ -193,7 +196,7 @@ private struct ChatGPTLoginView: View {
         Button { showConsent = true } label: {
           HStack {
             Image(systemName: "bubble.left.and.text.bubble.right")
-            Text("Continue with ChatGPT")
+            Text(L.t("Continue with ChatGPT", "ChatGPT ile devam et"))
             Spacer()
             Image(systemName: "chevron.right")
               .font(.caption.bold())
@@ -230,24 +233,24 @@ struct ChatGPTConsentView: View {
         GlassifAIMark(size: 76)
           .frame(maxWidth: .infinity)
         VStack(alignment: .leading, spacing: 8) {
-          Text("Connect ChatGPT")
+          Text(L.t("Connect ChatGPT", "ChatGPT'yi bağlayın"))
             .font(.title2.bold())
           Text("AutoLoom Media Glasses uses your ChatGPT account for live voice, vision, and web search requests. It is an independent app, not an official OpenAI or Meta product.")
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
         VStack(alignment: .leading, spacing: 18) {
-          consentRow("Credentials are protected by this iPhone’s Keychain", icon: "key.fill")
-          consentRow("A camera frame is sent only when a question needs to see", icon: "camera.fill")
-          consentRow("Disconnecting removes the local session", icon: "trash")
+          consentRow(L.t("Credentials are protected by this iPhone’s Keychain", "Kimlik bilgileri bu iPhone'un Anahtar Zinciri ile korunur"), icon: "key.fill")
+          consentRow(L.t("A camera frame is sent only when a question needs to see", "Kamera karesi yalnızca bir soru görmeyi gerektirdiğinde gönderilir"), icon: "camera.fill")
+          consentRow(L.t("Disconnecting removes the local session", "Bağlantıyı kesmek yerel oturumu siler"), icon: "trash")
         }
         Spacer(minLength: 12)
-        Button("Continue", action: onContinue)
+        Button(L.t("Continue", "Devam"), action: onContinue)
           .buttonStyle(.borderedProminent)
           .buttonBorderShape(.roundedRectangle(radius: 14))
           .controlSize(.large)
           .frame(maxWidth: .infinity)
-        Button("Cancel", role: .cancel) { dismiss() }
+        Button(L.t("Cancel", "Vazgeç"), role: .cancel) { dismiss() }
           .frame(maxWidth: .infinity, minHeight: 44)
       }
       .padding(24)

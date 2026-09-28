@@ -11,351 +11,442 @@ private struct ChatGPTAccountSection: View {
     switch status {
     case .loading, .connecting:
       HStack {
-        Text("Status")
+        Text(L.t("Status", "Durum"))
         Spacer()
         ProgressView()
       }
     case .unauthenticated:
-      Button("Connect ChatGPT", action: onConnect)
+      Button(L.t("Connect ChatGPT", "ChatGPT'yi bağla"), action: onConnect)
     case .pending(let login):
       VStack(alignment: .leading, spacing: 10) {
-        Text("Waiting for OpenAI verification")
+        Text(L.t("Waiting for OpenAI verification", "OpenAI doğrulaması bekleniyor"))
           .font(.subheadline)
         Text(verbatim: login.userCode)
           .font(.system(.title3, design: .monospaced, weight: .semibold))
           .textSelection(.enabled)
         HStack {
-          Button("Copy Code") { UIPasteboard.general.string = login.userCode }
-          Button("Open OpenAI") { onOpenVerification(login.verificationUrl) }
+          Button(L.t("Copy Code", "Kodu kopyala")) { UIPasteboard.general.string = login.userCode }
+          Button(L.t("Open OpenAI", "OpenAI'yi aç")) { onOpenVerification(login.verificationUrl) }
         }
       }
     case .authenticated(let user):
       VStack(alignment: .leading, spacing: 8) {
-        Label(user.email ?? user.name ?? "Connected", systemImage: "checkmark.circle.fill")
+        Label(user.email ?? user.name ?? L.t("Connected", "Bağlı"), systemImage: "checkmark.circle.fill")
           .foregroundStyle(.green)
         if let plan = user.plan {
-          Text("Plan: \(plan)")
+          Text(L.t("Plan: ", "Plan: ") + plan)
             .font(.footnote)
             .foregroundStyle(.secondary)
         }
         if !models.isEmpty {
-          Text("Available models: \(models.count)")
+          Text(L.t("Available models: ", "Kullanılabilir modeller: ") + "\(models.count)")
             .font(.footnote)
             .foregroundStyle(.secondary)
         }
-        Button("Disconnect ChatGPT", role: .destructive, action: onDisconnect)
+        Button(L.t("Disconnect ChatGPT", "ChatGPT bağlantısını kes"), role: .destructive, action: onDisconnect)
       }
     case .error(let message):
       VStack(alignment: .leading, spacing: 8) {
         Text(message)
           .font(.footnote)
           .foregroundStyle(.red)
-        Button("Try Again", action: onConnect)
+        Button(L.t("Try Again", "Tekrar dene"), action: onConnect)
       }
     }
   }
 }
 
+/// The Settings tab: ASSISTANT, AI, VISION, MEMORY, TOOLS, PRIVACY,
+/// DEVELOPER, ABOUT.
 struct SettingsView: View {
   var voice: GlassifAIRealtimeSession?
   var glassesStream: StreamSessionViewModel?
+  var wearablesViewModel: WearablesViewModel?
 
-  @Environment(\.dismiss) private var dismiss
+  @State private var chatGPT = ChatGPTAuthSession.shared
+  @ObservedObject private var memory = MemoryStore.shared
+  @ObservedObject private var wake = WakePhraseListener.shared
+  @AppStorage(AssistantPreferences.voiceKey) private var voiceName = AssistantPreferences.defaultVoice
+  @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
+  @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
+  @AppStorage(AssistantPreferences.webSearchKey) private var webSearchEnabled = true
+  @AppStorage(AssistantPreferences.actionsKey) private var actionsEnabled = true
+  @AppStorage(AssistantPreferences.debugOverlayKey) private var showsDeveloperOverlay = false
+  @AppStorage(ModelSelector.overrideKey) private var modelOverride = ""
+
+  init(
+    voice: GlassifAIRealtimeSession? = nil,
+    glassesStream: StreamSessionViewModel? = nil,
+    wearablesViewModel: WearablesViewModel? = nil
+  ) {
+    self.voice = voice
+    self.glassesStream = glassesStream
+    self.wearablesViewModel = wearablesViewModel
+  }
+
+  var body: some View {
+    NavigationStack {
+      List {
+        Section(L.t("Assistant", "Asistan")) {
+          NavigationLink { AssistantSettingsView() } label: {
+            row(L.t("Name & conversation", "İsim ve konuşma"), "person.wave.2", value: AssistantIdentity.name)
+          }
+          NavigationLink {
+            if let voice {
+              VoiceSettingsView(voice: voice)
+            } else {
+              Text(L.t("Voice settings are available on the main screen.", "Ses ayarları ana ekrandan kullanılabilir."))
+            }
+          } label: {
+            row(L.t("Voice", "Ses"), "waveform", value: voiceSummary)
+          }
+          NavigationLink { HandsFreeSettingsView() } label: {
+            row(L.t("Wake phrase & hands-free", "Uyandırma ve eller serbest"), "ear", value: wake.isArmed ? L.t("On", "Açık") : L.t("Off", "Kapalı"))
+          }
+          NavigationLink { AudioSettingsView() } label: {
+            row(L.t("Audio", "Ses çıkışı"), "speaker.wave.2", value: AudioRoutePreference.current.label)
+          }
+        }
+
+        Section(L.t("AI", "Yapay zekâ")) {
+          NavigationLink { AccountSettingsView() } label: {
+            row(L.t("ChatGPT account", "ChatGPT hesabı"), "person.crop.circle", value: chatGPT.isAuthenticated ? L.t("Connected", "Bağlı") : L.t("Not connected", "Bağlı değil"))
+          }
+          if chatGPT.isAuthenticated {
+            NavigationLink { ModelSettingsView() } label: {
+              row(L.t("Models", "Modeller"), "cpu", value: modelOverride.isEmpty ? L.t("Automatic", "Otomatik") : modelOverride)
+            }
+          }
+          NavigationLink { WebSettingsView() } label: {
+            row(L.t("Web search", "Web araması"), "globe", value: webSearchEnabled ? L.t("On", "Açık") : L.t("Off", "Kapalı"))
+          }
+        }
+
+        Section(L.t("Vision", "Görüntü")) {
+          NavigationLink { CameraSettingsView(glassesStream: glassesStream) } label: {
+            row(L.t("Camera & Ray-Ban", "Kamera ve Ray-Ban"), "camera", value: (CaptureSource(rawValue: captureSourceRaw) ?? .iPhoneCamera).displayName)
+          }
+        }
+
+        Section(L.t("Memory", "Hafıza")) {
+          NavigationLink { MemorySettingsView() } label: {
+            row(L.t("Memory", "Hafıza"), "brain", value: memory.isEnabled ? "\(memory.memories.count)" : L.t("Off", "Kapalı"))
+          }
+        }
+
+        Section(L.t("Tools", "Araçlar")) {
+          NavigationLink { ToolsSettingsView() } label: {
+            row(L.t("iPhone tools", "iPhone araçları"), "checklist", value: actionsEnabled ? L.t("On", "Açık") : L.t("Off", "Kapalı"))
+          }
+        }
+
+        Section(L.t("Privacy", "Gizlilik")) {
+          NavigationLink { PrivacySettingsView() } label: {
+            row(L.t("Privacy center", "Gizlilik merkezi"), "lock.shield", value: nil)
+          }
+        }
+
+        Section(L.t("Developer", "Geliştirici")) {
+          NavigationLink { DiagnosticsView(voice: voice, glassesStream: glassesStream) } label: {
+            row(L.t("Diagnostics", "Tanılama"), "stethoscope", value: nil)
+          }
+          NavigationLink { TaskTraceView(voice: voice) } label: {
+            row(L.t("Task trace", "Görev izi"), "list.bullet.rectangle", value: nil)
+          }
+          Toggle(isOn: $showsDeveloperOverlay) {
+            Label(L.t("Camera metrics overlay", "Kamera ölçüm katmanı"), systemImage: "gauge.with.dots.needle.33percent")
+          }
+        }
+
+        Section(L.t("About", "Hakkında")) {
+          NavigationLink { AboutView() } label: {
+            HStack(spacing: 12) {
+              GlassifAIMark(size: 36)
+                .padding(6)
+                .background(AutoLoomTheme.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+              VStack(alignment: .leading, spacing: 2) {
+                Text(AutoLoomBrand.appName).font(.subheadline.weight(.semibold))
+                Text("\(AppInfo.version) (\(AppInfo.build)) · \(AppInfo.commit)")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+            }
+          }
+        }
+      }
+      .navigationTitle(L.t("Settings", "Ayarlar"))
+      .task {
+        if case .loading = chatGPT.status { await chatGPT.restore() }
+      }
+    }
+    .tint(AutoLoomTheme.electricBlue)
+  }
+
+  private var voiceSummary: String {
+    let selected = VoiceCatalog.displayName(voiceName)
+    guard let report = voice?.startReport, let active = report.activeVoice, voice?.isActive == true else { return selected }
+    return active == voiceName ? selected : "\(selected) → \(VoiceCatalog.displayName(active))"
+  }
+
+  private func row(_ title: String, _ icon: String, value: String?) -> some View {
+    HStack {
+      Label(title, systemImage: icon)
+      Spacer(minLength: 8)
+      if let value {
+        Text(value)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
+    }
+  }
+}
+
+// MARK: Assistant
+
+struct AssistantSettingsView: View {
+  @AppStorage(AssistantPreferences.verbosityKey) private var verbosity = "concise"
+  @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
+  @AppStorage(AssistantPreferences.addressedOnlyKey) private var addressedOnly = false
+  @AppStorage(ConversationCommands.enabledKey) private var stopCommands = true
+  @AppStorage(ConversationTimeout.defaultsKey) private var timeout = ConversationTimeout.minutes2.rawValue
+  @State private var nameDraft = AssistantIdentity.name
+
+  var body: some View {
+    Form {
+      Section(
+        header: Text(L.t("Name", "İsim")),
+        footer: Text(L.t(
+          "How you address the assistant (“\(AssistantIdentity.name), what am I looking at?”). The wake phrase is set under Wake phrase & hands-free. Changes apply from the next conversation, or now with Voice → Apply now.",
+          "Asistana nasıl hitap ettiğiniz (“\(AssistantIdentity.name), neye bakıyorum?”). Uyandırma ifadesi “Uyandırma ve eller serbest” bölümündedir. Değişiklikler sonraki konuşmada ya da Ses → Şimdi uygula ile hemen geçerli olur."))) {
+        TextField(AssistantIdentity.defaultName, text: $nameDraft)
+          .textInputAutocapitalization(.words)
+          .autocorrectionDisabled()
+          .submitLabel(.done)
+          .onSubmit(commitName)
+        if !nameDraft.isEmpty, AssistantIdentity.sanitize(nameDraft) == nil {
+          Text(L.t("Use letters (up to \(AssistantIdentity.maxLength) characters).", "Harf kullanın (en fazla \(AssistantIdentity.maxLength) karakter)."))
+            .font(.footnote)
+            .foregroundStyle(.orange)
+        }
+      }
+      Section(L.t("Conversation", "Konuşma")) {
+        Picker(L.t("Language", "Dil"), selection: $language) {
+          Text(L.t("Match my language", "Benim dilimle konuş")).tag("auto")
+          Text("Türkçe").tag("tr")
+          Text("English").tag("en")
+        }
+        Picker(L.t("Answer length", "Yanıt uzunluğu"), selection: $verbosity) {
+          Text(L.t("Adaptive (short first)", "Uyarlanabilir (önce kısa)")).tag("concise")
+          Text(L.t("Detailed", "Detaylı")).tag("detailed")
+        }
+        Picker(L.t("End a quiet conversation after", "Sessiz konuşmayı bitir"), selection: $timeout) {
+          ForEach(ConversationTimeout.allCases) { Text($0.label).tag($0.rawValue) }
+        }
+      }
+      Section(
+        footer: Text(L.t(
+          "Say “Dur”, “Sus”, “Bekle” or “Stop” to cut an answer short; “Kapat”, “Konuşmayı bitir” or “\(AssistantIdentity.name) stop” to end the conversation.",
+          "Yanıtı kesmek için “Dur”, “Sus”, “Bekle”; konuşmayı bitirmek için “Kapat”, “Konuşmayı bitir” ya da “\(AssistantIdentity.name) dur” deyin."))) {
+        Toggle(L.t("Spoken stop commands", "Sesli durdurma komutları"), isOn: $stopCommands)
+        Toggle(L.t("Only answer when called by name (experimental)", "Yalnızca adıyla seslenince yanıtla (deneysel)"), isOn: $addressedOnly)
+      }
+    }
+    .navigationTitle(L.t("Name & conversation", "İsim ve konuşma"))
+    .onDisappear(perform: commitName)
+  }
+
+  private func commitName() {
+    nameDraft = AssistantIdentity.setName(nameDraft)
+  }
+}
+
+// MARK: Audio
+
+struct AudioSettingsView: View {
+  @ObservedObject private var audioRoute = AudioRouteMonitor.shared
+  @AppStorage(AudioRoutePreference.defaultsKey) private var audioRouteRaw = AudioRoutePreference.automatic.rawValue
+
+  var body: some View {
+    Form {
+      Section(footer: Text(L.t(
+        "Automatic uses the glasses' microphone and speakers with the Ray-Ban camera or with the camera off, and the iPhone in iPhone-camera mode. Takes effect on the next conversation.",
+        "Otomatik: Ray-Ban kamerasında veya kamera kapalıyken gözlüğün mikrofon ve hoparlörü, iPhone kamerasında iPhone kullanılır. Sonraki konuşmada geçerli olur."))) {
+        Picker(L.t("Audio", "Ses"), selection: $audioRouteRaw) {
+          ForEach(AudioRoutePreference.allCases) { Text($0.label).tag($0.rawValue) }
+        }
+        .pickerStyle(.segmented)
+      }
+      Section(L.t("Now", "Şu an")) {
+        LabeledContent(L.t("Microphone", "Mikrofon"), value: audioRoute.inputSummary)
+        LabeledContent(L.t("Speaker", "Hoparlör"), value: audioRoute.outputSummary)
+      }
+    }
+    .navigationTitle(L.t("Audio", "Ses çıkışı"))
+    .task { audioRoute.refresh() }
+  }
+}
+
+// MARK: AI
+
+struct AccountSettingsView: View {
   @Environment(\.openURL) private var openURL
   @State private var chatGPT = ChatGPTAuthSession.shared
-  @State private var showChatGPTConsent = false
-  @ObservedObject private var audioRoute = AudioRouteMonitor.shared
+  @State private var showConsent = false
+
+  var body: some View {
+    Form {
+      Section(footer: Text(L.t(
+        "Credentials stay in this iPhone's protected Keychain and are sent only to OpenAI. Signing in does not give this app every ChatGPT feature — see About.",
+        "Kimlik bilgileri bu iPhone'un korumalı Anahtar Zinciri'nde kalır ve yalnızca OpenAI'ye gönderilir."))) {
+        ChatGPTAccountSection(
+          status: chatGPT.status,
+          models: chatGPT.availableModels,
+          onConnect: { showConsent = true },
+          onOpenVerification: { openURL($0) },
+          onDisconnect: { Task { await chatGPT.logout() } })
+      }
+    }
+    .navigationTitle(L.t("ChatGPT account", "ChatGPT hesabı"))
+    .sheet(isPresented: $showConsent) {
+      ChatGPTConsentView {
+        showConsent = false
+        Task {
+          if let login = try? await chatGPT.startLogin() {
+            openURL(login.verificationUrl)
+          }
+        }
+      }
+    }
+  }
+}
+
+struct WebSettingsView: View {
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
+  @AppStorage(AssistantPreferences.webSearchKey) private var webSearchEnabled = true
+  @AppStorage(AssistantPreferences.regionKey) private var region = ""
+
+  var body: some View {
+    Form {
+      Section(footer: Text(L.t(
+        "Live search runs through your ChatGPT account (no separate API key or extra fee from this app). Answers show their sources as cards.",
+        "Canlı arama ChatGPT hesabınız üzerinden yapılır (ayrı API anahtarı veya ek ücret yok). Yanıtlar kaynaklarını kartlarda gösterir."))) {
+        Toggle(L.t("Web search", "Web araması"), isOn: $webSearchEnabled)
+        TextField(L.t("Usual location (e.g. Ottawa, Canada)", "Genellikle bulunduğunuz yer (ör. İstanbul)"), text: $region)
+          .textInputAutocapitalization(.words)
+      }
+      Section(L.t("Last search", "Son arama")) {
+        Text(orchestrator.lastWebStatus)
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      }
+    }
+    .navigationTitle(L.t("Web search", "Web araması"))
+  }
+}
+
+// MARK: Vision
+
+struct CameraSettingsView: View {
+  var glassesStream: StreamSessionViewModel?
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
-  @AppStorage(AudioRoutePreference.defaultsKey) private var audioRouteRaw = AudioRoutePreference.automatic.rawValue
   @AppStorage(GlassesStreamProfile.defaultsKey) private var streamProfileRaw = GlassesStreamProfile.recommended.rawValue
   @AppStorage(GlassesVideoTransport.defaultsKey) private var transportRaw = GlassesVideoTransport.hevc.rawValue
   @AppStorage(AssistantPreferences.previewModeKey) private var previewMode = "lowLatency"
-  @AppStorage(AssistantPreferences.debugOverlayKey) private var showsDebugOverlay = false
-  @AppStorage(AssistantPreferences.voiceKey) private var voiceName = AssistantPreferences.defaultVoice
-  @AppStorage(AssistantPreferences.verbosityKey) private var verbosity = "concise"
-  @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
-  @AppStorage(AssistantPreferences.webSearchKey) private var webSearchEnabled = true
-  @AppStorage(AssistantPreferences.regionKey) private var region = ""
-  @AppStorage(ModelSelector.overrideKey) private var modelOverride = ""
   @AppStorage(GlassesVisionCaptureMode.defaultsKey) private var glassesVisionCapture = GlassesVisionCaptureMode.automatic.rawValue
   @AppStorage(VisionQualityPreference.defaultsKey) private var visionQuality = VisionQualityPreference.automatic.rawValue
   @AppStorage(VisionAssistPreferences.textAssistKey) private var textDetailAssist = true
   @AppStorage(VisionAssistPreferences.upscaleKey) private var upscaleForReading = true
   @AppStorage(LiveVisionPolicy.maxMinutesKey) private var liveVisionMinutes = LiveVisionPolicy.defaultMaxMinutes
-  @AppStorage(AssistantPreferences.actionsKey) private var actionsEnabled = true
-  @AppStorage(AssistantPreferences.addressedOnlyKey) private var addressedOnly = false
-  @State private var assistantNameDraft = AssistantIdentity.name
-
-  private func commitAssistantName() {
-    assistantNameDraft = AssistantIdentity.setName(assistantNameDraft)
-  }
-
-  init(voice: GlassifAIRealtimeSession? = nil, glassesStream: StreamSessionViewModel? = nil) {
-    self.voice = voice
-    self.glassesStream = glassesStream
-  }
 
   var body: some View {
-    NavigationStack {
-      Form {
-        Section(
-          header: Text("ChatGPT account"),
-          footer: Text("Credentials stay in this iPhone’s protected Keychain and are sent only to OpenAI. Signing in does not give this app every ChatGPT feature — see Settings → About for what is supported.")) {
-          ChatGPTAccountSection(
-            status: chatGPT.status,
-            models: chatGPT.availableModels,
-            onConnect: { showChatGPTConsent = true },
-            onOpenVerification: { openURL($0) },
-            onDisconnect: { Task { await chatGPT.logout() } })
-          if chatGPT.isAuthenticated {
-            NavigationLink {
-              ModelSettingsView()
-            } label: {
-              LabeledContent(
-                "AI models",
-                value: modelOverride.isEmpty ? "Automatic (\(chatGPT.modelCatalog.count) available)" : modelOverride)
-            }
-          }
+    Form {
+      Section(
+        header: Text(L.t("Camera", "Kamera")),
+        footer: Text(L.t(
+          "Reading requests (signs, labels, VINs, badges, screens) use the sharpest recent frame in high detail with on-device text recognition and a zoomed crop. If an answer is still unclear, the app retries in high detail before asking you to move.",
+          "Okuma istekleri (tabela, etiket, şasi no, ekran) en net son kareyi yüksek ayrıntıda, cihaz üzerinde metin tanıma ve yakınlaştırılmış kesitle kullanır. Yanıt yine belirsizse uygulama sizden yaklaşmanızı istemeden önce yüksek ayrıntıda tekrar dener."))) {
+        Picker(L.t("Camera", "Kamera"), selection: $captureSourceRaw) {
+          ForEach(CaptureSource.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
         }
-
-        Section(
-          header: Text("Camera"),
-          footer: Text(cameraFooter)) {
-          Picker("Camera", selection: $captureSourceRaw) {
-            ForEach(CaptureSource.allCases, id: \.rawValue) { source in
-              Text(source.label).tag(source.rawValue)
-            }
-          }
-          .pickerStyle(.segmented)
-          Picker("Vision quality", selection: $visionQuality) {
-            ForEach(VisionQualityPreference.allCases) { preference in
-              Text(preference.label).tag(preference.rawValue)
-            }
-          }
-          Toggle("Text detail mode (on-device OCR + zoomed crop)", isOn: $textDetailAssist)
-          Toggle("Enlarge small frames for reading", isOn: $upscaleForReading)
-          Toggle("Show camera metrics overlay", isOn: $showsDebugOverlay)
+        .pickerStyle(.segmented)
+        Picker(L.t("Vision quality", "Görüntü kalitesi"), selection: $visionQuality) {
+          ForEach(VisionQualityPreference.allCases) { Text($0.label).tag($0.rawValue) }
         }
-
-        Section(
-          header: Text("Live Vision"),
-          footer: Text("Say \"start live vision\" or tap the eye button during a conversation. The assistant then gets a short note about the view when it changes (at most every 6 seconds; slower when the phone is warm or the battery is low). Notes are not spoken or stored. Detailed questions still use a fresh full-quality frame. It stops when the conversation ends or at the time limit.")) {
-          Picker("Time limit", selection: $liveVisionMinutes) {
-            ForEach(LiveVisionPolicy.maxMinuteChoices, id: \.self) { minutes in
-              Text("\(minutes) min").tag(minutes)
-            }
-          }
-        }
-
-        Section(
-          header: Text("Ray-Ban"),
-          footer: Text("Changes apply the next time the glasses stream starts (switch the camera to iPhone and back). Meta compresses every frame to fit the Bluetooth link, so fewer frames per second give sharper frames; the glasses may still lower the resolution on a weak link. Diagnostics shows requested and actual values.")) {
-          Picker("Stream profile", selection: $streamProfileRaw) {
-            ForEach(GlassesStreamProfile.allCases) { profile in
-              Text(profile.label).tag(profile.rawValue)
-            }
-          }
-          Picker("Video transport", selection: $transportRaw) {
-            ForEach(GlassesVideoTransport.allCases) { transport in
-              Text(transport.label).tag(transport.rawValue)
-            }
-          }
-          if let note = glassesStream?.transportNote {
-            Text(note)
-              .font(.footnote)
-              .foregroundStyle(.orange)
-          }
-          if let glassesStream {
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-              let metrics = FrameStore.shared.snapshot()
-              let actual = metrics.source == FrameSourceKind.glasses.rawValue && metrics.inputWidth > 0
-                ? "\(metrics.inputResolution) @ \(String(format: "%.1f", metrics.measuredFPS)) fps"
-                : "no Ray-Ban frames yet"
-              VStack(alignment: .leading, spacing: 2) {
-                Text("Requested: \(glassesStream.streamProfile.requestedSummary), \(glassesStream.activeTransport.shortLabel)")
-                Text("Actual: \(actual)")
-              }
-              .font(.footnote.monospacedDigit())
-              .foregroundStyle(.secondary)
-            }
-          }
-          Picker("Preview", selection: $previewMode) {
-            Text("Low latency (new)").tag("lowLatency")
-            Text("Legacy (original)").tag("legacy")
-          }
-          Picker("Vision image", selection: $glassesVisionCapture) {
-            ForEach(GlassesVisionCaptureMode.allCases) { mode in
-              Text(mode.label).tag(mode.rawValue)
-            }
-          }
-        }
-
-        Section(
-          header: Text("Audio route"),
-          footer: Text("Automatic uses the glasses’ microphone and speakers with the Ray-Ban camera or with the camera off, and the iPhone in iPhone-camera mode. Takes effect on the next conversation.")) {
-          Picker("Audio", selection: $audioRouteRaw) {
-            ForEach(AudioRoutePreference.allCases) { preference in
-              Text(preference.label).tag(preference.rawValue)
-            }
-          }
-          .pickerStyle(.segmented)
-          LabeledContent("Microphone", value: audioRoute.inputSummary)
-          LabeledContent("Speaker", value: audioRoute.outputSummary)
-        }
-
-        Section(
-          header: Text("Assistant"),
-          footer: Text("The name is how you address the assistant in a conversation (\"\(AssistantIdentity.name), what am I looking at?\"). It is not a system wake word — see Hands-Free. Changes apply from the next conversation. Juniper is the verified voice; other voices are experimental and fall back automatically if rejected.")) {
-          HStack {
-            Text("Assistant name")
-            Spacer()
-            TextField(AssistantIdentity.defaultName, text: $assistantNameDraft)
-              .multilineTextAlignment(.trailing)
-              .textInputAutocapitalization(.words)
-              .autocorrectionDisabled()
-              .submitLabel(.done)
-              .onSubmit(commitAssistantName)
-          }
-          if assistantNameDraft.trimmingCharacters(in: .whitespaces) != AssistantIdentity.name,
-             !assistantNameDraft.isEmpty,
-             AssistantIdentity.sanitize(assistantNameDraft) == nil {
-            Text("Use letters (up to \(AssistantIdentity.maxLength) characters). Invalid names fall back to \(AssistantIdentity.defaultName).")
-              .font(.footnote)
-              .foregroundStyle(.orange)
-          }
-          Toggle("Only answer when called by name (experimental)", isOn: $addressedOnly)
-          Picker("Voice", selection: $voiceName) {
-            ForEach(AssistantPreferences.voices, id: \.self) { name in
-              Text(name == AssistantPreferences.defaultVoice ? "\(name.capitalized) (default)" : name.capitalized)
-                .tag(name)
-            }
-          }
-          Picker("Response style", selection: $verbosity) {
-            Text("Short").tag("concise")
-            Text("Detailed").tag("detailed")
-          }
-          Picker("Language", selection: $language) {
-            Text("Match my language").tag("auto")
-            Text("Türkçe").tag("tr")
-            Text("English").tag("en")
-          }
-        }
-
-        Section(
-          header: Text("Web search"),
-          footer: Text("Live search runs through your ChatGPT account (no separate API key or extra fee from this app). Answers show their sources as cards. Last status: \(orchestrator.lastWebStatus)")) {
-          Toggle("Web search", isOn: $webSearchEnabled)
-          TextField("Usual location (e.g. Ottawa, Canada)", text: $region)
-            .textInputAutocapitalization(.words)
-        }
-
-        Section(
-          header: Text("iPhone actions"),
-          footer: Text("Reminders, calendar, AutoLoom notes, directions, links, copy, share, calls and messages. Saving a reminder, event or note needs your spoken yes or a tap on Save. Directions, links, calls, messages and sharing always need a tap on the phone. iOS asks for Reminders and Calendar access the first time. Email, purchases, payments, deleting data and posting are not supported.")) {
-          Toggle("Allow iPhone actions", isOn: $actionsEnabled)
-          NavigationLink {
-            TasksAndNotesView()
-          } label: {
-            Label("AutoLoom Tasks & Notes", systemImage: "note.text")
-          }
-          NavigationLink {
-            AgentGatewaySettingsView()
-          } label: {
-            Label("Agent gateway (OpenClaw, optional)", systemImage: "server.rack")
-          }
-        }
-
-        Section("Hands-free, memory & privacy") {
-          NavigationLink {
-            HandsFreeView()
-          } label: {
-            Label("Hands-Free", systemImage: "hand.wave")
-          }
-          NavigationLink {
-            MemorySettingsView()
-          } label: {
-            Label("Memory", systemImage: "brain")
-          }
-          NavigationLink {
-            PrivacySettingsView()
-          } label: {
-            Label("Privacy & permissions", systemImage: "lock.shield")
-          }
-        }
-
-        Section("Support") {
-          NavigationLink {
-            DiagnosticsView(voice: voice, glassesStream: glassesStream)
-          } label: {
-            Label("Diagnostics", systemImage: "stethoscope")
-          }
-          NavigationLink {
-            LicensesView()
-          } label: {
-            Label("Licenses", systemImage: "doc.text")
-          }
-        }
-
-        Section(
-          header: Text("About"),
-          footer: Text(AutoLoomBrand.independenceNotice)) {
-          HStack(spacing: 14) {
-            GlassifAIMark(size: 52)
-              .padding(10)
-              .background(AutoLoomTheme.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-              Text(AutoLoomBrand.appName).font(.headline)
-              Text("by \(AutoLoomBrand.company)").font(.subheadline).foregroundStyle(.secondary)
-            }
-          }
-          .padding(.vertical, 4)
-          .accessibilityElement(children: .combine)
-          LabeledContent("Version", value: "\(AppInfo.version) (\(AppInfo.build))")
-          LabeledContent("Build", value: AppInfo.commit)
-          Label("Live voice through your ChatGPT account", systemImage: "waveform")
-          Label("Vision on request from Ray-Ban or iPhone camera", systemImage: "eye")
-          Label("Live web search with sources", systemImage: "globe")
-          Label("iPhone actions with your confirmation: reminders, calendar, notes, maps, calls, messages", systemImage: "checklist")
-          Label("Live Vision and research reports saved as notes", systemImage: "eye")
-          Label("Not available: ChatGPT memory/history sync, ChatGPT Work, Codex cloud tasks, email, purchases", systemImage: "xmark.circle")
-            .foregroundStyle(.secondary)
+        Toggle(L.t("Text detail mode (OCR + zoomed crop)", "Metin ayrıntı modu (OCR + yakın kesit)"), isOn: $textDetailAssist)
+        Toggle(L.t("Enlarge small frames for reading", "Okuma için küçük kareleri büyüt"), isOn: $upscaleForReading)
+      }
+      Section(
+        header: Text(L.t("Live Vision", "Canlı Görüş")),
+        footer: Text(L.t(
+          "Say “keep looking” or tap the eye during a conversation. The assistant gets a short silent note when the view changes (at most every 6 seconds; slower when warm or low on battery). Notes are not spoken or stored.",
+          "Konuşma sırasında “bakmaya devam et” deyin veya göz simgesine dokunun. Görüntü değiştiğinde asistana kısa, sessiz bir not gider (en sık 6 saniyede bir; ısınınca veya pil azalınca daha seyrek). Notlar okunmaz ve saklanmaz."))) {
+        Picker(L.t("Time limit", "Süre sınırı"), selection: $liveVisionMinutes) {
+          ForEach(LiveVisionPolicy.maxMinuteChoices, id: \.self) { Text("\($0) min").tag($0) }
         }
       }
-      .navigationTitle(AutoLoomBrand.appName)
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Done") { dismiss() }
-            .fontWeight(.semibold)
+      Section(
+        header: Text("Ray-Ban Meta"),
+        footer: Text(L.t(
+          "Changes apply the next time the glasses stream starts. Meta compresses every frame for Bluetooth, so fewer frames per second give sharper frames. Developer → Diagnostics shows requested and actual values.",
+          "Değişiklikler gözlük yayını yeniden başladığında geçerli olur. Meta her kareyi Bluetooth için sıkıştırır; saniyedeki kare azaldıkça kareler netleşir."))) {
+        Picker(L.t("Stream profile", "Yayın profili"), selection: $streamProfileRaw) {
+          ForEach(GlassesStreamProfile.allCases) { Text($0.label).tag($0.rawValue) }
         }
-      }
-      .sheet(isPresented: $showChatGPTConsent) {
-        ChatGPTConsentView {
-          showChatGPTConsent = false
-          Task {
-            if let login = try? await chatGPT.startLogin() {
-              openURL(login.verificationUrl)
-            }
-          }
+        Picker(L.t("Video transport", "Video aktarımı"), selection: $transportRaw) {
+          ForEach(GlassesVideoTransport.allCases) { Text($0.label).tag($0.rawValue) }
         }
-      }
-      .task {
-        if case .loading = chatGPT.status { await chatGPT.restore() }
-        audioRoute.refresh()
+        if let note = glassesStream?.transportNote {
+          Text(note).font(.footnote).foregroundStyle(.orange)
+        }
+        Picker(L.t("Preview", "Önizleme"), selection: $previewMode) {
+          Text(L.t("Low latency", "Düşük gecikme")).tag("lowLatency")
+          Text(L.t("Legacy", "Eski")).tag("legacy")
+        }
+        Picker(L.t("Vision image", "Görüntü kaynağı"), selection: $glassesVisionCapture) {
+          ForEach(GlassesVisionCaptureMode.allCases) { Text($0.label).tag($0.rawValue) }
+        }
       }
     }
-    .onDisappear(perform: commitAssistantName)
-    .tint(AutoLoomTheme.electricBlue)
+    .navigationTitle(L.t("Camera & Ray-Ban", "Kamera ve Ray-Ban"))
   }
+}
 
-  private var cameraFooter: String {
-    let source: String
-    switch CaptureSource(rawValue: captureSourceRaw) ?? .iPhoneCamera {
-    case .glasses: source = "Uses the camera in your connected Meta glasses."
-    case .iPhoneCamera: source = "Uses this iPhone’s back camera."
-    case .off: source = "No camera. Conversation, web search, and reasoning keep working."
+// MARK: About
+
+struct AboutView: View {
+  var body: some View {
+    List {
+      Section {
+        HStack(spacing: 14) {
+          GlassifAIMark(size: 52)
+            .padding(10)
+            .background(AutoLoomTheme.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+          VStack(alignment: .leading, spacing: 2) {
+            Text(AutoLoomBrand.appName).font(.headline)
+            Text("by \(AutoLoomBrand.company)").font(.subheadline).foregroundStyle(.secondary)
+            Text(AutoLoomBrand.tagline).font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        LabeledContent(L.t("Version", "Sürüm"), value: "\(AppInfo.version) (\(AppInfo.build))")
+        LabeledContent(L.t("Build", "Derleme"), value: AppInfo.commit)
+      }
+      Section(L.t("What it can do", "Neler yapabilir")) {
+        Label(L.t("Live voice through your ChatGPT account", "ChatGPT hesabınızla canlı sesli konuşma"), systemImage: "waveform")
+        Label(L.t("Sees and reads through Ray-Ban Meta or the iPhone camera", "Ray-Ban Meta veya iPhone kamerasıyla görür ve okur"), systemImage: "eye")
+        Label(L.t("Live web answers with sources", "Kaynaklı canlı web yanıtları"), systemImage: "globe")
+        Label(L.t("Remembers what you ask, on this iPhone", "İstediğinizi bu iPhone'da hatırlar"), systemImage: "brain")
+        Label(L.t("Reminders, calendar, notes and notifications with your OK", "Onayınızla anımsatıcı, takvim, not ve bildirim"), systemImage: "checklist")
+        Label(L.t("Not available: ChatGPT memory/history sync, email, purchases", "Yok: ChatGPT hafıza/geçmiş eşitleme, e-posta, satın alma"), systemImage: "xmark.circle")
+          .foregroundStyle(.secondary)
+      }
+      Section {
+        NavigationLink(L.t("Licenses", "Lisanslar")) { LicensesView() }
+      } footer: {
+        Text(AutoLoomBrand.independenceNotice)
+      }
     }
-    return source + " Reading requests (signs, labels, VINs, badges, screens) use the sharpest recent frame in high detail. Text detail mode adds on-device OCR hints and a zoomed crop of the text; neither is stored."
+    .navigationTitle(L.t("About", "Hakkında"))
   }
 }
