@@ -13,10 +13,10 @@ struct ParsedTime: Equatable {
   let alternative: Date?
   /// The time came from a part of the day ("yarın sabah" → 09:00).
   let usedDefaultTime: Bool
-  /// A day was said ("yarın", "cuma", "15 Ekim", "in 2 days").
-  var hasDay = false
   /// The words that were understood (diagnostics).
   let matched: String
+  /// A day was said ("yarın", "cuma", "15 Ekim", "in 2 days").
+  var hasDay = false
 }
 
 /// Turns Turkish and English time phrases into dates: "yarın saat 7'de",
