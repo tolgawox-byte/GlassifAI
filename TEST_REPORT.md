@@ -1,4 +1,4 @@
-# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`)
+# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, Jarvis v1.1)
 
 Result categories:
 - **BUILD PASS**: compiled into the Debug and Release IPAs in CI.
@@ -6,6 +6,129 @@ Result categories:
 - **PHYSICAL TEST REQUIRED**: needs the iPhone and Ray-Ban Meta Gen 1. The tables below are for you to fill in.
 
 Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
+
+## Automated results — Jarvis v1.1
+
+<!-- AUTOMATED-RESULTS-V11 -->
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [36385963557](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36385963557) | `98e5feb` | **BUILD PASS · iOS 143/143 · Rust 8/8** | Voice actions, memory, tasks, connection feedback, Jarvis Style; Debug + Release IPAs |
+| [36382827852](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36382827852) | `a720297` | **BUILD PASS · iOS 126/126 · Rust 8/8** | Camera background fix (lifecycle states, decoder, `bluetooth-central`) |
+
+New iOS tests in v1.1 (`AutoLoomVoiceActionTests`, plus updated risk and greeting tests):
+
+| Area | Tests |
+|---|---|
+| Notes by voice (start/end triggers, "bunu", asking for content, awaiting answer) | `testSpokenNotesAreRecognised` |
+| Ordinary speech left to the voice model (weather, "not almak için…", "mesaj yaz", "adım atmak", negatives, addressed-only) | `testOrdinarySpeechIsLeftToTheVoiceModel` |
+| Reminders and notifications (titles "Patronu ara", relative times, "bunu tekrar", English) | `testRemindersKeepTheSpokenTimeAndAClearTitle` |
+| AutoLoom tasks and calendar ("cuma 3'e", "yarın ne var?", routines) | `testTasksAndEvents`, `testTimePhrasesForCommonMeetingHours` |
+| Memory, name, recall, forget, visual memory, conversation questions | `testMemoryCommands` |
+| Answers to pending actions (evet/hayır/sabah/akşam; a new question is not a yes) | `testAnswersToAPendingAction` |
+| The brief's own test sentences (§76–§82) | `testBriefScenarios` |
+| Early hold of the model's reply | `testCommandStartsAreSpottedEarly` |
+| Saved before the confirmation; tasks visible at once; trace | `testSpokenNoteAndTaskAreSavedBeforeTheConfirmation`, `testActionTraceRedactsNumbers` |
+| Tasks grouping, profile, conversation summaries, summarizer | `testTasksAreGroupedByDay`, `testProfileNameIsExplicitAndCleaned`, `testConversationSummariesAreStoredAndRetrievedNotInjected`, `testConversationSummarizer` |
+| Connection feedback, chime, Jarvis Style, instructions size | `testConnectionFeedback`, `testJarvisStyleIsAStyleNotAClone` |
+| Daily briefing once per day | `testDailyBriefingIsOffByDefaultAndOncePerDay` |
+| Ray-Ban lifecycle states | `testGlassesPipelineStates` |
+| Updated: explicit reminders/events SAFE, greetings | `AutoLoomActionTests.testReminderTimeComesFromTheUsersWords`, `testRiskLevels`; `AutoLoomJarvisTests.testEveryPlannableActionHasATool`, `testQuietTimeoutAndGreetings` |
+
+## Physical tests for Jarvis v1.1 (iPhone + Ray-Ban Meta Gen 1)
+
+**Before you start**
+1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run below (`docs/WINDOWS_INSTALL.md`).
+2. Settings → Developer → Diagnostics: **Commit** matches the run, **DAT SDK** = 0.5.0.
+3. Settings → Name & conversation: name **Jarvis**. Settings → Wake phrase & hands-free: phrase **Hey Jarvis**.
+4. After a failed test: Developer → Action & task trace → **Copy sanitized task trace** (it now includes the voice actions), and keep the text. For camera tests also copy the Camera diagnostics transitions.
+
+### Lock screen (brief §74) — mandatory
+
+| # | Step | Pass when | Result |
+|---|---|---|---|
+| L1 | Start AutoLoom, select Ray-Ban, start a conversation, ask "Ne görüyorum?" | Correct answer | |
+| L2 | Lock the iPhone, wait 10 s, look at a new object, ask "Bu ne?" through the glasses | Describes the **new** object | |
+| L3 | Turn to another object, ask again | Describes that object | |
+| L4 | Unlock | Preview resumes; the next answer is about the current view (no stale frame) | |
+| L5 | Camera diagnostics after L2–L3 | State `ScreenLockedStreaming`; background samples and background decoded both rising; transport HEVC; note the last decode error if any | |
+
+If L2 fails: note whether background samples rose (glasses kept sending) and whether background decoded stayed at 0 (decoder) — `docs/BACKGROUND_STREAMING.md` explains what each means. Do not mark it working otherwise.
+
+### Voice actions (brief §78, §79, §82)
+
+| # | Say | Pass when | Result |
+|---|---|---|---|
+| A1 | "Jarvis, not al: yarın kamerayı yanıma alacağım." | One answer, "Tamam, not aldım." (no "Tabii, not alabilirim" first); Memory → Notes shows it at once | |
+| A2 | "Jarvis, iki dakika sonra test hatırlatıcısı oluştur." | Reminder "Test" in Apple Reminders and the Tasks tab at once; it alerts after two minutes | |
+| A3 | "Yarın 10'a Ahmet'i aramamı hatırlat." | Reminder "Ahmet'i ara", tomorrow 10:00, no morning/evening question | |
+| A4 | "Yarın 7'de koşuya çıkmayı hatırlat" → "akşam" | Asks "sabah mı akşam mı?"; saved at 19:00 after "akşam" | |
+| A5 | "Cuma 3'e toplantı ekle" | Calendar event "Toplantı", Friday 15:00 | |
+| A6 | "Bugün takvimimde ne var?" / "Yarın ne var?" | Reads the right day | |
+| A7 | "Yarın bu arabayı tekrar kontrol et görev oluştur" | AutoLoom task in Tasks → Upcoming (tomorrow) | |
+| A8 | "Görevlerim neler?" | Lists open tasks (and reminders) | |
+| A9 | First time only, with Reminders permission not yet given and the phone locked: "Yarın 9'da su iç diye hatırlat" | Says to open the app; after opening and allowing, the reminder is created without repeating the sentence | |
+| A10 | Developer → Action & task trace → Voice actions | Each command shows transcript, intent, parser, parsed time, permission, executor, result | |
+
+### Memory and conversation memory (brief §76, §77)
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| M1 | "Jarvis, benim adım Tolga, bunu hatırla." Force-quit the app, reopen, start a conversation: "Benim adım ne?" | "Tolga"; Memory → About me shows it | |
+| M2 | Talk for a minute about one project (e.g. the camera quality), end the conversation ("Kapat"). Close the app. Reopen: "Geçen konuşmamızda ne yapıyorduk?" | Answers from the summary; Memory → Conversations shows it | |
+| M3 | "Arabamın otoparkın P2 katında olduğunu unutma" → later "Arabam nerede?" | "P2" | |
+| M4 | Memory → ⋯ → Clear all AutoLoom memory | Confirmation; memories, summaries and name gone; notes and tasks kept | |
+
+### Connection acknowledgement (brief §80)
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| K1 | Wake phrase on, say "Hey Jarvis" | Nothing while connecting; then chime + "Bağlandım, dinliyorum." **exactly once** | |
+| K2 | Settings → Voice → Connection feedback = Chime only; start by wake phrase | Chime only, when ready | |
+| K3 | Airplane mode, "Hey Jarvis" | Low tone + "Bağlantı kurulamadı." | |
+| K4 | During a conversation switch Wi-Fi off and on | At most a subtle chime on reconnect; no second greeting | |
+| K5 | During a conversation fold the glasses / turn them off | "Ray-Ban bağlantısı koptu." | |
+| K6 | Developer → Voice diagnostics | Steps WakeDetected → … → Ready with times; the audio route | |
+
+### Voices and Jarvis Style (brief §81)
+
+| Voice | Selected | Active | Audibly different | Fallback | Pass/fail |
+|---|---|---|---|---|---|
+| Juniper | | | | | |
+| Maple | | | | | |
+| Spruce | | | | | |
+| Ember | | | | | |
+| Vale | | | | | |
+| Breeze | | | | | |
+| Arbor | | | | | |
+| Sol | | | | | |
+| Cove | | | | | |
+| Jarvis Style on (Cove + style) | | | | | |
+
+Jarvis Style is labelled in Settings as a style, not a voice clone; check the wording.
+
+### Natural conversation (brief §82) — one conversation
+
+Say in order: "Selam Jarvis." · "Bugün biraz yoğunum." · "Yarın 10'a Ahmet'i aramamı hatırlat." · "Bir de not al, kamerayı götüreceğim." · "Az önce ne not aldın?" · "Şu an önümdeki şeyi de bir kontrol et." · "Bunun Kanada fiyatına bak."
+
+| Check | Pass when | Result |
+|---|---|---|
+| Flow | Feels like one conversation; no canned "Tabii, size yardımcı olabilirim" | |
+| Reminder and note | Both saved, each confirmed once | |
+| "Az önce ne not aldın?" | Says "kamerayı götüreceğim" | |
+| Vision + web | Describes the item, then the Canadian price with a source name (no URL read aloud) | |
+
+### Interface
+
+| # | Check | Pass when | Result |
+|---|---|---|---|
+| U1 | Assistant screen with Ray-Ban | No resolution, FPS, frame, codec or age text anywhere | |
+| U2 | Say a note | Status word shows "Kaydediyor"/"Saving" briefly | |
+| U3 | Settings | Assistant, Voice, AI, Vision, Memory, Tools, Privacy, Developer, About | |
+| U4 | Developer → Camera diagnostics | All camera numbers are here | |
+
+---
+
+# Jarvis v1 (earlier results and tests)
 
 ## Automated results
 
@@ -48,7 +171,7 @@ Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actio
 
 Earlier suites (vision pipeline, camera, Live Vision, models, agent, core) still run unchanged.
 
-## Physical tests (iPhone + Ray-Ban Meta Gen 1)
+## Physical tests of Jarvis v1 (where they overlap, the v1.1 tables above replace them: reminders and events are now saved without a yes, and the camera overlay is gone)
 
 **Before you start**
 1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run (`docs/WINDOWS_INSTALL.md`).
@@ -137,7 +260,7 @@ Earlier suites (vision pipeline, camera, Live Vision, models, agent, core) still
 | U5 | Settings → Developer → overlay on | Metrics appear; off again → gone | |
 | U6 | Privacy center | Every permission listed with its state | |
 
-## Camera measurement sheet (from the overlay / Diagnostics)
+## Camera measurement sheet (Settings → Developer → Camera diagnostics)
 
 | Profile | Requested | Actual resolution | Actual fps (in / shown) | Transport | Dropped | Frame age |
 |---|---|---|---|---|---|---|

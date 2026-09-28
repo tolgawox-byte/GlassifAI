@@ -23,7 +23,9 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 │   PIPELINE A  preview: single pending slot ─► AVSampleBufferDisplayLayer                         │
 │   PIPELINE B  AI vision (on demand): profile ─► best-frame ─► one encode (+OCR, +crop)            │
 │                                                                                                  │
-│ GlassifAIRealtimeSession (WebRTC mic/speaker, data channel, captions, reconnect budget, metrics) │
+│ GlassifAIRealtimeSession (WebRTC mic/speaker, data channel, captions, reconnect budget, metrics, │
+│   connection phases → ready chime/phrase, turn interception: mute model reply, speak app result) │
+│      │ final user transcript ─► VoiceActionIntentBridge (LEVEL 1 parser) ─► runVoiceIntent       │
 │      │ delegation.created  "TASK: … | QUERY: …"                         ▲ speakable result /     │
 │      ▼                                                                  │ silent context notes   │
 │ AssistantOrchestrator ── TaskLedger (session/turn/task IDs, phases, T0–T5, vision profile)       │
@@ -36,7 +38,8 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 │  ├─ confirm_action / cancel_action / cancel                                                       │
 │  └─ live_vision_start/stop ─► LiveVisionController ─► scene notes as commentary context           │
 │                                                                                                  │
-│ ConversationContext · MemoryStore (SwiftData: memories + notes) · WakePhraseListener · Tools     │
+│ ConversationContext · MemoryStore (SwiftData: memories, notes, tasks; profile; summaries)       │
+│ GlassesLifecycleMonitor · ActionTraceLog · WakePhraseListener · Tools                            │
 │ Keychain: ChatGPT OAuth, agent gateway token        GlassifAICodexBridge (Rust): call, sideband   │
 └───────────────────────────────┬──────────────────────────────────────────────────────────────────┘
         auth.openai.com · chatgpt.com/backend-api/codex (voice, models, responses, search)
@@ -50,7 +53,8 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 | App root | Onboarding (once), login, then the tab shell; initializes DAT | `GlassifAIApp.swift`, `Runtime/OnboardingView.swift` |
 | Authentication and models | Device-code login, refresh, **model catalog** (full `/models` metadata) | `Runtime/ChatGPTAuthSession.swift`, `Runtime/ChatGPTKeychain.swift` |
 | Model routing | Roles (general, vision, reasoning, web), automatic choice by capability, overrides, health, GPT-6 Astra detection, effort mapping | `Runtime/ModelCatalog.swift`, `Runtime/ModelSettingsView.swift`, `Runtime/RoutingPolicy.swift` (`ModelSelector`) |
-| Voice session | Audio session, WebRTC, data channel, captions, turn tracking, **start ladder with Selected/Active voice**, preview, apply now, stop words, end commands, quiet timeout, auto-reconnect, latency metrics | `Runtime/GlassifAIRealtimeSession.swift`, `Runtime/VoiceCatalog.swift`, `Runtime/ConversationPolicy.swift` (see `VOICE_ARCHITECTURE.md`) |
+| Voice session | Audio session, WebRTC, data channel, captions, turn tracking, **connection phases and the ready announcement**, **turn interception for app-handled commands**, start ladder with Selected/Active voice, preview, apply now, stop words, end commands, quiet timeout, auto-reconnect, latency metrics | `Runtime/GlassifAIRealtimeSession.swift`, `Runtime/VoiceCatalog.swift`, `Runtime/ConversationPolicy.swift`, `Runtime/ConnectionFeedback.swift` (chime, Apple-voice fallback, Jarvis Style), `Runtime/VoiceDiagnosticsView.swift` (see `VOICE_ARCHITECTURE.md`) |
+| Voice action bridge | LEVEL 1 parser for explicit commands; execution with permission checks, permission retry, action trace | `Runtime/VoiceActionIntentBridge.swift`, `Runtime/VoiceIntentRunner.swift` |
 | Native bridge (v3) | Call creation (v1 and v2) returning the applied voice and model, sideband with reconnect and generation guard, context append (speakable or silent commentary) | `native/GlassifAICodexBridge/src/lib.rs` |
 | Routing policy | Envelope parser, realtime and executor instructions, tool and action schemas, preferences | `Runtime/RoutingPolicy.swift` |
 | Orchestrator | Verifies routes, runs tasks, vision attachments (with a high-detail retry before any "move closer"), memory and visual memory, reports, actions, contacts resolution, agent, cancellation, stale-result guard | `Runtime/AssistantOrchestrator.swift`, `Runtime/AssistantTasks.swift`, `Runtime/AssistantFlows.swift` |
@@ -60,10 +64,11 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 | Vision profiles | FAST/BALANCED/HIGH_DETAIL, query classifier, still-photo coordination, assist settings | `Runtime/VisionCapture.swift` |
 | OCR | Apple Vision text recognition with timeout, reading order, focus region | `Runtime/TextRecognition.swift` |
 | Live Vision | Adaptive scene notes during a conversation | `Runtime/LiveVision.swift` |
-| Glasses stream | DAT session, permissions, profiles, **HEVC/raw transport and watchdog**, device info | `ViewModels/StreamSessionViewModel.swift`, `ViewModels/VideoDecoder.swift` |
+| Glasses stream | DAT session, permissions, profiles, HEVC/raw transport and watchdog (foreground only), background-safe decoder (keyframe gate, session recreation, software fallback), device info | `ViewModels/StreamSessionViewModel.swift`, `ViewModels/VideoDecoder.swift` |
+| Glasses lifecycle | ForegroundActive / BackgroundStreaming / ScreenLockedStreaming / Suspended / Disconnected, transitions with frame counters, honest "cannot see" reasons, Camera diagnostics | `Runtime/GlassesLifecycle.swift`, `Runtime/CameraDiagnosticsView.swift` (see `BACKGROUND_STREAMING.md`) |
 | iPhone camera | AVCapture session and preview; throttled frame hand-off | `Runtime/GlassifAICamera.swift` |
 | Tools | Action kinds with SAFE / CONFIRM / STRONG CONFIRM, local guard, plan parser, **deterministic time parsing**, EventKit / notifications / contacts executor, tool registry, permission center, Tasks tab | `Runtime/DeviceActions.swift`, `Runtime/TimePhraseParser.swift`, `Runtime/ToolRegistry.swift`, `Runtime/PermissionCenter.swift`, `Runtime/ActionViews.swift`, `Runtime/TasksViews.swift` (see `NATIVE_TOOLS.md`) |
-| Memory | SwiftData memories and notes, explicit saving, on-device search, migration, Memory tab | `Runtime/MemoryStore.swift`, `Runtime/MemoryViews.swift` (see `MEMORY_ARCHITECTURE.md`) |
+| Memory | SwiftData memories, notes and AutoLoom tasks, user profile, conversation summaries (with `ConversationSummarizer`), ranking, on-device search, migration, Memory tab | `Runtime/MemoryStore.swift`, `Runtime/MemoryViews.swift`, `Runtime/ConversationMemory.swift` (see `MEMORY_ARCHITECTURE.md`) |
 | Agent gateway | Optional OpenClaw client, address policy, Keychain token | `Runtime/AgentGateway.swift`, `Runtime/AgentGatewaySettingsView.swift` |
 | Hands-free | Start coordinator, Siri intents and shortcuts (incl. Create AutoLoom Note), wake phrase, Hands-Free Ready, glasses link arming, greeting and chime | `Runtime/VoiceInvocation.swift`, `Runtime/WakePhrase.swift`, `Runtime/HandsFreeSettingsView.swift` (see `WAKE_INVOCATION.md`) |
 | Audio route | Route, interruption and media-reset monitoring; glasses HFP selection | `Runtime/AudioRouteMonitor.swift` |
@@ -72,6 +77,8 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 | Brand | Theme, mark; assets generated from `assets/brand/LOGO 2.png` | `Runtime/GlassifAITheme.swift`, `scripts/make-brand-assets.py` |
 
 ## Task routing
+
+Explicit commands (notes, memory, the user's name, reminders, notifications, AutoLoom tasks, calendar, routines, translation, answers to pending questions) are recognised by the app from the final transcript and run locally; the model's own reply to such a turn is muted and the app's result spoken (`VOICE_ARCHITECTURE.md`). Everything else follows the path below.
 
 The realtime voice model answers ordinary conversation itself. It delegates only when needed, with one structured line:
 
@@ -113,10 +120,11 @@ TASK: <vision|vision_read|web|vision_web|reasoning|memory|visual_memory|action|c
 
 1. Configure `AVAudioSession` (`.playAndRecord`, `.voiceChat`) with glasses HFP when preferred. Other headsets are never grabbed by mistake.
 2. Create the WebRTC peer, mic track, send-only video transceiver, and negotiated data channel. Create the offer and wait briefly for ICE gathering.
-3. Start the call with the start ladder: AutoLoom instructions and the selected voice, then without resume context, then the default voice, then the verified baseline. Every failure is recorded and shown (Selected vs Active voice).
-4. Captions and turns come from the data channel; delegations come from both the sideband and the data channel (deduplicated).
-5. **Mid-call failures** (ICE failed, task channel ended, audio services reset, a result that cannot be delivered) reconnect automatically within a budget of 3 in 2 minutes, resuming with the conversation summary. Initial-start failures and user hang-ups never reconnect.
-6. Teardown closes everything, ends the orchestrator session (discarding pending results), and stops Live Vision.
+3. Start the call with the start ladder: AutoLoom instructions (profile, memories, last conversation summary, Jarvis Style if on) and the selected voice, then without resume context, then the default voice, then the verified baseline. Every failure is recorded and shown (Selected vs Active voice).
+4. Ready only when the data channel is open and the audio route is up (glasses HFP when preferred); then, once per new conversation, the chime and/or "Bağlandım, dinliyorum." — a failure says "Bağlantı kurulamadı.".
+5. Captions and turns come from the data channel; delegations come from both the sideband and the data channel (deduplicated). Delegations that arrive before the final user transcript wait for the voice action bridge's decision.
+6. **Mid-call failures** (ICE failed, task channel ended, audio services reset, a result that cannot be delivered) reconnect automatically within a budget of 3 in 2 minutes, resuming with the conversation summary. Initial-start failures and user hang-ups never reconnect.
+7. Teardown closes everything, ends the orchestrator session (discarding pending results), and stops Live Vision. When the conversation really ends (not a reconnect), a short summary is saved if it was meaningful.
 
 Metrics: connect time, and the median time from the end of the user's turn to the first words of the answer (Diagnostics → Realtime).
 

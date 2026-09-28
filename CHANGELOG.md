@@ -2,6 +2,31 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1.1] — branch `autoloom-glasses-jarvis-v1`
+
+Baseline: `26f3685` (tag `baseline-26f3685-jarvis-v1`, CI run 36375889033). Nothing below is device-verified yet; see `TEST_REPORT.md`.
+
+### Fixed
+- **Spoken commands really run.** "Not al", "bunu hatırla", "yarın hatırlat" and "görev oluştur" depended on the voice model choosing a delegation and sometimes only got a conversational answer. A local voice action bridge now reads every final transcript (LEVEL 1 parser, LEVEL 2 structured classification only when details are missing) and executes notes, memory, the user's name, reminders, notifications, AutoLoom tasks and calendar requests itself — saved first, confirmed after. See `docs/VOICE_ARCHITECTURE.md`.
+- **One answer per command.** The model's own reply to a command the app handles is muted and the app's result is spoken instead (through the model's delegation for the same turn when there is one); delegations arriving before the final transcript wait, so nothing runs twice.
+- **Ray-Ban vision with the phone locked** (root causes in code; physical test required): the glasses stream is no longer paused in the background; the HEVC→raw fallback is never decided in the background; the decoder waits for keyframes, recreates lost sessions and falls back to software; `bluetooth-central` added. See `docs/BACKGROUND_STREAMING.md`.
+- **No developer text on the Assistant screen.** Camera numbers live only in Settings → Developer → Camera diagnostics; the overlay switch is gone.
+- **Greetings through the speakable channel** were sent as user messages and could be answered instead of said; app lines are now explicit "[App message …]" instructions.
+
+### Added
+- **Connection-ready acknowledgement:** WakeDetected → PreparingAudio → ConnectingRealtime → WaitingForDataChannel → RoutingAudio → Ready/Failed; chime and/or "Bağlandım, dinliyorum." once per new conversation, only when really ready; "Bağlantı kurulamadı." and "Ray-Ban bağlantısı koptu."; Connection Feedback setting; Voice diagnostics.
+- **Persistent memory:** user profile (name), conversation summaries (on by default, never transcripts), memory types PROFILE/PERSON/PLACE/VEHICLE/CONVERSATION_SUMMARY, ranking by relevance + exact names + pinned + recency, bounded injection (profile + memories + last summary), Smart Memory (off), Memory tab sections About me / Conversations / Visual memories, Clear all AutoLoom memory.
+- **AutoLoom Tasks** (local) next to Apple Reminders in the Tasks tab, with Today/Upcoming/Completed, editor and optional alert; voice: "görev oluştur", "görevlerim neler", "… görevini tamamla".
+- **Calendar:** "yarın ne var?"; explicit reminders and events are SAFE (an unclear time is still asked); 9–11 o'clock read as morning, 1–5 as afternoon; "cuma 3'e".
+- **Permission retry**, **action trace**, **"Saving"** status word, **routines** ("İşe başlıyorum", "günün özeti"), **daily briefing** (off by default), **translation** of the view.
+- **Jarvis Style:** closest ChatGPT voice (Cove) plus persona instructions; a style, never an actor imitation; Apple voice only as the offline fallback.
+- **Settings:** Voice section (selected/active/style, Jarvis Style, connection feedback, language, tone), Intelligence, conversation memory and Smart Memory, Tools shows AutoLoom Tasks and Shortcuts, Developer: Action & task trace, Voice diagnostics, Camera diagnostics.
+- **Glasses lifecycle states** with transition log and per-request proof of origin.
+- **Docs:** BACKGROUND_STREAMING (new), and updates to ARCHITECTURE, CAPABILITIES, MEMORY_ARCHITECTURE, VOICE_ARCHITECTURE, VOICE_SELECTION, WAKE_INVOCATION, NATIVE_TOOLS, RAYBAN_CAMERA_CAPABILITIES, DAT_1_MIGRATION, UI_REDESIGN, PRIVACY_AND_PERMISSIONS, TEST_REPORT.
+
+### Not in this build
+- DAT 1.0 (`Camera.photo`, "Hey Meta, start AutoLoom", `donState`): see `docs/DAT_1_MIGRATION.md`.
+
 ## [AutoLoom Jarvis v1] — branch `autoloom-glasses-jarvis-v1`
 
 Baseline: `3cb0437` (tag `baseline-3cb0437-vnext`, CI run 36362397832).

@@ -1,78 +1,87 @@
 # AutoLoom Media Glasses — capability report
 
-Branch `autoloom-glasses-jarvis-v1`. Status meanings:
+Branch `autoloom-glasses-jarvis-v1` (Jarvis v1.1). Status meanings:
 - **WORKING**: verified on the physical iPhone and Ray-Ban Meta Gen 1 by the owner, and unchanged since.
 - **PARTIAL**: works with a stated limit.
 - **EXPERIMENTAL**: implemented and covered by automated tests in CI; behaviour that depends on the AI model still needs real use.
 - **PHYSICAL TEST REQUIRED**: implemented and built in CI, but it depends on iOS, the audio hardware or the glasses in a way only the phone can confirm. `TEST_REPORT.md` has the test.
 - **UNAVAILABLE**: not possible on the current platforms or connection, or deliberately not built.
 
-Nothing is marked WORKING without a device test. Everything new in Jarvis v1 starts as EXPERIMENTAL or PHYSICAL TEST REQUIRED.
+Nothing is marked WORKING without a device test. Everything new in Jarvis v1 and v1.1 starts as EXPERIMENTAL or PHYSICAL TEST REQUIRED.
 
 This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex uses (`chatgpt.com/backend-api/codex/*`). Signing in does not unlock every feature of the ChatGPT app. No new paid service, API key or subscription is used.
+
+## Voice actions (new in v1.1)
+
+| Capability | Status | Notes |
+|---|---|---|
+| Voice action intent bridge (LEVEL 1 parser on the final transcript) | **EXPERIMENTAL** | Notes, memory, name, reminders, notifications, AutoLoom tasks, calendar read/create, task lists, routines, translation, yes/no/sabah/akşam. Unit-tested; the voice model is no longer needed to pick a delegation |
+| LEVEL 2 structured classification | **EXPERIMENTAL** | Only when the kind is certain but details are missing; strict JSON, times still from the user's words |
+| One answer per command (model reply muted, app result spoken) | **PHYSICAL TEST REQUIRED** | Depends on event timing on the real call; see `docs/VOICE_ARCHITECTURE.md` |
+| "Jarvis, not al: cuma Mercedes gelecek." → saved, then "Tamam, not aldım." | **PHYSICAL TEST REQUIRED** | Saved before the confirmation; unit test covers the saving |
+| Permission retry (command kept 10 min, runs after the permission) | **PHYSICAL TEST REQUIRED** | iOS asks for permissions only on screen |
+| Action trace (transcript → intent → parser → permission → executor → result) | **EXPERIMENTAL** | Developer → Action & task trace |
+| Text from the camera/OCR/web triggering an action | **UNAVAILABLE by design** | Only the user's own words reach the parser |
 
 ## Voice and conversation
 
 | Capability | Status | Notes |
 |---|---|---|
 | ChatGPT sign-in (device code) | **WORKING** | Unchanged |
-| Realtime voice call (`gpt-live-1-codex`, WebRTC, frameless protocol) | **WORKING** | Call setup unchanged; the start now tries the full AutoLoom configuration first and records every fallback |
-| Voice selection (Juniper, Maple, Spruce, Ember, Vale, Breeze, Arbor, Sol, Cove) | **PHYSICAL TEST REQUIRED** | Root cause fixed: earlier builds offered voices the protocol rejects, and the silent fallback always spoke with Juniper. See `docs/VOICE_SELECTION.md` |
-| Selected vs Active voice, fallback reason | **EXPERIMENTAL** | Settings → Voice and Developer → Diagnostics. The bridge now reports the applied voice and model |
-| Apply now (restart with the new voice) | **PHYSICAL TEST REQUIRED** | Resumes from the conversation summary |
-| Preview voice | **PHYSICAL TEST REQUIRED** | Short line through the speakable context channel with the microphone off. Whether the model says the exact line must be heard |
-| Natural Turkish, adaptive answer length | **EXPERIMENTAL** | New instructions; depends on the voice model |
-| Stop words ("Dur", "Sus", "Bekle", "Hayır", "Bir dakika", "Başka bir şey soracağım") | **PHYSICAL TEST REQUIRED** | The app silences the answer locally at once; the server also stops an answer the user talks over |
-| End commands ("Kapat", "Konuşmayı bitir", "Görüşürüz", "Jarvis stop") | **PHYSICAL TEST REQUIRED** | Ends after a short goodbye |
-| Quiet-conversation timeout (15 s / 30 s / 1 min / 2 min / Never) | **EXPERIMENTAL** | Default 2 minutes; anything in progress counts as activity |
-| "What can you do?" answered briefly | **EXPERIMENTAL** | Instruction-level |
-| Auto-reconnect after a network or audio drop | **EXPERIMENTAL** | Unchanged from vNext |
+| Realtime voice call (`gpt-live-1-codex`, WebRTC, frameless protocol) | **WORKING** | Call setup unchanged; the start tries the full AutoLoom configuration first and records every fallback |
+| Voice selection (Juniper, Maple, Spruce, Ember, Vale, Breeze, Arbor, Sol, Cove) | **PHYSICAL TEST REQUIRED** | Root cause fixed in v1: earlier builds offered voices the protocol rejects. See `docs/VOICE_SELECTION.md` |
+| Selected vs Active voice, fallback reason | **EXPERIMENTAL** | Settings → Voice and Developer → Voice diagnostics |
+| Jarvis Style (Cove + persona, a style not a clone) | **EXPERIMENTAL** | No actor imitation, no bundled audio. "Composed and direct" is ChatGPT's description; an accent is not promised |
+| Connection-ready acknowledgement ("Bağlandım, dinliyorum." / chime), once per new conversation | **PHYSICAL TEST REQUIRED** | Only after ChatGPT, WebRTC, the data channel and the audio route are ready. Setting: Chime + voice / Voice only / Chime only / Off |
+| Connection failure feedback ("Bağlantı kurulamadı.", "Ray-Ban bağlantısı koptu.") | **PHYSICAL TEST REQUIRED** | Low tone + on-device Apple voice |
+| Apply now (restart with the new voice) | **PHYSICAL TEST REQUIRED** | No new greeting |
+| Preview voice | **PHYSICAL TEST REQUIRED** | Now phrased as an app message so the model says the line instead of answering it |
+| Natural Turkish, no canned openers, adaptive length | **EXPERIMENTAL** | Instruction-level; depends on the voice model |
+| Stop words and end commands | **PHYSICAL TEST REQUIRED** | Unchanged |
+| Quiet-conversation timeout | **EXPERIMENTAL** | Unchanged |
+| Auto-reconnect | **EXPERIMENTAL** | A subtle chime when it works, the failure announcement when the budget is used |
 
 ## Assistant name, wake and hands-free
 
 | Capability | Status | Notes |
 |---|---|---|
-| Assistant name (default AutoLoom) | **EXPERIMENTAL** | Used in the instructions, greetings and stop commands |
-| Wake phrase setting ("Hey AutoLoom", "Jarvis", custom) | **PHYSICAL TEST REQUIRED** | On-device speech recognition; tolerant of split words |
-| State A — conversation running, address by name | **EXPERIMENTAL** | No wake phrase needed |
-| State B — app open, wake phrase armed | **PHYSICAL TEST REQUIRED** | |
-| State C — Hands-Free Ready in the background or locked | **PHYSICAL TEST REQUIRED** | Opt-in, time-limited, orange microphone dot; iOS may stop it, then the app pauses honestly |
-| State D — listening only while the glasses are connected | **PHYSICAL TEST REQUIRED** | Driven by the DAT `LinkState` event. DAT 0.5.0 has no worn/unworn event |
-| State E — "Hey Siri, start AutoLoom" / personal Siri shortcut | **EXPERIMENTAL** | App Shortcuts |
-| Greeting (Minimal / Normal / Jarvis style / Custom) and activation feedback (Off / Subtle chime / Spoken greeting) | **PHYSICAL TEST REQUIRED** | Hands-free starts only; button starts stay quiet |
-| "Hey Meta, start AutoLoom" | **UNAVAILABLE** | Needs DAT 1.0, glasses firmware V128, Meta AI V290 and Voice Invocation approval in the Wearables Developer Center. See `docs/WAKE_INVOCATION.md` |
-| A system-wide custom wake word | **UNAVAILABLE** | Not offered by iOS or the Meta glasses to third-party apps |
+| Assistant name (default AutoLoom) | **EXPERIMENTAL** | |
+| Wake phrase ("Hey AutoLoom", "Jarvis", "Hey Jarvis", custom) | **PHYSICAL TEST REQUIRED** | On-device speech recognition |
+| States A–E (conversation, app open, Hands-Free Ready, glasses-connected arming, Siri) | **PHYSICAL TEST REQUIRED** / **EXPERIMENTAL** (A, E) | Unchanged; state D uses the DAT 0.5.0 `LinkState` event |
+| Arming by wearing the glasses (`donState`) | **UNAVAILABLE** in this build | DAT 1.0 API; see `docs/DAT_1_MIGRATION.md` |
+| "Hey Meta, start AutoLoom" | **UNAVAILABLE** | Needs DAT 1.0, firmware V128, Meta AI V290 and Voice Invocation approval in the Wearables Developer Center |
+| A system-wide custom wake word | **UNAVAILABLE** | Not offered to third-party apps |
+| Routines: "İşe başlıyorum" (today's tasks + calendar + arms Hands-Free Ready), "günün özeti" | **EXPERIMENTAL** | Reads only phone data; weather/news not included |
+| Daily briefing on the first conversation of the day | **UNAVAILABLE** in this build | Available on request ("günün özeti"); no automatic briefing |
 
-## Memory and notes
+## Memory, notes and tasks
 
 | Capability | Status | Notes |
 |---|---|---|
-| AutoLoom Memory (SwiftData on this iPhone) | **EXPERIMENTAL** | Kinds FACT / EPISODE / NOTE / VISUAL_MEMORY / PREFERENCE / TASK_CONTEXT. Explicit saving only |
-| Memory tab (search, Pinned / Recent / People / Places / Vehicles / Other, edit, pin, forget, delete all) | **PHYSICAL TEST REQUIRED** | UI builds in CI; needs a look on the phone |
-| Search | **PARTIAL** | Turkish: word stems and folded letters. English: plus Apple's on-device sentence embedding. No Turkish embedding exists on iOS |
-| Visual memory ("bunu hatırla") | **PHYSICAL TEST REQUIRED** | Opt-in; a description is saved; photo and place only if turned on |
-| Forgetting by voice | **EXPERIMENTAL** | Needs a yes (CONFIRM) |
-| AutoLoom Notes (title, text, tags, links, place) | **EXPERIMENTAL** | Memory tab → Notes; share to Apple Notes |
+| AutoLoom Memory (SwiftData on this iPhone) | **EXPERIMENTAL** | Types PROFILE, PREFERENCE, FACT, PERSON, PLACE, VEHICLE, EPISODE, NOTE, TASK_CONTEXT, VISUAL_MEMORY, CONVERSATION_SUMMARY |
+| User profile ("Benim adım Tolga" → "Benim adım ne?") | **EXPERIMENTAL** | Only what the user says or types; used "naturally, not in every sentence" |
+| Conversation memory (summaries of meaningful conversations) | **EXPERIMENTAL** | On by default; summaries only, never transcripts; searchable; the latest goes into the next conversation |
+| Smart Memory (offers to remember, saves only after a yes) | **EXPERIMENTAL** | Off by default |
+| Retrieval: Turkish stems, English on-device embedding, exact names, pinned, recency | **PARTIAL** | No Turkish sentence embedding exists on iOS |
+| Memory tab (About me, Pinned, Recent, People, Places, Vehicles, Conversations, Visual; edit, pin, forget, Clear all) | **PHYSICAL TEST REQUIRED** | |
+| Visual memory ("bunu hatırla", "anahtarımı buraya bıraktığımı hatırla") | **PHYSICAL TEST REQUIRED** | Opt-in; one frame when asked, never continuous |
+| AutoLoom Notes | **EXPERIMENTAL** | Separate from memory; share to Apple Notes |
+| AutoLoom Tasks (Today / Upcoming / Completed, optional alert) | **EXPERIMENTAL** | Local, next to Apple Reminders in the Tasks tab |
 | Apple Notes direct write | **UNAVAILABLE** | No public API; Share is offered |
-| Migration of earlier memory.json / notes.json | **EXPERIMENTAL** | Imported once; the old files are kept as backups |
-| ChatGPT account memory or chat history | **UNAVAILABLE** | Not reachable through this connection |
+| ChatGPT account memory or chat history | **UNAVAILABLE** | Not reachable; the assistant says so |
 
 ## iPhone tools
 
 | Capability | Status | Notes |
 |---|---|---|
-| Deterministic time parsing (Turkish and English) | **EXPERIMENTAL** | About 40 unit-tested phrases, including words that must not be read as times. The model copies the user's words; model timestamps are ignored; morning/evening is asked when both fit |
-| Reminders (create, list) | **PHYSICAL TEST REQUIRED** | EventKit; CONFIRM; success only after iOS saves it |
-| Calendar (today, upcoming, create) | **PHYSICAL TEST REQUIRED** | CONFIRM for creating |
-| Tasks tab (Today / Upcoming / Completed, create, complete, delete with confirmation, reschedule) | **PHYSICAL TEST REQUIRED** | On Apple Reminders |
-| Local notifications | **PHYSICAL TEST REQUIRED** | SAFE; listed in the Tasks tab, cancellable |
-| Contacts lookup (for calls and messages) | **PHYSICAL TEST REQUIRED** | Read-only; asks which one when several match |
-| Maps, open link, share, call, message | **EXPERIMENTAL** | STRONG CONFIRM: only a tap confirms |
-| Clipboard, notes | **EXPERIMENTAL** | SAFE |
-| Tool registry with per-tool switches | **EXPERIMENTAL** | Settings → Tools |
-| Deleting calendar events by voice | **UNAVAILABLE** | Not built; reminders can be deleted in the Tasks tab with confirmation |
-| Email, purchases, payments, deleting data, posting | **UNAVAILABLE** | Refused locally before any model call |
-| App Intents: Start Conversation, Ask AutoLoom, Create AutoLoom Note, Start Live Vision | **EXPERIMENTAL** | |
+| Deterministic time parsing (Turkish and English) | **EXPERIMENTAL** | 9–11 read as morning, 1–5 as afternoon; 6–8 asked; "cuma 3'e"; model timestamps ignored |
+| Reminders (create, list) | **PHYSICAL TEST REQUIRED** | EventKit; SAFE for an explicit request; success only after iOS saves it |
+| Calendar (today, tomorrow, upcoming, create) | **PHYSICAL TEST REQUIRED** | SAFE for an explicit request; an unclear time is asked |
+| Tasks tab | **PHYSICAL TEST REQUIRED** | AutoLoom tasks + Apple Reminders; refreshes right after a spoken action |
+| Local notifications | **PHYSICAL TEST REQUIRED** | SAFE |
+| Contacts lookup, maps, links, share, call, message | **EXPERIMENTAL** / **PHYSICAL TEST REQUIRED** | Unchanged; calls/messages/sharing need a tap |
+| Email, purchases, payments, deleting data, posting | **UNAVAILABLE** | Refused locally |
+| App Intents: Start Conversation, Ask AutoLoom, Create AutoLoom Note, Start Live Vision | **EXPERIMENTAL** | "Ask AutoLoom" now also runs commands ("not al: …") |
 | OpenClaw agent gateway | **EXPERIMENTAL** (optional) | Off by default |
 
 ## Camera and vision
@@ -80,12 +89,14 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Capability | Status | Notes |
 |---|---|---|
 | iPhone camera vision | **WORKING** (earlier pipeline) / **EXPERIMENTAL** (profiles, OCR, crop) | |
-| Ray-Ban preview and vision | **WORKING** on DAT 0.4.0 / **EXPERIMENTAL** on DAT 0.5.0 | Pipeline unchanged since vNext |
-| High-detail retry before "move closer" | **EXPERIMENTAL** | An unclear standard answer is retried with the best frame, OCR, a zoomed crop and upscaling |
-| Specific, non-repeating reposition advice | **EXPERIMENTAL** | One specific tip; not repeated within 90 s |
-| Source vs encoded resolution in diagnostics | **EXPERIMENTAL** | Upscaling is labelled, never presented as extra detail |
-| Live Vision | **EXPERIMENTAL** | Adaptive, time-limited silent notes |
-| Ray-Ban full-resolution photo (`Camera.photo`) | **UNAVAILABLE** in this build | Needs DAT 1.0 and firmware V128. Plan: `docs/DAT_1_MIGRATION.md` |
+| Ray-Ban preview and vision (foreground) | **WORKING** on DAT 0.4.0 / **EXPERIMENTAL** on DAT 0.5.0 | |
+| Ray-Ban vision with the iPhone locked | **PHYSICAL TEST REQUIRED** | Root causes fixed (see `docs/BACKGROUND_STREAMING.md`): no background pause, no background fallback to raw, background-safe decoder, `bluetooth-central`. Meta's own sample stops decoding in the background, so the test decides |
+| Lifecycle states (ForegroundActive, BackgroundStreaming, ScreenLockedStreaming, Suspended, Disconnected) | **EXPERIMENTAL** | Transitions logged with frame counters |
+| Camera source proof per request (pipeline state, transport, sequence, age, dimensions) | **EXPERIMENTAL** | Metadata only, never the image |
+| Camera diagnostics screen | **EXPERIMENTAL** | All technical camera numbers live here; none on the Assistant screen |
+| High-detail retry before "move closer" | **EXPERIMENTAL** | Best frame, OCR, zoomed crop, upscaling |
+| Translation of what is in view ("bunu Türkçeye çevir") | **EXPERIMENTAL** | High-detail read + translation |
+| Ray-Ban full-resolution photo (`Camera.photo`) | **UNAVAILABLE** in this build | DAT 1.0 (beta API) + firmware V128. Plan and variant: `docs/DAT_1_MIGRATION.md` |
 | Face recognition | **UNAVAILABLE** | Not built |
 
 ## Interface
@@ -93,19 +104,16 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Capability | Status | Notes |
 |---|---|---|
 | Tabs: Assistant, Memory, Tasks, Settings | **PHYSICAL TEST REQUIRED** | |
-| Assistant screen: state word, camera indicator, camera view or orb, voice button | **PHYSICAL TEST REQUIRED** | No FPS or frame numbers unless Developer → overlay is on |
-| Seven-page onboarding | **PHYSICAL TEST REQUIRED** | Shown once |
-| Privacy center with every permission's state | **PHYSICAL TEST REQUIRED** | |
-| Friendly errors | **EXPERIMENTAL** | Mapping unit-tested; technical text in Developer |
-| Turkish / English interface | **PARTIAL** | Main screens and settings; some diagnostics stay English |
-| Developer: diagnostics, copyable sanitized task trace | **EXPERIMENTAL** | |
+| Assistant screen without any technical camera text | **PHYSICAL TEST REQUIRED** | The overlay switch was removed |
+| Status words incl. "Saving" | **EXPERIMENTAL** | Unit-tested mapping |
+| Settings: Assistant, Voice, AI, Vision, Memory, Tools, Privacy, Developer (Diagnostics, Action & task trace, Voice diagnostics, Camera diagnostics), About | **PHYSICAL TEST REQUIRED** | |
+| Turkish / English interface | **PARTIAL** | Main screens and settings; diagnostics stay English |
 
 ## Web, models, battery
 
 | Capability | Status | Notes |
 |---|---|---|
-| Live web search with sources; vision + web; reports | **EXPERIMENTAL** | Unchanged from vNext |
+| Live web search with sources; vision + web; reports | **EXPERIMENTAL** | Unchanged |
 | Model discovery and task routing | **EXPERIMENTAL** | Unchanged |
-| GPT-6 Astra | **EXPERIMENTAL** (detection) | Used only if this connection lists it |
-| Battery states (Idle / Hands-Free Ready / Conversation / Live Vision) | **PHYSICAL TEST REQUIRED** | Screen may sleep when idle; an idle glasses stream pauses in the background; Hands-Free Ready is time-limited |
+| Battery | **PHYSICAL TEST REQUIRED** | The glasses stream no longer pauses in the background (needed for locked-screen vision), so it uses more battery while the glasses stream; Live Vision and Hands-Free Ready stay time-limited |
 | Offline mode | **UNAVAILABLE** | Not built |

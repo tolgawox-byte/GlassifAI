@@ -40,6 +40,22 @@ Choosing another voice in Settings "often still gives the same voice".
 | Sol | Savvy and relaxed | |
 | Cove | Composed and direct | |
 
+## Jarvis Style
+
+A **style**, not a voice clone (brief sections 42–45).
+
+| Part | What it is |
+|---|---|
+| Voice | The closest of the nine ChatGPT voices this protocol accepts: **Cove**, "composed and direct" in ChatGPT's own description. Chosen from the descriptions; none of the nine is documented as British-accented, so the Settings text does not promise an accent. The user can pick any other voice while the style is on |
+| Delivery | Extra realtime instructions: composed, discreet, courteous, economical with words, occasional dry humour, steady pace; Turkish in a polished *siz* register with "efendim" now and then, never in every sentence; the user's name only occasionally |
+| Limits | "Do not imitate any real actor or film character, do not quote films, and never claim to be a character from a film." |
+| Greeting | Turning the style on switches the connection phrase from Normal to Jarvis ("Bağlantı hazır. Sizi dinliyorum."); turning it off switches back |
+| Offline fallback | For the few moments the realtime voice cannot speak (a failed connection), an Apple voice installed on the iPhone is used: premium, then enhanced quality; with Jarvis Style, a British English male voice for English. Nothing is downloaded or bundled |
+
+Not done, on purpose: no film audio, no scraped dialogue, no actor clone, no downloaded voice model. The primary live conversation stays on the realtime voice; it is never replaced by a local TTS voice to get a special sound. Nothing voice-related is bundled, so `THIRD_PARTY_NOTICES.md` has no voice entry.
+
+Settings → Voice now shows **Selected voice**, **Active voice**, **Style** (Natural / Jarvis Style), the Jarvis Style switch, the voice list with previews, **Connection feedback** (Chime + voice / Voice only / Chime only / Off, with the phrase), **Language** and **Conversation tone**, and the offline Apple voice with a test button.
+
 ## Device check
 
 1. Settings → Voice → press ▶ next to three different voices. Each preview should sound clearly different.
@@ -48,3 +64,5 @@ Choosing another voice in Settings "often still gives the same voice".
 4. Developer → Diagnostics: "Voice (selected / active)" matches, "Voice fallback reason" = none.
 
 If the active voice differs, the fallback reason in Settings shows ChatGPT's own error text. That is the information needed to fix it.
+5. Turn **Jarvis Style** on: the selected voice becomes Cove and the style shows "Jarvis Style". Start a conversation and ask something: calm, concise, courteous; no film quotes; "efendim" at most now and then.
+6. Turn it off: the earlier voice comes back.

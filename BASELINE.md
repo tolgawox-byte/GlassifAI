@@ -1,5 +1,27 @@
 # Baseline — last device-verified working build
 
+## Baseline for Jarvis v1.1 (recorded 2026-09-28, brief "ULTIMATE JARVIS / MEMORY / RAY-BAN VISION / VOICE ACTIONS")
+
+| Item | Value |
+| --- | --- |
+| Branch | `autoloom-glasses-jarvis-v1` (work continues on the same branch; `main`, `autoloom-glasses-next` and `autoloom-glasses-vNext` untouched) |
+| Starting HEAD | `4157c69` (docs only on top of `26f3685`) |
+| Build of that HEAD | CI run [36375889033](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36375889033), commit `26f3685`: iOS 126/126, Rust 8/8, Debug + Release IPAs |
+| Rollback tag | `baseline-26f3685-jarvis-v1` (annotated, on `26f3685`) |
+| Older rollbacks | `baseline-3cb0437-vnext` (vNext), `baseline-44f089d-vision-working` (last build confirmed on the phone, DAT 0.4.0) |
+
+What the owner reported from the phone, and asked for, before this work:
+- Spoken "not al", "bunu hatırla", "yarın hatırlat", "görev oluştur" sometimes got only a conversational answer and nothing was saved.
+- With the iPhone screen locked, Ray-Ban vision stopped ("cannot see").
+- The main screen still showed camera numbers (requested/actual, FPS, frame count, codec, frame age, processing).
+- After "Hey AutoLoom" there was no audible sign of when the connection was really ready.
+- The owner wants the assistant to remember them across sessions (name, facts, earlier AutoLoom conversations).
+
+Rollback: install the IPA from run 36375889033, or rebuild with `git checkout baseline-26f3685-jarvis-v1`.
+
+---
+
+
 ## Baseline for `autoloom-glasses-jarvis-v1` (recorded 2026-09-28)
 
 | Item | Value |

@@ -11,6 +11,7 @@ AutoLoom Media Glasses is a modified version of GlassifAI. The GlassifAI MIT Lic
 Integrations that ship no third-party code in this repository:
 - **Meta Wearables DAT 0.5.0**: a Swift package fetched at build time under Meta's terms (above).
 - **Apple frameworks**: Vision (OCR), Speech, EventKit, and App Intents are part of iOS.
+- **Voices and sounds**: nothing is bundled. The live voice is ChatGPT's realtime voice; "Jarvis Style" is instructions plus one of ChatGPT's own voices, not a recording or a clone. The connection chimes are tones generated in code at run time. The offline announcement uses an Apple system voice already installed on the iPhone (`AVSpeechSynthesizer`). No voice model, film audio or dialogue is downloaded or included.
 - **OpenClaw**: the optional agent gateway adapter talks to the user's own OpenClaw installation over its documented HTTP API. No OpenClaw code is included.
 
 No third-party trademark rights are granted by the GlassifAI MIT License. ChatGPT and OpenAI are trademarks of OpenAI; Meta and Ray-Ban Meta are trademarks of their respective owners. GlassifAI is an independent project and is not affiliated with or endorsed by OpenAI or Meta.

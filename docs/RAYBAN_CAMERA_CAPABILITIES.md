@@ -100,12 +100,17 @@ Glass-to-glass latency: the glasses' capture clock is not exposed. Use the stopw
 
 ## Physical test procedure (camera part of `TEST_REPORT.md`)
 
-1. Settings → Camera → **Show camera metrics overlay** on. Select **Ray-Ban**.
-2. With the glasses on for 10 s, read the overlay: *Requested* and *Actual* (resolution, fps, pixel format), dropped frames, processing times, frame age.
+1. Select **Ray-Ban**. Open Settings → Developer → **Camera diagnostics** (the metrics are no longer shown on the Assistant screen).
+2. With the glasses on for 10 s, read *Requested* and *Actual* (resolution, fps, pixel format), dropped frames, processing times and frame age.
 3. Repeat for each stream profile: Detail 720p/15, Max detail 720p/7, Balanced 720p/24, Smooth 504p/30. Switch the camera to iPhone and back after changing a profile.
 4. Latency: point the glasses at a phone showing a millisecond stopwatch, take one photo of both screens with a third device, and compare the times. Repeat 3 times.
-5. Reading: hold a label about 40 cm away and ask "Jarvis, etiketteki küçük yazıyı oku". Diagnostics → Recent tasks shows the image source (`OCR+VIDEO`), best-of-n, upscale, crop, and OCR line count. Compare with Text detail mode off.
-6. Record every number in `TEST_REPORT.md`. Don't claim "Meta AI quality" without them.
+5. Reading: hold a label about 40 cm away and ask "Jarvis, etiketteki küçük yazıyı oku". Developer → Action & task trace shows the image source (`OCR+VIDEO`), best-of-n, upscale, crop, OCR line count and the pipeline proof (`ForegroundActive · HEVC (hvc1) app-decoded glasses sample`). Compare with Text detail mode off.
+6. Locked screen: the procedure in `BACKGROUND_STREAMING.md`.
+7. Record every number in `TEST_REPORT.md`. Don't claim "Meta AI quality" without them.
+
+## Locked screen (Jarvis v1.1)
+
+The vision path reads decoded glasses samples, never the preview. The stream is no longer paused in the background, the HEVC→raw fallback is never decided in the background (raw pauses there), the decoder survives background session loss (keyframe gate, session recreation, software fallback) and `bluetooth-central` was added. Lifecycle states, background decode counters and per-request proof of origin are in Camera diagnostics. Details and the physical test: `BACKGROUND_STREAMING.md`.
 
 ## Upgrade path to DAT 1.0 (after the Meta rollout reaches the glasses)
 
@@ -114,3 +119,4 @@ Glass-to-glass latency: the glasses' capture clock is not exposed. Use the stopw
 3. For reading requests, use `Camera.photo` at `.full`/`.high` (stop the stream, capture, restart). The existing high-detail pipeline (OCR, crop, `detail: high`, patch budget) then works on a much larger source.
 4. Add the Hey Meta `VoiceInvocationsStream` (see `VOICE_INVOCATION.md`).
 5. Keep the 0.5.0 build as a rollback. Integration versions created before 1.0 don't work with 1.0 builds.
+6. Check the transport: Meta's 1.0 guide says a user who denies Local Network access "will continue over Bluetooth LE, but without streaming", i.e. 1.0 camera streaming may need the Wi-Fi transport (`NSLocalNetworkUsageDescription`, `NSBonjourServices`, and possibly entitlements a free signing team cannot use). Only a device test on firmware V128 settles this; it is one more reason the 0.5.0 build stays the main build.
