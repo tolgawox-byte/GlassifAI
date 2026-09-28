@@ -28,6 +28,8 @@ enum AssistantActivity: Equatable {
   case searching
   /// Preparing or running an iPhone action.
   case acting
+  /// Saving to or searching the user's memory.
+  case remembering
   case thinking
 }
 
@@ -90,6 +92,9 @@ final class AssistantOrchestrator: ObservableObject {
   private var hostedSearchUnsupported = Set<String>()
   /// Set if the endpoint ever rejects an explicit image `detail`.
   private var imageDetailRejected = false
+  /// When a vision answer last told the user to reposition the camera, so
+  /// the advice is not repeated every turn.
+  private var lastRepositionAdviceAt: Date?
   private let client = ResponsesClient()
 
   private var availableModels: [String] { ChatGPTAuthSession.shared.availableModels }
@@ -274,9 +279,14 @@ final class AssistantOrchestrator: ObservableObject {
           speakable: "iPhone actions are turned off in the app settings, so nothing was done. The user can enable them in Settings, iPhone actions.",
           kind: requested)
       }
-      if requested == .localMemory && !LocalMemoryStore.shared.isEnabled {
+      if (requested == .localMemory || requested == .visualMemory) && !MemoryStore.shared.isEnabled {
         return Outcome(
-          speakable: "On-device memory is turned off. The user can enable it in Settings, Memory. Nothing was saved.",
+          speakable: "Memory is turned off in the app. The user can turn it on in Settings, Memory. Nothing was saved or recalled.",
+          kind: requested)
+      }
+      if requested == .visualMemory && !MemoryStore.shared.visualMemoriesEnabled {
+        return Outcome(
+          speakable: "Visual memories are off. The user can turn them on in Settings, Memory, Visual memories. Nothing was saved.",
           kind: requested)
       }
       if requested.usesCamera && camera == .off {
@@ -305,6 +315,9 @@ final class AssistantOrchestrator: ObservableObject {
     do {
       if kind == .localMemory {
         return try await runMemory(taskID: taskID, query: query)
+      }
+      if kind == .visualMemory {
+        return try await runVisualMemory(taskID: taskID, query: query)
       }
       if kind == .authorizedAction {
         return try await runAction(taskID: taskID, query: query)
@@ -402,8 +415,23 @@ final class AssistantOrchestrator: ObservableObject {
       attachment = try await prepareVisionImage(taskID: taskID, detail: detail)
     }
     guard kind.usesWeb else {
-      let result = try await callModel(
+      var result = try await callModel(
         taskID: taskID, kind: kind, query: query, tools: [], attachment: attachment, detail: detail)
+      if kind == .vision, detail != .high, VisionAnswerCheck.suggestsUnclear(result.text) {
+        // Before any "move closer": the sharpest recent frame in high detail
+        // with on-device OCR and a zoomed crop of the text.
+        NSLog("[AutoLoom] vision answer was unclear; retrying with the high-detail profile")
+        ledger.update(taskID) {
+          $0.visionProfile = .high
+          $0.notes.append("unclear standard answer → high-detail retry (best frame, OCR, crop)")
+        }
+        let sharper = try await prepareVisionImage(taskID: taskID, detail: .high)
+        result = try await callModel(
+          taskID: taskID, kind: kind, query: query, tools: [], attachment: sharper, detail: .high)
+      }
+      if kind.usesCamera, VisionAnswerCheck.containsRepositionAdvice(result.text) {
+        lastRepositionAdviceAt = Date()
+      }
       return makeOutcome(kind: kind, query: query, result: result)
     }
     let hostedModel = ModelSelector.model(
@@ -506,22 +534,80 @@ final class AssistantOrchestrator: ObservableObject {
       schema: AssistantTools.actionSchema)
     try Task.checkCancellation()
     let staged: ActionStageResult
-    switch DeviceActionParser.parse(result.text) {
+    switch DeviceActionParser.parse(result.text, query: query) {
     case .failure(let error):
       staged = ActionStageResult(
         speakable: error.speakable + " Tell the user briefly and ask for what is missing.",
         display: nil, failed: "action plan: \(error.speakable)")
-    case .success(let plan):
+    case .success(var plan):
+      guard ToolRegistry.allows(plan.kind) else {
+        return Outcome(
+          speakable: "The \(plan.kind.label) tool is turned off in Settings, Tools, so nothing was done. Tell the user.",
+          kind: .authorizedAction)
+      }
+      if plan.kind == .call || plan.kind == .message, plan.phone == nil, let name = plan.recipient {
+        switch await resolveContact(name) {
+        case .found(let phone, let fullName):
+          plan.phone = phone
+          plan.recipient = fullName
+          ledger.update(taskID) { $0.notes.append("contact resolved on the phone") }
+        case .ask(let text):
+          return Outcome(speakable: text, kind: .authorizedAction)
+        case .unavailable(let text):
+          // A message can still open without a recipient; a call cannot.
+          if plan.kind == .call { return Outcome(speakable: text, kind: .authorizedAction) }
+        }
+      }
       staged = await stage(plan)
     }
     return Outcome(speakable: staged.speakable, display: staged.display, kind: .authorizedAction, failed: staged.failed)
   }
 
-  /// Runs a read-only action now, or holds the plan until the user confirms:
-  /// saves by a spoken yes or a tap, everything that leaves the app by a tap.
+  private enum ContactResolution {
+    case found(phone: String, name: String)
+    case ask(String)
+    case unavailable(String)
+  }
+
+  /// Finds the number for "call Ahmet" in Contacts (read-only). Several
+  /// matches or numbers are handed back as a question, never guessed.
+  private func resolveContact(_ name: String) async -> ContactResolution {
+    do {
+      let matches = try await ContactsLookup.find(name).filter { !$0.phones.isEmpty }
+      guard !matches.isEmpty else {
+        return .unavailable("No contact named \(name) with a phone number was found on this iPhone. Ask the user for the number.")
+      }
+      guard matches.count == 1, let match = matches.first else {
+        let names = matches.prefix(4).map(\.name).joined(separator: ", ")
+        return .ask("Several contacts match \(name): \(names). Ask the user which one they mean.")
+      }
+      let mobile = match.phones.first { phone in
+        let label = phone.label.lowercased()
+        return label.contains("mobile") || label.contains("cep") || label.contains("iphone")
+      }
+      if let chosen = match.phones.count == 1 ? match.phones.first : mobile,
+         let phone = DeviceActionParser.normalizedPhone(chosen.number) {
+        return .found(phone: phone, name: match.name)
+      }
+      let numbers = match.phones.prefix(4).map { "\($0.label) \($0.number)" }.joined(separator: ", ")
+      return .ask("\(match.name) has several numbers: \(numbers). Ask the user which one to use.")
+    } catch {
+      return .unavailable(LogSanitizer.sanitize(error.localizedDescription) + " Tell the user.")
+    }
+  }
+
+  /// SAFE actions run now; CONFIRM actions wait for a spoken yes or a tap;
+  /// STRONG CONFIRM actions (anything that leaves the app or contacts
+  /// someone) wait for a tap. An ambiguous time is always asked first.
   func stage(_ plan: DeviceActionPlan) async -> ActionStageResult {
+    if let ambiguity = plan.ambiguityNote {
+      pendingAction = PendingDeviceAction(plan: plan)
+      return ActionStageResult(
+        speakable: "\(ambiguity) Proposed: \(plan.summary). If the user means the other time, delegate the action again with those words; if they confirm this one, delegate TASK: confirm_action. Nothing is saved yet.",
+        display: plan.summary, failed: nil)
+    }
     switch plan.risk {
-    case .readOnly:
+    case .safe:
       do {
         let text = try await DeviceActionExecutor.shared.run(plan)
         lastActionResult = text
@@ -531,12 +617,12 @@ final class AssistantOrchestrator: ObservableObject {
         let message = LogSanitizer.sanitize(error.localizedDescription)
         return ActionStageResult(speakable: message + " Tell the user.", display: nil, failed: message)
       }
-    case .save:
+    case .confirm:
       pendingAction = PendingDeviceAction(plan: plan)
       return ActionStageResult(
-        speakable: "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to confirm. If they say yes, delegate TASK: confirm_action; if no, TASK: cancel_action. They can also tap Save or Cancel on the phone. Nothing is saved yet.",
+        speakable: "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to confirm. If they say yes, delegate TASK: confirm_action; if no, TASK: cancel_action. They can also tap Confirm or Cancel on the phone. Nothing is saved yet.",
         display: plan.summary, failed: nil)
-    case .needsTap:
+    case .strongConfirm:
       pendingAction = PendingDeviceAction(plan: plan)
       return ActionStageResult(
         speakable: "\(plan.summary) is ready on the phone screen. For safety the user must tap to confirm it there; a spoken yes is not enough. Tell the user briefly. Nothing has happened yet.",
@@ -551,7 +637,7 @@ final class AssistantOrchestrator: ObservableObject {
       pendingAction = nil
       return "There is no action waiting for confirmation."
     }
-    if byVoice && pending.plan.risk == .needsTap {
+    if byVoice && pending.plan.risk == .strongConfirm {
       return "For safety, this must be confirmed with a tap on the phone; a spoken yes is not enough."
     }
     pendingAction = nil
@@ -631,8 +717,14 @@ final class AssistantOrchestrator: ObservableObject {
     let outcome = try await runExecutor(taskID: taskID, kind: .report, query: query, image: false)
     guard outcome.failed == nil, let report = outcome.display, !report.isEmpty else { return outcome }
     let title = "Report: " + String(query.prefix(60))
-    AutoLoomNotesStore.shared.add(
-      title: title, body: report, source: "report", sources: outcome.sources.map { $0.url.absoluteString })
+    guard MemoryStore.shared.addNote(
+      title: title, content: report, source: "report", tags: ["report"],
+      links: outcome.sources.map { $0.url.absoluteString }) != nil else {
+      var failed = outcome
+      failed.speakable = "The research finished but the note could not be saved. Tell the user and give the short answer:\n" +
+        String(report.prefix(600))
+      return failed
+    }
     let summary = report
       .components(separatedBy: CharacterSet.newlines)
       .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -645,27 +737,101 @@ final class AssistantOrchestrator: ObservableObject {
     return spoken
   }
 
+  /// Explicit memory only: the voice model writes "save:", "recall:",
+  /// "forget:" or "list"; without a prefix a model classifies the request
+  /// (strict JSON) and the store executes it. Search runs on the phone.
   private func runMemory(taskID: UUID, query: String) async throws -> Outcome {
-    let memory = LocalMemoryStore.shared
-    let listing = memory.items.isEmpty
-      ? "(empty)"
-      : memory.items.map { "- \($0.text)" }.joined(separator: "\n")
-    let request = "Current memory list:\n\(listing)\n\nUser request: \(query)"
+    let store = MemoryStore.shared
+    var request = MemoryRequest.parse(query)
+    if request == nil {
+      let result = try await callModel(
+        taskID: taskID, kind: .localMemory, query: query, tools: [], attachment: nil,
+        schema: AssistantTools.memorySchema)
+      request = MemoryRequest.decodePlan(result.text)
+      ledger.update(taskID) { $0.notes.append("memory request classified by the model") }
+    }
+    guard let request else {
+      return Outcome(
+        speakable: "It is not clear what to remember or recall. Ask the user briefly.",
+        kind: .localMemory)
+    }
+    switch request {
+    case .save(let text, let title, let kind):
+      guard let record = store.remember(text, title: title, kind: kind, source: "voice") else {
+        return Outcome(speakable: "The memory could not be saved. Tell the user.", kind: .localMemory, failed: "memory save failed")
+      }
+      return Outcome(
+        speakable: "Saved to memory on this iPhone: \"\(record.text)\". Confirm it in a few natural words.",
+        display: record.text, kind: .localMemory)
+    case .recall(let search):
+      let hits = store.search(search, limit: 5)
+      store.noteRecalled(hits)
+      guard !hits.isEmpty else {
+        return Outcome(
+          speakable: "Nothing the user saved matches \"\(search)\". Say honestly that you don't have that saved.",
+          kind: .localMemory)
+      }
+      let lines = hits.map { "- \($0.line)" }.joined(separator: "\n")
+      return Outcome(
+        speakable: "From the user's saved memories and notes (answer naturally from them):\n" + lines,
+        display: lines, kind: .localMemory)
+    case .forget(let search):
+      let hits = store.search(search, limit: 3, includeNotes: false)
+      guard let best = hits.first, case .memory(let record) = best.item else {
+        return Outcome(
+          speakable: "No saved memory matches \"\(search)\", so nothing was forgotten. Tell the user.",
+          kind: .localMemory)
+      }
+      if hits.count > 1, hits[1].score >= best.score * 0.9 {
+        let options = hits.prefix(3).map { "\"\($0.line)\"" }.joined(separator: "; ")
+        return Outcome(
+          speakable: "Several memories match: \(options). Ask the user which one to forget.",
+          kind: .localMemory)
+      }
+      var plan = DeviceActionPlan(kind: .forgetMemory)
+      plan.memoryID = record.id
+      plan.text = record.text
+      let staged = await stage(plan)
+      return Outcome(speakable: staged.speakable, display: staged.display, kind: .localMemory, failed: staged.failed)
+    case .list:
+      let recent = store.memories.prefix(8)
+      guard !recent.isEmpty else {
+        return Outcome(speakable: "No memories are saved yet. Tell the user how: \"hatırla …\" or \"remember that …\".", kind: .localMemory)
+      }
+      let lines = recent.map { "- \($0.text.prefix(160))" }.joined(separator: "\n")
+      return Outcome(
+        speakable: "The user's most recent saved memories (\(store.memories.count) in total). Summarise briefly:\n" + lines,
+        display: lines, kind: .localMemory)
+    }
+  }
+
+  /// "Remember what I'm looking at": a high-detail description of the
+  /// current view saved as a visual memory, with a small photo and the place
+  /// only when the user allowed them.
+  private func runVisualMemory(taskID: UUID, query: String) async throws -> Outcome {
+    let store = MemoryStore.shared
+    ledger.update(taskID) { $0.visionProfile = .high }
+    let attachment = try await prepareVisionImage(taskID: taskID, detail: .high)
     let result = try await callModel(
-      taskID: taskID, kind: .localMemory, query: request, tools: [], attachment: nil,
-      schema: AssistantTools.memorySchema)
-    guard let data = result.text.data(using: .utf8),
-          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-      return Outcome(speakable: "The memory request could not be processed.", kind: .localMemory, failed: "invalid memory reply")
+      taskID: taskID, kind: .visualMemory, query: query, tools: [], attachment: attachment, detail: .high)
+    try Task.checkCancellation()
+    let description = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !description.isEmpty else {
+      return Outcome(speakable: "The view could not be described, so nothing was saved. Tell the user.", kind: .visualMemory, failed: "empty description")
     }
-    let added = (object["add"] as? [String] ?? []).filter { memory.add($0, source: "voice") }
-    var forgotten = 0
-    for phrase in object["forget"] as? [String] ?? [] {
-      forgotten += memory.forget(matching: phrase)
+    var location: MemoryLocation?
+    if store.attachLocation {
+      location = await LocationProvider.shared.currentLocation()
     }
-    var reply = object["reply"] as? String ?? "Done."
-    if added.isEmpty && forgotten == 0 && reply.isEmpty { reply = "Nothing was changed." }
-    return Outcome(speakable: reply, kind: .localMemory)
+    let thumbnail = store.saveVisualPhotos ? attachment.images.first.flatMap { Thumbnailer.jpeg($0.jpeg) } : nil
+    guard let record = store.remember(
+      String(description.prefix(600)), title: MemoryStore.defaultTitle(for: query), kind: .visual,
+      source: "visual", location: location, thumbnail: thumbnail) else {
+      return Outcome(speakable: "The visual memory could not be saved. Tell the user.", kind: .visualMemory, failed: "memory save failed")
+    }
+    var spoken = "Saved as a visual memory on this iPhone: \(record.text)"
+    if let place = location?.placeName { spoken += " (place: \(place))" }
+    return Outcome(speakable: spoken + "\nConfirm briefly and naturally.", display: record.text, kind: .visualMemory)
   }
 
   /// Frames older than this never answer a visual question.
@@ -974,13 +1140,18 @@ final class AssistantOrchestrator: ObservableObject {
 
     var imageDetail: String? = attachment.map { imageDetailValue(model: firstModel, profile: $0.profile) }
     if imageDetailRejected { imageDetail = nil }
-    let contextText = context.promptContext(memory: LocalMemoryStore.shared.promptItems)
+    // Memory requests are answered from the store itself; other tasks get
+    // the few saved memories relevant to the request.
+    let memoryContext = kind == .localMemory ? [] : MemoryStore.shared.relevantItems(for: query)
+    let contextText = context.promptContext(memory: memoryContext)
+    let recentlyAdvised = lastRepositionAdviceAt.map { Date().timeIntervalSince($0) < 90 } ?? false
     var instructions = AssistantInstructions.executor(
       kind: kind,
       detectedLanguage: context.detectedLanguage,
       detail: detail,
       hasCrop: attachment?.hasCrop ?? false,
-      hasOCR: attachment?.ocrText != nil)
+      hasOCR: attachment?.ocrText != nil,
+      avoidRepositionAdvice: recentlyAdvised)
     if directSearch {
       instructions += "\nWeb search results are provided in the input. Base current facts only on them, " +
         "name the most relevant source briefly, and say so if they do not answer the request."
@@ -1197,7 +1368,9 @@ final class AssistantOrchestrator: ObservableObject {
     let phases = active.map { ($0.kind, $0.phase) }
     let visual = active.filter { $0.phase == .capturingFrame || ($0.phase == .analyzing && $0.kind?.usesCamera == true) }
     if !visual.isEmpty {
-      activity = visual.contains { $0.visionProfile == .high } ? .reading : .seeing
+      activity = visual.contains { $0.visionProfile == .high && $0.kind != .visualMemory } ? .reading : .seeing
+    } else if active.contains(where: { $0.kind == .localMemory || $0.kind == .visualMemory }) {
+      activity = .remembering
     } else if active.contains(where: { $0.kind == .authorizedAction }) {
       activity = .acting
     } else if phases.contains(where: { $0.1 == .searching }) {

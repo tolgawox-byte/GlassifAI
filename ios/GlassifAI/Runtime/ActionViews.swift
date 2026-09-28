@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Confirmation card for an iPhone action. Saves can also be confirmed by
-/// voice; anything that opens another app or contacts someone is only ever
-/// done by a tap here.
+/// Confirmation card for an iPhone action. CONFIRM actions can also be
+/// confirmed by voice; STRONG CONFIRM actions (anything that opens another
+/// app or contacts someone) are only ever done by a tap here.
 struct PendingActionCard: View {
   let pending: PendingDeviceAction
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
@@ -25,14 +25,21 @@ struct PendingActionCard: View {
           .foregroundStyle(.secondary)
           .lineLimit(4)
       }
-      if plan.risk == .needsTap {
-        Text("Tap to confirm. A spoken \"yes\" is not enough for this.")
+      if let alternative = plan.alternativeDate {
+        Text(L.t("Or did you mean ", "Yoksa şunu mu kastettiniz: ") +
+             TimePhraseParser.describe(alternative, hasTime: true, turkish: L.isTurkish) + "?")
+          .font(.footnote)
+          .foregroundStyle(.orange)
+      }
+      if plan.risk == .strongConfirm {
+        Text(L.t("Tap to confirm. A spoken \"yes\" is not enough for this.",
+                 "Onaylamak için dokunun. Bunun için sesli \"evet\" yeterli değil."))
           .font(.caption2)
           .foregroundStyle(.secondary)
       }
       HStack(spacing: 10) {
         primaryButton
-        Button("Cancel", role: .cancel) { orchestrator.cancelPendingAction() }
+        Button(L.t("Cancel", "Vazgeç"), role: .cancel) { orchestrator.cancelPendingAction() }
           .buttonStyle(.bordered)
       }
       .controlSize(.regular)
@@ -44,11 +51,20 @@ struct PendingActionCard: View {
     .accessibilityElement(children: .contain)
   }
 
+  private var confirmTitle: String {
+    switch plan.kind {
+    case .forgetMemory: L.t("Forget", "Unut")
+    case .agentTask: L.t("Send to agent", "Ajana gönder")
+    default: L.t("Confirm", "Onayla")
+    }
+  }
+
   @ViewBuilder
   private var primaryButton: some View {
     switch plan.kind {
-    case .createReminder, .createEvent, .saveNote, .listReminders, .todayEvents, .upcomingEvents, .copyText, .none:
-      Button("Save") {
+    case .createReminder, .createEvent, .saveNote, .listReminders, .todayEvents, .upcomingEvents, .copyText,
+         .scheduleNotification, .findContact, .forgetMemory, .agentTask, .none:
+      Button(confirmTitle) {
         working = true
         Task {
           _ = await orchestrator.confirmPendingAction(byVoice: false)
@@ -57,7 +73,7 @@ struct PendingActionCard: View {
       }
       .buttonStyle(.borderedProminent)
     case .openMaps:
-      Button("Open in Maps") {
+      Button(L.t("Open in Maps", "Haritalar'da aç")) {
         if let destination = plan.location, let url = DeviceActionExecutor.mapsURL(for: destination) {
           openURL(url)
           orchestrator.completeTapAction("Opened directions to \(destination)")
@@ -65,7 +81,7 @@ struct PendingActionCard: View {
       }
       .buttonStyle(.borderedProminent)
     case .openURL:
-      Button("Open link") {
+      Button(L.t("Open link", "Bağlantıyı aç")) {
         if let url = plan.url, URLSafety.isPublicWebURL(url) {
           openURL(url)
           orchestrator.completeTapAction("Opened \(url.host ?? "link")")
@@ -73,15 +89,16 @@ struct PendingActionCard: View {
       }
       .buttonStyle(.borderedProminent)
     case .call:
-      Button("Call") {
+      Button(L.t("Call", "Ara")) {
         if let phone = plan.phone, let url = DeviceActionExecutor.callURL(for: phone) {
           openURL(url)
           orchestrator.completeTapAction("Call started to \(plan.recipient ?? phone)")
         }
       }
       .buttonStyle(.borderedProminent)
+      .disabled(plan.phone == nil)
     case .message:
-      Button("Write in Messages") {
+      Button(L.t("Write in Messages", "Mesajlar'da yaz")) {
         if let url = DeviceActionExecutor.messageURL(phone: plan.phone, body: plan.text) {
           openURL(url)
           orchestrator.completeTapAction("Message opened in Messages; sending is up to the user")
@@ -90,126 +107,9 @@ struct PendingActionCard: View {
       .buttonStyle(.borderedProminent)
     case .shareText:
       ShareLink(item: plan.text ?? "") {
-        Label("Share", systemImage: "square.and.arrow.up")
+        Label(L.t("Share", "Paylaş"), systemImage: "square.and.arrow.up")
       }
       .buttonStyle(.borderedProminent)
-    case .agentTask:
-      Button("Send to agent") {
-        working = true
-        Task {
-          _ = await orchestrator.confirmPendingAction(byVoice: false)
-          working = false
-        }
-      }
-      .buttonStyle(.borderedProminent)
-    }
-  }
-}
-
-/// Settings → AutoLoom Tasks & Notes: saved notes and reports, and the
-/// recent tasks of this app run.
-struct TasksAndNotesView: View {
-  @ObservedObject private var notes = AutoLoomNotesStore.shared
-  @ObservedObject private var ledger = AssistantOrchestrator.shared.ledger
-  @State private var confirmDeleteAll = false
-
-  var body: some View {
-    List {
-      Section(
-        header: Text("Notes and reports (\(notes.notes.count))"),
-        footer: Text("Stored only on this iPhone. Say \"save this as a note\" or \"research this and prepare a report\". Apple Notes has no API for other apps, so use Share to copy a note there.")) {
-        if notes.notes.isEmpty {
-          Text("No notes yet").foregroundStyle(.secondary)
-        }
-        ForEach(notes.notes) { note in
-          NavigationLink {
-            NoteDetailView(note: note)
-          } label: {
-            VStack(alignment: .leading, spacing: 2) {
-              Text(note.title).lineLimit(1)
-              Text("\(note.source) · \(note.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-          }
-        }
-        .onDelete { offsets in
-          offsets.map { notes.notes[$0].id }.forEach(notes.delete)
-        }
-      }
-      Section("Recent tasks") {
-        if ledger.records.isEmpty {
-          Text("No tasks yet").foregroundStyle(.secondary)
-        }
-        ForEach(Array(ledger.records.suffix(12).reversed())) { record in
-          VStack(alignment: .leading, spacing: 2) {
-            Text("\(record.kind?.displayName ?? "Task") · \(phaseText(record.phase))")
-              .font(.footnote.weight(.semibold))
-            Text(record.request)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .lineLimit(2)
-          }
-        }
-      }
-      if !notes.notes.isEmpty {
-        Section {
-          Button("Delete all notes", role: .destructive) { confirmDeleteAll = true }
-        }
-      }
-    }
-    .navigationTitle("AutoLoom Tasks & Notes")
-    .confirmationDialog("Delete all notes?", isPresented: $confirmDeleteAll, titleVisibility: .visible) {
-      Button("Delete all", role: .destructive) { notes.deleteAll() }
-    }
-  }
-
-  private func phaseText(_ phase: AssistantTaskPhase) -> String {
-    switch phase {
-    case .completed: "done"
-    case .cancelled: "cancelled"
-    case .failed: "failed"
-    case .routing, .capturingFrame, .searching, .analyzing, .reasoning, .delivering: "running"
-    }
-  }
-}
-
-private struct NoteDetailView: View {
-  let note: AutoLoomNotesStore.Note
-  @Environment(\.dismiss) private var dismiss
-
-  var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 14) {
-        Text(note.body)
-          .font(.body)
-          .textSelection(.enabled)
-        if !note.sources.isEmpty {
-          Text("Sources")
-            .font(.headline)
-          ForEach(note.sources, id: \.self) { source in
-            Text(source)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .textSelection(.enabled)
-          }
-        }
-      }
-      .padding(20)
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .navigationTitle(note.title)
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar {
-      ToolbarItem(placement: .primaryAction) {
-        ShareLink(item: "\(note.title)\n\n\(note.body)")
-      }
-      ToolbarItem(placement: .bottomBar) {
-        Button("Delete", role: .destructive) {
-          AutoLoomNotesStore.shared.delete(note.id)
-          dismiss()
-        }
-      }
     }
   }
 }

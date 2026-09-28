@@ -120,6 +120,28 @@ struct AskAutoLoomIntent: AppIntent {
   }
 }
 
+/// "Create a note in AutoLoom": saves an AutoLoom note without opening the
+/// app. The note is stored on this iPhone (Memory tab → Notes).
+struct CreateAutoLoomNoteIntent: AppIntent {
+  static var title: LocalizedStringResource = "Create AutoLoom Note"
+  static var description = IntentDescription("Saves a note in AutoLoom Media Glasses on this iPhone.")
+  static var openAppWhenRun: Bool = false
+
+  @Parameter(title: "Note", requestValueDialog: "What should the note say?")
+  var content: String
+
+  @Parameter(title: "Title")
+  var noteTitle: String?
+
+  @MainActor
+  func perform() async throws -> some IntentResult & ProvidesDialog {
+    guard let note = MemoryStore.shared.addNote(title: noteTitle, content: content, source: "shortcut") else {
+      return .result(dialog: "The note could not be saved.")
+    }
+    return .result(dialog: "Saved \"\(note.title)\" in AutoLoom.")
+  }
+}
+
 /// Starts a conversation (if needed) and turns Live Vision on.
 struct StartLiveVisionIntent: AppIntent {
   static var title: LocalizedStringResource = "Start Live Vision"
@@ -161,6 +183,14 @@ struct AutoLoomShortcuts: AppShortcutsProvider {
       shortTitle: "Ask",
       systemImageName: "text.bubble")
     AppShortcut(
+      intent: CreateAutoLoomNoteIntent(),
+      phrases: [
+        "Create a note in \(.applicationName)",
+        "New \(.applicationName) note",
+      ],
+      shortTitle: "New Note",
+      systemImageName: "note.text")
+    AppShortcut(
       intent: StartLiveVisionIntent(),
       phrases: [
         "Start live vision in \(.applicationName)",
@@ -180,7 +210,8 @@ enum HandsFreeCapabilities {
     "Needs Meta Wearables DAT 1.0 (this build uses \(GlassesSDKInfo.datVersion)), glasses firmware V128 and Meta AI app V290 " +
     "(rollout from 2026-09-30), and Voice Invocation approval in the Wearables Developer Center."
   /// No system-wide custom wake word exists for third-party apps on iOS or
-  /// the Meta glasses; the app-armed mode only listens while the app is open.
+  /// the Meta glasses. The app's own wake phrase uses on-device recognition
+  /// while the app is open, or in the background with Hands-Free Ready.
   static let customWakeWordSupported = false
   static let siriPhrase = "Hey Siri, start AutoLoom"
 }

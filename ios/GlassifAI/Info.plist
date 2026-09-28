@@ -90,7 +90,11 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Only if you connect your own agent gateway (OpenClaw) on your home network or tailnet in Settings.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Only when you turn on "Listen for the assistant's name" and the app is open: on-device speech recognition listens for the name to start a conversation. Audio is not stored or sent.</string>
+	<string>Only when you turn on the wake phrase: on-device speech recognition listens for your phrase (while the app is open, or in the background if you turn on Hands-Free Ready) to start a conversation. Audio is not stored or sent.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Only when you ask to call, message or look up someone by name: AutoLoom Media Glasses finds that contact's phone number on this iPhone. Contacts are not uploaded.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Only if you turn on "Attach the place" for visual memories: the current place is saved with that memory on this iPhone.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>AutoLoom Media Glasses adds reminders you ask for and reads your open reminders when you ask about them.</string>
 	<key>NSRemindersUsageDescription</key>
