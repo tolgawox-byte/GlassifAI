@@ -2,6 +2,27 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1] — branch `autoloom-glasses-jarvis-v1`
+
+Baseline: `3cb0437` (tag `baseline-3cb0437-vnext`, CI run 36362397832).
+
+### Fixed
+- **The selected voice now really changes.** Settings offered voices the frameless realtime protocol rejects, and the silent fallback always spoke with Juniper. Only the nine accepted voices are offered; earlier choices are migrated with a note; a start ladder keeps the selected voice when anything else fails; Settings shows Selected vs Active voice and the reason; Apply now and Preview. See `docs/VOICE_SELECTION.md`.
+- **Fewer "move closer" answers.** An unclear answer is retried once in high detail (best frame, OCR, zoomed crop) first; any advice is one specific tip and is not repeated.
+
+### Added
+- **Consumer interface:** Assistant, Memory, Tasks and Settings tabs; a state word and camera indicator; an animated orb when the camera is off; a voice button that is not a call UI; seven-page onboarding; privacy center; friendly errors; Turkish/English strings. FPS and frame data moved to Settings → Developer.
+- **Conversation:** natural Turkish and adaptive answer length; local instant mute for "Dur/Sus/Bekle/Hayır"; end commands; quiet-conversation timeout; short "what can you do".
+- **Assistant identity and wake:** wake phrase setting separate from the name; Hands-Free Ready (background, time-limited, visible); arming while the glasses report a connected link; greeting styles and activation feedback.
+- **AutoLoom Memory:** SwiftData store with kinds and categories, explicit saving only, Turkish-aware search plus on-device English embeddings, pin/edit/forget, visual memories (opt-in), notes with tags and links; migration of the earlier JSON files.
+- **Tools:** deterministic Turkish/English time parsing (model timestamps ignored, ambiguous times asked); SAFE / CONFIRM / STRONG CONFIRM; local notifications; contacts lookup for calls and messages; tool registry with switches; Tasks tab on Apple Reminders; App Intent "Create AutoLoom Note".
+- **Observability:** Selected/Active voice and model, start attempts, fallback reason; copyable sanitized task trace.
+- **Battery:** the screen may sleep when idle; an idle glasses stream pauses in the background.
+- **Docs:** VOICE_ARCHITECTURE, VOICE_SELECTION, WAKE_INVOCATION, MEMORY_ARCHITECTURE, NATIVE_TOOLS, DAT_1_MIGRATION, UI_REDESIGN.
+
+### Not in this build
+- DAT 1.0 (`Camera.photo`, "Hey Meta, start AutoLoom", worn state): planned on a separate branch; see `docs/DAT_1_MIGRATION.md`.
+
 ## [AutoLoom vNext] — branch `autoloom-glasses-vNext`
 
 Baseline: `44f089d` (tag `baseline-44f089d-vision-working`), the build on the phone.

@@ -4,10 +4,12 @@
 > - Live Vision
 > - live web search and research reports
 > - model routing based on what your connection actually exposes
-> - confirmed iPhone actions (reminders, calendar, notes, maps, calls, messages)
+> - confirmed iPhone actions (reminders, calendar, notes, notifications, maps, calls, messages) with times parsed by code
+> - AutoLoom Memory (explicit, on-device, searchable) and a Tasks tab on Apple Reminders
+> - a consumer interface: Assistant, Memory, Tasks and Settings tabs, a selectable voice that really changes, a wake phrase and Hands-Free Ready
 > - an optional OpenClaw agent gateway
 >
-> Start with [CAPABILITIES.md](CAPABILITIES.md) (honest status of every feature), [docs/WINDOWS_INSTALL.md](docs/WINDOWS_INSTALL.md), and [TEST_REPORT.md](TEST_REPORT.md). Then see [BASELINE.md](BASELINE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/RAYBAN_CAMERA_CAPABILITIES.md](docs/RAYBAN_CAMERA_CAPABILITIES.md), [docs/MODEL_CAPABILITIES.md](docs/MODEL_CAPABILITIES.md), [docs/TOOLS_AND_ACTIONS.md](docs/TOOLS_AND_ACTIONS.md), [docs/VOICE_INVOCATION.md](docs/VOICE_INVOCATION.md), and [docs/PRIVACY_AND_PERMISSIONS.md](docs/PRIVACY_AND_PERMISSIONS.md).
+> Start with [CAPABILITIES.md](CAPABILITIES.md) (honest status of every feature), [docs/WINDOWS_INSTALL.md](docs/WINDOWS_INSTALL.md), and [TEST_REPORT.md](TEST_REPORT.md). Then see [BASELINE.md](BASELINE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/UI_REDESIGN.md](docs/UI_REDESIGN.md), [docs/VOICE_ARCHITECTURE.md](docs/VOICE_ARCHITECTURE.md), [docs/VOICE_SELECTION.md](docs/VOICE_SELECTION.md), [docs/WAKE_INVOCATION.md](docs/WAKE_INVOCATION.md), [docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md), [docs/NATIVE_TOOLS.md](docs/NATIVE_TOOLS.md), [docs/RAYBAN_CAMERA_CAPABILITIES.md](docs/RAYBAN_CAMERA_CAPABILITIES.md), [docs/DAT_1_MIGRATION.md](docs/DAT_1_MIGRATION.md), [docs/MODEL_CAPABILITIES.md](docs/MODEL_CAPABILITIES.md), and [docs/PRIVACY_AND_PERMISSIONS.md](docs/PRIVACY_AND_PERMISSIONS.md).
 >
 > It is not made, endorsed, or supported by OpenAI, ChatGPT, Meta, Ray-Ban, or EssilorLuxottica. The original GlassifAI README follows, with its MIT attribution preserved.
 

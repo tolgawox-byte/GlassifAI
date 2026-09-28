@@ -5,7 +5,7 @@ AutoLoom Media Glasses is an iPhone app for natural voice, vision, web research,
 - Meta's Wearables Device Access Toolkit (**DAT 0.5.0**)
 - LiveKit's WebRTC framework
 - a small Rust bridge built from pinned OpenAI Codex sources
-- Apple frameworks: Vision (OCR), Speech (on-device name listening), EventKit, App Intents
+- Apple frameworks: Vision (OCR), Speech (on-device wake phrase), EventKit, UserNotifications, Contacts, CoreLocation (opt-in), SwiftData, NaturalLanguage, App Intents
 
 There is no AutoLoom backend. Everything runs on the iPhone against the user's own ChatGPT account, plus the user's own OpenClaw gateway if they connect one.
 
@@ -29,14 +29,14 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 │ AssistantOrchestrator ── TaskLedger (session/turn/task IDs, phases, T0–T5, vision profile)       │
 │  ├─ vision / vision_read / vision_web ─► VisionAttachment (full view, text crop, OCR hint)        │
 │  ├─ web ─► hosted web_search (fallback backend search)          ┐                                │
-│  ├─ reasoning / chat / memory                                   ├─► ResponsesClient (SSE)        │
+│  ├─ reasoning / chat · memory (save:/recall:/forget:) · visual_memory ├─► ResponsesClient (SSE)  │
 │  ├─ report ─► web research ─► AutoLoom note with sources        │   model per role from          │
 │  ├─ action ─► ActionGuard ─► planner JSON ─► validate ─► confirm │   ModelCatalog / ModelHealth    │
 │  ├─ agent ─► confirm ─► AgentGatewayClient (user's OpenClaw)    ┘                                │
 │  ├─ confirm_action / cancel_action / cancel                                                       │
 │  └─ live_vision_start/stop ─► LiveVisionController ─► scene notes as commentary context           │
 │                                                                                                  │
-│ ConversationContext · LocalMemoryStore · AutoLoomNotesStore · WakePhraseListener (Mode B)        │
+│ ConversationContext · MemoryStore (SwiftData: memories + notes) · WakePhraseListener · Tools     │
 │ Keychain: ChatGPT OAuth, agent gateway token        GlassifAICodexBridge (Rust): call, sideband   │
 └───────────────────────────────┬──────────────────────────────────────────────────────────────────┘
         auth.openai.com · chatgpt.com/backend-api/codex (voice, models, responses, search)
@@ -47,13 +47,13 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 
 | Component | Responsibility | Files |
 |---|---|---|
-| App root | Restores login, picks onboarding or the main experience, initializes DAT | `GlassifAIApp.swift` |
+| App root | Onboarding (once), login, then the tab shell; initializes DAT | `GlassifAIApp.swift`, `Runtime/OnboardingView.swift` |
 | Authentication and models | Device-code login, refresh, **model catalog** (full `/models` metadata) | `Runtime/ChatGPTAuthSession.swift`, `Runtime/ChatGPTKeychain.swift` |
 | Model routing | Roles (general, vision, reasoning, web), automatic choice by capability, overrides, health, GPT-6 Astra detection, effort mapping | `Runtime/ModelCatalog.swift`, `Runtime/ModelSettingsView.swift`, `Runtime/RoutingPolicy.swift` (`ModelSelector`) |
-| Voice session | Audio session, WebRTC, data channel, captions, turn tracking, stop-speaking, **auto-reconnect**, **latency metrics** | `Runtime/GlassifAIRealtimeSession.swift` |
-| Native bridge | Call creation (v1 and v2), sideband with reconnect and generation guard, context append (speakable or silent commentary) | `native/GlassifAICodexBridge/src/lib.rs` |
+| Voice session | Audio session, WebRTC, data channel, captions, turn tracking, **start ladder with Selected/Active voice**, preview, apply now, stop words, end commands, quiet timeout, auto-reconnect, latency metrics | `Runtime/GlassifAIRealtimeSession.swift`, `Runtime/VoiceCatalog.swift`, `Runtime/ConversationPolicy.swift` (see `VOICE_ARCHITECTURE.md`) |
+| Native bridge (v3) | Call creation (v1 and v2) returning the applied voice and model, sideband with reconnect and generation guard, context append (speakable or silent commentary) | `native/GlassifAICodexBridge/src/lib.rs` |
 | Routing policy | Envelope parser, realtime and executor instructions, tool and action schemas, preferences | `Runtime/RoutingPolicy.swift` |
-| Orchestrator | Verifies routes, runs tasks, vision attachments, reports, actions, agent, cancellation, stale-result guard | `Runtime/AssistantOrchestrator.swift`, `Runtime/AssistantTasks.swift` |
+| Orchestrator | Verifies routes, runs tasks, vision attachments (with a high-detail retry before any "move closer"), memory and visual memory, reports, actions, contacts resolution, agent, cancellation, stale-result guard | `Runtime/AssistantOrchestrator.swift`, `Runtime/AssistantTasks.swift`, `Runtime/AssistantFlows.swift` |
 | Responses client | Streaming SSE client, error mapping and retry, citations; direct search fallback | `Runtime/ResponsesClient.swift` |
 | Frame pipeline | FrameStore (ring, epoch, metrics), pixel-buffer copy, low-latency preview, vision encoder (resample, upscale, crop) | `Runtime/FramePipeline.swift` |
 | Frame selection | Luma sharpness, exposure, scene-change thumbnails, best-frame choice | `Runtime/FrameSelection.swift` |
@@ -62,12 +62,13 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 | Live Vision | Adaptive scene notes during a conversation | `Runtime/LiveVision.swift` |
 | Glasses stream | DAT session, permissions, profiles, **HEVC/raw transport and watchdog**, device info | `ViewModels/StreamSessionViewModel.swift`, `ViewModels/VideoDecoder.swift` |
 | iPhone camera | AVCapture session and preview; throttled frame hand-off | `Runtime/GlassifAICamera.swift` |
-| Actions | Action kinds and risk, local guard, plan parser and validation, EventKit executor, notes store | `Runtime/DeviceActions.swift`, `Runtime/ActionViews.swift` |
+| Tools | Action kinds with SAFE / CONFIRM / STRONG CONFIRM, local guard, plan parser, **deterministic time parsing**, EventKit / notifications / contacts executor, tool registry, permission center, Tasks tab | `Runtime/DeviceActions.swift`, `Runtime/TimePhraseParser.swift`, `Runtime/ToolRegistry.swift`, `Runtime/PermissionCenter.swift`, `Runtime/ActionViews.swift`, `Runtime/TasksViews.swift` (see `NATIVE_TOOLS.md`) |
+| Memory | SwiftData memories and notes, explicit saving, on-device search, migration, Memory tab | `Runtime/MemoryStore.swift`, `Runtime/MemoryViews.swift` (see `MEMORY_ARCHITECTURE.md`) |
 | Agent gateway | Optional OpenClaw client, address policy, Keychain token | `Runtime/AgentGateway.swift`, `Runtime/AgentGatewaySettingsView.swift` |
-| Hands-free | Start coordinator, Siri intents and shortcuts, Mode B name listener | `Runtime/VoiceInvocation.swift`, `Runtime/WakePhrase.swift` |
+| Hands-free | Start coordinator, Siri intents and shortcuts (incl. Create AutoLoom Note), wake phrase, Hands-Free Ready, glasses link arming, greeting and chime | `Runtime/VoiceInvocation.swift`, `Runtime/WakePhrase.swift`, `Runtime/HandsFreeSettingsView.swift` (see `WAKE_INVOCATION.md`) |
 | Audio route | Route, interruption and media-reset monitoring; glasses HFP selection | `Runtime/AudioRouteMonitor.swift` |
 | Safety | Log sanitizer, SSRF-safe URL checks, untrusted-content wrapper | `Runtime/PrivacyGuards.swift` |
-| UI | Main screen, camera switch, Live Vision toggle, status, action card, settings, diagnostics | `Runtime/GlassifAIExperienceView.swift`, `Settings/SettingsView.swift`, `Runtime/SettingsSections.swift` |
+| UI | Tab shell (Assistant, Memory, Tasks, Settings), assistant screen with state word and orb, onboarding, settings sections, privacy center, developer diagnostics and task trace, bilingual strings | `Runtime/AppShellView.swift`, `Runtime/AssistantHomeView.swift`, `Runtime/AssistantOrb.swift`, `Runtime/UIText.swift`, `Settings/SettingsView.swift`, `Runtime/SettingsSections.swift`, `Runtime/VoiceSettingsView.swift` (see `UI_REDESIGN.md`) |
 | Brand | Theme, mark; assets generated from `assets/brand/LOGO 2.png` | `Runtime/GlassifAITheme.swift`, `scripts/make-brand-assets.py` |
 
 ## Task routing
@@ -75,7 +76,7 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The bundle 
 The realtime voice model answers ordinary conversation itself. It delegates only when needed, with one structured line:
 
 ```text
-TASK: <vision|vision_read|web|vision_web|reasoning|memory|action|confirm_action|cancel_action|report|live_vision_start|live_vision_stop|cancel> | QUERY: <self-contained request>
+TASK: <vision|vision_read|web|vision_web|reasoning|memory|visual_memory|action|confirm_action|cancel_action|report|live_vision_start|live_vision_stop|cancel> | QUERY: <self-contained request>
 ```
 
 `agent` is described to the voice model only when an agent gateway is connected.
@@ -86,7 +87,9 @@ TASK: <vision|vision_read|web|vision_web|reasoning|memory|action|confirm_action|
    - vision requests get a profile from the request text (`VisionQueryClassifier`)
 3. **Tool routing fallback.** Without a valid envelope, the executor model chooses tools itself: hosted `web_search`, or a `look_at_camera` function that triggers the vision path.
 4. **Web fallback.** A model that rejects the hosted tool is remembered for the session, and the backend search endpoint is used instead.
-5. **Actions and the agent** are staged and confirmed as described in `TOOLS_AND_ACTIONS.md`.
+5. **Actions and the agent** are staged and confirmed as described in `NATIVE_TOOLS.md`.
+6. **Memory** queries start with `save:`, `recall:`, `forget:` or `list`, so the store acts without an extra model call (`MEMORY_ARCHITECTURE.md`).
+7. **Unclear vision answers** ("can't read", "yaklaşın") are retried once in HIGH_DETAIL (best frame, OCR, crop, upscale) before being spoken, and reposition advice is not repeated within 90 s.
 
 ### Task tracking, cancellation, freshness
 
@@ -110,7 +113,7 @@ TASK: <vision|vision_read|web|vision_web|reasoning|memory|action|confirm_action|
 
 1. Configure `AVAudioSession` (`.playAndRecord`, `.voiceChat`) with glasses HFP when preferred. Other headsets are never grabbed by mistake.
 2. Create the WebRTC peer, mic track, send-only video transceiver, and negotiated data channel. Create the offer and wait briefly for ICE gathering.
-3. Start the call with AutoLoom instructions and voice (`glassifai_codex_realtime_start_v2`). If rejected, fall back to the verified baseline start.
+3. Start the call with the start ladder: AutoLoom instructions and the selected voice, then without resume context, then the default voice, then the verified baseline. Every failure is recorded and shown (Selected vs Active voice).
 4. Captions and turns come from the data channel; delegations come from both the sideband and the data channel (deduplicated).
 5. **Mid-call failures** (ICE failed, task channel ended, audio services reset, a result that cannot be delivered) reconnect automatically within a budget of 3 in 2 minutes, resuming with the conversation summary. Initial-start failures and user hang-ups never reconnect.
 6. Teardown closes everything, ends the orchestrator session (discarding pending results), and stops Live Vision.
@@ -128,7 +131,7 @@ Why notes instead of streaming frames: OpenVision's live mode streams frames (1 
 
 ## Hands-free
 
-`VoiceStartCoordinator` is the single start path for the call button, Siri shortcuts, Mode B, and a future Hey Meta invocation. It is idempotent. Mode B (`WakePhraseListener`) runs only while armed, the app is active, and no conversation is running; it uses on-device recognition only.
+`VoiceStartCoordinator` is the single start path for the voice button, Siri shortcuts, the wake phrase, and a future Hey Meta invocation. It is idempotent. `WakePhraseListener` uses on-device recognition only: while the app is open, or in the background with Hands-Free Ready (opt-in, time-limited), optionally only while the glasses report a connected link. See `WAKE_INVOCATION.md`.
 
 ## Concurrency
 
@@ -143,10 +146,10 @@ Why notes instead of streaming frames: OpenVision's live mode streams frames (1 
 |---|---|
 | ChatGPT OAuth tokens | Keychain (`AfterFirstUnlockThisDeviceOnly`) |
 | Agent gateway token (optional) | Keychain (`com.autoloom.agentgateway`, this device only) |
-| Settings (camera, profiles, transport, vision quality, assist toggles, Live Vision limit, audio, voice, language, web, region, model overrides, memory, actions, agent address, Mode B) | UserDefaults |
+| Settings (camera, profiles, transport, vision quality, assist toggles, Live Vision limit, audio, voice, language, web, region, model overrides, memory switches, tool switches, wake phrase, greeting, timeout, onboarding) | UserDefaults |
 | Model health (which models worked or failed) | UserDefaults (no request content) |
-| Opt-in memory | `Application Support/AutoLoom/memory.json` (complete file protection) |
-| AutoLoom notes and reports | `Application Support/AutoLoom/notes.json` (complete file protection) |
+| Memories and notes | SwiftData `Application Support/AutoLoom/AutoLoomMemory.store` (earlier `memory.json` / `notes.json` imported once and kept as `*.migrated-backup`) |
+| Visual memory photos (only if enabled) | Inside the SwiftData store (external storage) |
 
 Not stored: camera frames, audio, transcripts, OCR text, Live Vision notes, sideband messages, SDP, call IDs, model results (except notes you saved), sources.
 
@@ -154,7 +157,7 @@ Not stored: camera frames, audio, transcripts, OCR text, Live Vision notes, side
 
 | Failure | Result | Recovery |
 |---|---|---|
-| Customized realtime session rejected | Baseline session (shown in Diagnostics) | Automatic |
+| Customized realtime session rejected | Next step of the start ladder; Settings shows Selected vs Active voice and the reason | Automatic; Apply now after changing the voice |
 | Network or audio drop mid-call | "Connecting" and automatic reconnect with context | Automatic (budgeted); otherwise tap |
 | HEVC yields no decodable frames | One automatic switch to raw, note in Settings and Diagnostics | Automatic |
 | No fresh frame / camera off / camera switched mid-request | Spoken explanation; never an older image | Point or enable the camera |
@@ -168,5 +171,5 @@ Not stored: camera frames, audio, transcripts, OCR text, Live Vision notes, side
 ## Compatibility policy
 
 - Pinned packages: DAT **0.5.0** and LiveKit WebRTC. The Codex source is vendored at 0.149.0.
-- The DAT 1.0 upgrade (full-resolution stills, Hey Meta) is planned after Meta's firmware and app rollout reaches the glasses; see `RAYBAN_CAMERA_CAPABILITIES.md`.
+- The DAT 1.0 upgrade (full-resolution stills, Hey Meta, worn state) is planned on a separate branch after Meta's firmware and app rollout reaches the glasses; see `DAT_1_MIGRATION.md`.
 - The private ChatGPT transport is unsupported by OpenAI. A server change may need a bridge update.

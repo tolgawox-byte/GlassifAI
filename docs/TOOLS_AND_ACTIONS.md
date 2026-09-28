@@ -1,5 +1,7 @@
 # Tools and actions (AutoLoom Tasks)
 
+> Jarvis v1 replaced the risk levels with SAFE / CONFIRM / STRONG CONFIRM, added deterministic time parsing, notifications, contacts lookup, a tool registry and the Tasks tab. The current description is [NATIVE_TOOLS.md](NATIVE_TOOLS.md); memory is in [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md).
+
 What the assistant can do on the iPhone, how each action is confirmed, and what it refuses. Everything here is **implemented and unit-tested, but not yet verified on the phone** (see `TEST_REPORT.md`).
 
 ## How a request becomes an action

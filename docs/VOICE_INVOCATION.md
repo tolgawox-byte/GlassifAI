@@ -1,5 +1,7 @@
 # Voice invocation and the assistant name
 
+> Jarvis v1: the wake phrase is now a separate setting, Hands-Free Ready can keep listening in the background, and listening can be armed by the glasses' link state. The current description is in [WAKE_INVOCATION.md](WAKE_INVOCATION.md); this page keeps the research behind it.
+
 Researched 2026-09-27 from Meta's official Wearables documentation ("Respond to Hey Meta voice invocations", https://wearables.developer.meta.com/docs/develop/dat/voice-invocations, DAT SDK v1.0 docs) and from the symbols in the Meta DAT binaries: `VoiceInvocation*` types exist in `MWDATCore` **1.0.0** and are absent from **0.4.0** and **0.5.0** (this build uses 0.5.0).
 
 ## Two separate things

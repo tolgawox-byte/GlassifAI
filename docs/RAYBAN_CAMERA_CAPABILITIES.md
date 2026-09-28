@@ -70,6 +70,16 @@ There is no main-thread work per frame, no `UIImage` per frame, no JPEG per fram
 | Photos | photo first for reading | **Video first**: Meta documents in-stream photos as "a frame lifted out of a video stream", so they add latency without detail on 0.5.0. Photos remain the fallback when video stalls, and a "photo first" setting exists for comparison |
 | Stale protection | ≤1.0 s, source filter, reset on switch | Same, plus a **frame epoch**: a frame selected before a camera switch is rejected even if its encode finishes after the switch |
 
+## "Move closer" (Jarvis v1)
+
+The owner reported that the assistant often said "move closer". It now tries everything the app can do first:
+
+1. A reading request (read, label, VIN, badge, oku, yazı, etiket, plaka…) goes straight to HIGH_DETAIL: the sharpest of the recent frames, on-device OCR as an untrusted hint, a zoomed crop of the text region, and enlargement within the model's patch budget. Diagnostics shows the **source** resolution next to the **encoded** one, and an enlarged frame is marked "upscaled", never presented as more detail.
+2. A standard vision answer that says it cannot see enough ("can't read", "blurry", "okunmuyor", "yaklaşın"…) is **retried once in HIGH_DETAIL** before anything is spoken (`VisionAnswerCheck`, task trace note "high-detail retry").
+3. Only then may the answer ask for a better view. It first gives everything it could read, then **one specific tip** ("about half as far away", "tilt the label toward the light", "hold still for a second"), never a bare "move closer".
+4. After such advice, the next answers within 90 seconds are told not to repeat it.
+5. A full-resolution still (DAT 1.0 `Camera.photo`) would be the next step; it needs the migration in `DAT_1_MIGRATION.md`.
+
 ## Capability table
 
 | Capability | This build | Official max | Physical test |

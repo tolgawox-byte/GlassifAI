@@ -1,121 +1,131 @@
-# Test report — AutoLoom Media Glasses (`autoloom-glasses-vNext`)
+# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`)
 
 Result categories:
 - **BUILD PASS**: compiled into the Debug and Release IPAs in CI.
 - **UNIT PASS**: automated test passed in CI (iOS Simulator or Rust host).
-- **PHYSICAL TEST REQUIRED**: needs the iPhone and Ray-Ban Meta Gen 1; the results table below is for you to fill.
+- **PHYSICAL TEST REQUIRED**: needs the iPhone and Ray-Ban Meta Gen 1. The tables below are for you to fill in.
 
-Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page. Compiler errors are published the same way.
+Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
 
 ## Automated results
 
 <!-- AUTOMATED-RESULTS -->
-### Final build: run [36362397832](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36362397832), commit `3cb0437`
+_Filled in from the CI run of the final commit._
 
-**BUILD PASS · iOS 99/99 UNIT PASS (0 skipped) · Rust 5/5 UNIT PASS.** Artifact `AutoLoomMediaGlasses-unsigned-IPAs` (51 MB) contains `AutoLoomMediaGlasses-Release-unsigned.ipa` (install this one) and `AutoLoomMediaGlasses-Debug-unsigned.ipa`. Compared with `bdbf24a`, it adds:
-- the Mode B audio-safety fix
-- the HEVC never-started fallback
-- rendered-fps and battery diagnostics
-- the requested/actual line in Settings
-- documentation
+## What the automated tests cover (new in Jarvis v1)
 
-### Previous complete result: run [36361068283](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36361068283), commit `bdbf24a`
-
-- **BUILD PASS**: Rust bridge (3 iOS targets), Swift Debug and Release, and both unsigned IPAs (artifact `AutoLoomMediaGlasses-unsigned-IPAs`).
-- **iOS: 99 passed, 0 failed, 0 skipped** (from the `.xcresult` bundle). The OCR test skips itself if Apple Vision is unavailable; 0 skipped means the real OCR pass ran and passed. Per-class counts come from the test sources and add up to the same 99.
-  - `AutoLoomCoreTests` 23
-  - `AutoLoomVisionTests` 10
-  - `AutoLoomVisionPipelineTests` 13
-  - `AutoLoomActionTests` 11
-  - `AutoLoomModelTests` 8
-  - `AutoLoomTaskTests` 7
-  - `AutoLoomAssistantTests` 6
-  - `AutoLoomAgentTests` 5
-  - `AutoLoomCameraTests` 5
-  - `AutoLoomLiveVisionTests` 5
-  - `AutoLoomVoiceTests` 3
-  - `GlassesGestureInterpreterTests` 3
-  - The Meta mock-device integration class is excluded by design (long fixed sleeps).
-- **Rust: 5 passed, 0 failed.**
-
-### Runs on `autoloom-glasses-vNext`
-
-| Run | Commit | Result | Notes |
-|---|---|---|---|
-| [36362397832](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36362397832) | `3cb0437` (final) | **BUILD PASS · iOS 99/99 · Rust 5/5** | Release IPA for the phone |
-| [36361068283](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36361068283) | `bdbf24a` (all features + agent gateway) | **BUILD PASS · iOS 99/99 UNIT PASS · Rust 5/5 UNIT PASS** | |
-| [36358353416](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36358353416) | `5bf325b` (DAT 0.5.0, HEVC, profiles) | **BUILD PASS · iOS 54/54 UNIT PASS · Rust 5/5 UNIT PASS** | First build against DAT 0.5.0 |
-| [36360275311](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36360275311) | `b3a64ca` (vision pipeline, models, Live Vision, voice, actions) | BUILD PASS · test target did not compile | `ModelHealth` main-actor call from a non-isolated test |
-| [36360687135](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36360687135) | `8fd60fe` (+ brand, Mode B, shortcuts) | BUILD PASS · test target did not compile | Missing `import CoreMedia` (MemberImportVisibility). Found through the new error annotations |
-
-## What the automated tests cover
-
-| Area (brief §46) | Tests |
+| Area | Tests (`AutoLoomJarvisTests` unless noted) |
 |---|---|
-| Auth, routing, envelopes | `AutoLoomCoreTests` (envelopes, JSON, cancel, invalid input), `AutoLoomLiveVisionTests.testVoiceCommandsParseToLiveVision` |
-| Conversation context | `AutoLoomTaskTests.testConversationContextCompactsAndWrapsTaskResults` |
-| Camera source, raw and compressed frames, decode | `AutoLoomVisionTests` (raw → FrameStore, H.264 keyframe decoded → FrameStore, wrong source, stale, switch clears) |
-| DAT 0.5.0 profiles and HEVC fallback | `AutoLoomCameraTests` (documented frame rates, defaults, watchdog decisions, counter reset) |
-| Stale-frame rejection and camera-switch epoch | `AutoLoomVisionTests`, `AutoLoomVisionPipelineTests.testFrameStoreKeeps…NewEpochOnReset` |
-| Best-frame selection | `AutoLoomVisionPipelineTests` (sharp beats blurred, scene change excluded, stale rejected, newest wins ties) |
-| Photo matching | `AutoLoomVisionTests` (pending-only, late rejected, one in flight, pass-through) |
-| Vision quality modes and routing | `AutoLoomVisionPipelineTests.testQueryClassifierMatchesTheBrief` (every example from the brief, in English and Turkish) |
-| Upscale and crop within the patch budget | `AutoLoomVisionPipelineTests.testProfilesAndUpscale…`, `testEncoderUpscalesAndCrops` |
-| OCR path | `AutoLoomVisionPipelineTests.testOnDeviceOCRReadsRenderedText` (real Apple Vision pass), focus region, low-confidence rejection |
-| Web search, vision + web | `AutoLoomCoreTests` (SSE parsing, citations, direct search fallback, source filtering) |
-| Task cancellation, duplicates, stale results | `AutoLoomTaskTests` |
-| Tool confirmation | `AutoLoomActionTests` (risk levels, voice yes accepted for saves, refused for calls/messages, cancel, expiry, local refusal without network) |
-| Action validation | `AutoLoomActionTests` (time zones, past times, private links rejected, phone format, unknown actions) |
-| Model discovery and fallback | `AutoLoomModelTests` (catalog parsing, per-role choice, exclusion after failure, overrides, GPT-6 Astra only when exposed, effort mapping, request shape) |
-| Assistant name and wake state | `AutoLoomAssistantTests`, `AutoLoomVoiceTests` (name matching, reconnect budget, interruption words) |
-| Live Vision policy | `AutoLoomLiveVisionTests` (thermal/battery intervals, scene-change gating, needs conversation and camera, stops by itself) |
-| Agent gateway | `AutoLoomAgentTests` (address policy, request/reply shape, tap for destructive requests, planner can't route to the agent, honest reply without a gateway) |
-| Privacy guards, prompt injection | `AutoLoomCoreTests` (sanitizer, SSRF, untrusted wrapper); OCR and agent replies wrapped as untrusted |
-| Memory deletion | `AutoLoomTaskTests.testLocalMemoryIsOptInAndDeletable` |
-| Native bridge | Rust: option parsing, voice fallback, bounded items, reconnect backoff, UTF-8 truncation |
+| Voice catalog = frameless voices; legacy voice migration | `testVoiceCatalogOffersOnlyTheFramelessVoices`, `testStoredLegacyVoiceIsMigratedVisibly`; Rust `frameless_voices_match_the_app_catalog` |
+| Start ladder, bridge result with applied voice | `testStartLadderKeepsTheSelectedVoiceAsLongAsPossible`, `testBridgeResultReportsTheAppliedVoice`; Rust `start_summary_reports_the_applied_voice_and_model`, `requested_voice_is_applied`, `invalid_voice_falls_back_to_juniper_and_is_reported` |
+| State words, friendly errors | `testPresenceWordsFollowRealState`, `testFriendlyErrorsHideTechnicalText` |
+| Stop words and end commands | `testStopWordsSilenceOnlyAnAnswerInProgress`, `testEndCommandsEndTheConversation` |
+| Quiet timeout, greetings | `testQuietTimeoutAndGreetings` |
+| Wake phrase matching | `testWakePhraseMatchesNaturalTranscripts`; `AutoLoomVoiceTests` |
+| Deterministic time parsing (Turkish, English, false friends) | `testRelativeTimes`, `testTurkishDayAndClock`, `testEnglishPhrases`, `testWordsThatAreNotTimes`, `testEventEndBelongsToTheStartDay`; `AutoLoomActionTests.testReminderTimeComesFromTheUsersWords`, `testModelTimestampsAreIgnored` |
+| Memory store, dedupe, classification, Turkish search, pins, prompt bounds, notes, deletion | `testMemoryIsExplicitDedupedAndClassified`, `testMemorySearchUnderstandsTurkishWordForms`, `testPinnedMemoriesComeFirstAndPromptsStaySmall`, `testNotesAndDeletion`; `AutoLoomCoreTests.testMemoryIsExplicitAndDeletable` |
+| Memory requests and visual memory routing | `testMemoryRequestsAreParsedDeterministically`, `testVisualMemoryDelegationRoutes` |
+| Risk levels and confirmation | `AutoLoomActionTests.testRiskLevels`, `testNotesAreSavedDirectly`, `testForgettingAMemoryWaitsForAYes`, `testCallsAndMessagesAreNeverConfirmedByVoice` |
+| Tool registry and switches | `testEveryPlannableActionHasATool` |
+| Vision "move closer" escalation | `testUnclearVisionAnswersAreRecognised` |
+| Instructions size and content | `testRealtimeInstructionsAreNaturalAndBounded` |
+| Trace redaction | `testTraceRedactsPersonalDetails` |
 
-## Physical test plan (iPhone + Ray-Ban Meta Gen 1)
+Earlier suites (vision pipeline, camera, Live Vision, models, agent, core) still run unchanged.
+
+## Physical tests (iPhone + Ray-Ban Meta Gen 1)
 
 **Before you start**
-1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run (see `docs/WINDOWS_INSTALL.md`).
-2. Settings → Diagnostics:
-   - **Commit** matches the run
-   - **DAT SDK** is 0.5.0
-   - **Transport** is HEVC (hvc1)
-3. Settings → Assistant: name **Jarvis**.
-4. Settings → Camera: **Show camera metrics overlay** on for the camera tests.
-5. After each test, Diagnostics → **Copy diagnostics report** (sanitized) and keep the text.
+1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run (`docs/WINDOWS_INSTALL.md`).
+2. Go through the onboarding once. Settings → Developer → Diagnostics: **Commit** matches the run, **Native bridge** = `autoloom-bridge-3`, **DAT SDK** = 0.5.0.
+3. Settings → Name & conversation: name **Jarvis**. Settings → Wake phrase & hands-free: phrase **Hey Jarvis**.
+4. After a failed test: Developer → Task trace → **Copy sanitized task trace**, and keep the text.
 
-| # | Test | Steps | Pass when | Result |
-|---|---|---|---|---|
-| 1 | General conversation | Camera **Off**. Start a conversation. "Jarvis, nasılsın?", then 3–4 more turns | Natural Turkish replies; no "Looking" status; no VISION task in Recent tasks | |
-| 2 | Ray-Ban vision | Camera **Ray-Ban**. "Jarvis, şu an neye bakıyorum?" | Correct description. Recent tasks: `VIDEO Ray-Ban`, "best of n", age ≤1000 ms. **Note the overlay's Requested vs Actual** (resolution, fps) | |
-| 3 | Freshness | Look at object A, ask. Turn to object B, ask at once | The second answer describes **B**, never A | |
-| 4 | Large text | "Jarvis, önümdeki yazıyı oku." | Status "Reading"; exact transcription; task shows `OCR+VIDEO`, HIGH_DETAIL, upscaled | |
-| 5 | Small detail | A small label ~40 cm away: "Jarvis, etiketteki küçük yazıyı oku." Repeat with Stream profile **Max detail 720p/7** | Readable where the optics allow; Recent tasks shows the crop and OCR line count. Note which profile read better | |
-| 6 | Vehicle badge | "Jarvis, bu arabanın arkasındaki badge ne yazıyor?" | Badge text read or honestly "unreadable"; HIGH_DETAIL | |
-| 7 | Live Vision | "Jarvis, start live vision." Walk between two rooms, then "Burada ne var?" and a follow-up | Red "Live Vision" chip. Diagnostics → Live Vision: notes sent only when the view changed (stable skips grow when still). Follow-ups work. "Stop live vision" ends it | |
-| 8 | Web | "Bugünkü Ottawa hava durumunu internetten kontrol et." | Status "Searching"; answer names a source; source cards show title, host, fetch time | |
-| 9 | Vision + web | Look at a product: "Jarvis, bunun Kanada fiyatını bul." | Identifies the product, then CAD prices with a source | |
-| 10 | Reminder | "Jarvis, yarın saat 7'de bana süt almayı hatırlat." | iOS asks for Reminders access (first time). The card shows the reminder; "evet" or Save stores it; it appears in Reminders at 07:00 tomorrow | |
-| 11 | Calendar | "Jarvis, bugün takvimimde ne var?", then "Yarın 15:00'te dişçi randevusu ekle" | Today's events read out; the event appears in Calendar after yes/Save | |
-| 12 | Bluetooth | During a conversation, fold the glasses 10 s, then unfold | "Glasses folded" placeholder, stream resumes; audio returns to the glasses; other headsets not grabbed | |
-| 13 | Wi-Fi ↔ cellular | During a conversation, turn Wi-Fi off, then on; ask a question after each | Call survives or shows "Connecting" and resumes by itself; Diagnostics → Auto-reconnects shows the reason | |
-| 14 | Phone locked | Start a conversation with Ray-Ban, lock the phone, ask a chat question and "şu an neye bakıyorum?" | Voice continues. Vision works while locked (HEVC); if it can't, the assistant says why and never describes an old image | |
-| 15 | Thermal / 10-minute Live Vision | Live Vision on for 10 minutes while walking | Stops by itself at 10 min; Diagnostics thermal state; no overheating warning; note the battery drop | |
+### Voices
 
-**Extra checks**
-- **Settings → AI models**: write down the list and whether **GPT-6 Astra** is exposed.
-- **Mode B**: Settings → Hands-Free → turn on listening, keep the app open, say "Hey Jarvis". A conversation should start.
-- **Call confirmation**: "Jarvis, 613 555 0100'ı ara". Saying "evet" must **not** start the call; only the Call button may.
+| Voice | Preview sounds different | Conversation uses it (Active = Selected) | Notes |
+|---|---|---|---|
+| Juniper | | | |
+| Maple | | | |
+| Spruce | | | |
+| Ember | | | |
+| Vale | | | |
+| Breeze | | | |
+| Arbor | | | |
+| Sol | | | |
+| Cove | | | |
+| Apply now during a conversation (Maple → Cove) | — | | |
+
+### Conversation
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| C1 | "Jarvis, nasılsın?" and 3–4 casual turns | Natural Turkish, short answers, no "As an AI", no lists | |
+| C2 | Ask a long explanation, say "Dur" in the middle | Sound stops at once; the assistant listens | |
+| C3 | "Başka bir şey soracağım" while it talks, then a new question | Old answer dropped; new question answered | |
+| C4 | "Ne yapabilirsin?" | 2–3 sentences with examples, not a list | |
+| C5 | "Kapat" / "Konuşmayı bitir" | Short goodbye, conversation ends | |
+| C6 | Stay silent for 2 minutes | Conversation ends; notice "Ended after a quiet period" | |
+
+### Wake states (see `docs/WAKE_INVOCATION.md`)
+
+| State | Test | Pass when | Result |
+|---|---|---|---|
+| A | In a conversation: "Jarvis, saat kaç?" | Answers without re-invoking | |
+| B | App open, wake phrase on: "Hey Jarvis" | Chime, conversation starts | |
+| C | Hands-Free Ready 30 min, lock the phone, wait 1 min: "Hey Jarvis" | Starts, or shows "paused" (note which) | |
+| C2 | After a hands-free conversation ends while locked, say it again | Starts again, or "paused" | |
+| D | "Only while the glasses are connected": glasses off, then on | "Waiting for the glasses", then listening | |
+| E | "Hey Siri, start AutoLoom" | App opens and listens | |
+| Meta | "Hey Meta, start AutoLoom" | Not expected to work (DAT 1.0 needed); note what happens | |
+
+### Memory, notes, visual memory
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| M1 | "Jarvis, arabamı otoparkın P2 katına park ettiğimi hatırla" | Short confirmation; Memory → Recent (Vehicles) | |
+| M2 | Later: "Arabam nerede?" | Answers "P2" | |
+| M3 | Save "kapı kodu 4512", then "kapı kodunu unut" | Asks to confirm; forgotten only after yes | |
+| M4 | Memory tab: search, pin, edit, Delete all | Works; confirmation before Delete all | |
+| M5 | Visual memories on; look at a sign: "bunu hatırla" | Description with the readable text; photo/place only if enabled | |
+| N1 | "Not al: yarınki toplantıda bütçeyi konuş" | Note in Memory → Notes; Share works | |
+| N2 | Shortcuts app: "Create AutoLoom Note" | Note saved without opening the app | |
+
+### Reminders, calendar, notifications, contacts
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| R1 | "Jarvis, yarın saat 7'de bana süt almayı hatırlat" | Asks "sabah mı akşam mı?" (07:00 or 19:00); saved only after the answer and yes; appears in Reminders and the Tasks tab | |
+| R2 | "20 dakika sonra ilacımı hatırlat" | Card shows the exact time (now + 20 min); saved after yes | |
+| R3 | "Cuma akşam 8'de Ali'yi aramayı hatırlat" | Friday 20:00, no ambiguity question | |
+| R4 | Tasks tab: complete, reschedule, delete (with confirmation) | Changes appear in Apple Reminders | |
+| K1 | "Bugün takvimimde ne var?"; "Yarın 15:00'te dişçi randevusu ekle" | Events read; event added after yes | |
+| K2 | "10 dakika sonra bana haber ver" | Notification arrives; listed in the Tasks tab before it fires | |
+| P1 | "Annemi ara" (with a contact named Anne/Annem) | Contacts permission once; call card with the number; only a tap calls | |
+
+### Vision
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| V1 | Ray-Ban: "Şu an neye bakıyorum?" | Correct description | |
+| V2 | A small label ~40 cm away: "Etikette ne yazıyor?" | Reads it, or one specific tip; Task trace shows "high-detail retry" when the first try was unclear | |
+| V3 | Ask V2 twice in a row | The tip is not repeated the second time | |
+
+### Interface
+
+| # | Check | Pass when | Result |
+|---|---|---|---|
+| U1 | Main screen | No FPS/frame numbers; state word changes Ready → Listening → Thinking → Speaking | |
+| U2 | Camera off | Orb animates with the state | |
+| U3 | Camera indicator | Switches Ray-Ban / iPhone / Off | |
+| U4 | Airplane mode, start | Friendly "No internet connection" | |
+| U5 | Settings → Developer → overlay on | Metrics appear; off again → gone | |
+| U6 | Privacy center | Every permission listed with its state | |
 
 ## Camera measurement sheet (from the overlay / Diagnostics)
 
-| Profile | Requested | Actual resolution | Actual fps (in / shown) | Transport | Dropped | Frame age | Glass-to-glass (stopwatch ×3) |
-|---|---|---|---|---|---|---|---|
-| Detail 720p/15 (default) | 720×1280 @ 15 | | | | | | |
-| Max detail 720p/7 | 720×1280 @ 7 | | | | | | |
-| Balanced 720p/24 (original) | 720×1280 @ 24 | | | | | | |
-| Smooth 504p/30 | 504×896 @ 30 | | | | | | |
-
-No "Meta AI quality" or "higher resolution" is claimed until this sheet is filled in.
+| Profile | Requested | Actual resolution | Actual fps (in / shown) | Transport | Dropped | Frame age |
+|---|---|---|---|---|---|---|
+| Detail 720p/15 (default) | 720×1280 @ 15 | | | | | |
+| Max detail 720p/7 | 720×1280 @ 7 | | | | | |
+| Balanced 720p/24 (original) | 720×1280 @ 24 | | | | | |
