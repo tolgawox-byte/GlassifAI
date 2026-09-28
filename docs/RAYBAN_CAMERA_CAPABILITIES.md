@@ -1,5 +1,7 @@
 # Ray-Ban camera: capabilities, root causes, and the quality pipeline
 
+> **DAT 1.0 variant (`autoloom-glasses-dat1`):** this branch links DAT 1.0.0. Where this page describes DAT 0.5.0 limits (no standalone photo, no worn state, no "Hey Meta"), `docs/DAT_1_MIGRATION.md` describes what the variant does instead. Nothing DAT 1.0-specific has been tested on glasses.
+
 Researched 2026-09-27 from Meta's official sources:
 - the **Meta Wearables docs MCP server** (`https://mcp.developer.meta.com/wearables`, tool `search_dat_docs`), queried directly
 - the SDK repository `facebook/meta-wearables-dat-ios` (tags 0.4.0 → 1.0.0, `CHANGELOG.md`)

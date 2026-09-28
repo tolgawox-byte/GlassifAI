@@ -1,5 +1,7 @@
 # AutoLoom Media Glasses architecture
 
+> **DAT 1.0 variant (`autoloom-glasses-dat1`):** this branch links DAT 1.0.0. Where this page describes DAT 0.5.0 limits (no standalone photo, no worn state, no "Hey Meta"), `docs/DAT_1_MIGRATION.md` describes what the variant does instead. Nothing DAT 1.0-specific has been tested on glasses.
+
 AutoLoom Media Glasses is an iPhone app for natural voice, vision, web research, and confirmed iPhone actions on the iPhone and Meta Ray-Ban glasses. It is built on GlassifAI (MIT) and combines:
 - a native SwiftUI app
 - Meta's Wearables Device Access Toolkit (**DAT 0.5.0**)

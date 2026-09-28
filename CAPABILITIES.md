@@ -1,6 +1,6 @@
 # AutoLoom Media Glasses — capability report
 
-Branch `autoloom-glasses-jarvis-v1` (Jarvis v1.1). Status meanings:
+Branch `autoloom-glasses-dat1`: Jarvis v1.1 on Meta DAT **1.0.0**, a separate variant of `autoloom-glasses-jarvis-v1` (DAT 0.5.0) for glasses with firmware V128 and Meta AI V290. What differs is in `docs/DAT_1_MIGRATION.md`; nothing in this variant has been tested on glasses. Status meanings:
 - **WORKING**: verified on the physical iPhone and Ray-Ban Meta Gen 1 by the owner, and unchanged since.
 - **PARTIAL**: works with a stated limit.
 - **EXPERIMENTAL**: implemented and covered by automated tests in CI; behaviour that depends on the AI model still needs real use.
@@ -47,12 +47,12 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 |---|---|---|
 | Assistant name (default AutoLoom) | **EXPERIMENTAL** | |
 | Wake phrase ("Hey AutoLoom", "Jarvis", "Hey Jarvis", custom) | **PHYSICAL TEST REQUIRED** | On-device speech recognition |
-| States A–E (conversation, app open, Hands-Free Ready, glasses-connected arming, Siri) | **PHYSICAL TEST REQUIRED** / **EXPERIMENTAL** (A, E) | Unchanged; state D uses the DAT 0.5.0 `LinkState` event |
-| Arming by wearing the glasses (`donState`) | **UNAVAILABLE** in this build | DAT 1.0 API; see `docs/DAT_1_MIGRATION.md` |
-| "Hey Meta, start AutoLoom" | **UNAVAILABLE** | Needs DAT 1.0, firmware V128, Meta AI V290 and Voice Invocation approval in the Wearables Developer Center |
+| States A–E (conversation, app open, Hands-Free Ready, glasses arming, Siri) | **PHYSICAL TEST REQUIRED** / **EXPERIMENTAL** (A, E) | State D arms when the glasses are worn (DAT 1.0), falling back to the `LinkState` event while the worn state is unknown |
+| Arming by wearing the glasses (`donState`) | **PHYSICAL TEST REQUIRED** | DAT 1.0 `DeviceState.donState` and `hingeState`; test D9 in `docs/DAT_1_MIGRATION.md` |
+| "Hey Meta, start AutoLoom" | **EXPERIMENTAL** (waits for Meta approval) | The `VoiceInvocationsStream` listener is built in; Meta delivers launches only after it approves Voice Invocation for this app in the Wearables Developer Center (owner action), with firmware V128 and Meta AI V290 |
 | A system-wide custom wake word | **UNAVAILABLE** | Not offered to third-party apps |
 | Routines: "İşe başlıyorum" (today's tasks + calendar + arms Hands-Free Ready), "günün özeti" | **EXPERIMENTAL** | Reads only phone data; weather/news not included |
-| Daily briefing on the first conversation of the day | **UNAVAILABLE** in this build | Available on request ("günün özeti"); no automatic briefing |
+| Daily briefing on the first conversation of the day | **EXPERIMENTAL** (off by default) | Settings → Name & conversation → Daily briefing: once a day, after the ready greeting, from the calendar, reminders and AutoLoom tasks on this iPhone; also on request ("günün özeti") |
 
 ## Memory, notes and tasks
 
@@ -89,14 +89,14 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Capability | Status | Notes |
 |---|---|---|
 | iPhone camera vision | **WORKING** (earlier pipeline) / **EXPERIMENTAL** (profiles, OCR, crop) | |
-| Ray-Ban preview and vision (foreground) | **WORKING** on DAT 0.4.0 / **EXPERIMENTAL** on DAT 0.5.0 | |
+| Ray-Ban preview and vision (foreground) | **PHYSICAL TEST REQUIRED** on DAT 1.0 (this build) | WORKING on DAT 0.4.0, EXPERIMENTAL on DAT 0.5.0. DAT 1.0 streams over Wi-Fi and needs the Local Network permission |
 | Ray-Ban vision with the iPhone locked | **PHYSICAL TEST REQUIRED** | Root causes fixed (see `docs/BACKGROUND_STREAMING.md`): no background pause, no background fallback to raw, background-safe decoder, `bluetooth-central`. Meta's own sample stops decoding in the background, so the test decides |
 | Lifecycle states (ForegroundActive, BackgroundStreaming, ScreenLockedStreaming, Suspended, Disconnected) | **EXPERIMENTAL** | Transitions logged with frame counters |
 | Camera source proof per request (pipeline state, transport, sequence, age, dimensions) | **EXPERIMENTAL** | Metadata only, never the image |
 | Camera diagnostics screen | **EXPERIMENTAL** | All technical camera numbers live here; none on the Assistant screen |
 | High-detail retry before "move closer" | **EXPERIMENTAL** | Best frame, OCR, zoomed crop, upscaling |
 | Translation of what is in view ("bunu Türkçeye çevir") | **EXPERIMENTAL** | High-detail read + translation |
-| Ray-Ban full-resolution photo (`Camera.photo`) | **UNAVAILABLE** in this build | DAT 1.0 (beta API) + firmware V128. Plan and variant: `docs/DAT_1_MIGRATION.md` |
+| Ray-Ban full-resolution photo (`Camera.photo`) | **PHYSICAL TEST REQUIRED** (Meta beta API) | High-detail requests take a standalone photo (Meta: 4032×3024), with one startup retry and the best video frame as fallback; see `docs/DAT_1_MIGRATION.md` |
 | Face recognition | **UNAVAILABLE** | Not built |
 
 ## Interface

@@ -2,6 +2,20 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1.1 — DAT 1.0 variant] — branch `autoloom-glasses-dat1`
+
+Jarvis v1.1 (below) moved to Meta Wearables DAT **1.0.0** as a separate build, `AutoLoomMediaGlasses-DAT1-*-unsigned.ipa`, for glasses with firmware V128 and Meta AI V290 (rollout from 2026-09-30). The 0.5.0 build stays the default. CI-built with the unit tests passing; the Mock Device Kit integration tests compile but are not run in CI. See `docs/DAT_1_MIGRATION.md`.
+
+### Changed
+- **Camera on the DAT 1.0 session API:** one `DeviceSession`, `addCamera(config:)`, the `stream` child for video (same pipeline, HEVC and raw fallback). iOS 17.2 minimum. `NSBonjourServices` and the Local Network description added, as Meta's 1.0 guide requires for Wi-Fi streaming.
+- **Temple gestures** follow the camera session's `DeviceSessionState`; switching to the iPhone camera no longer reads as the wearer ending the call.
+- **Wake-phrase arming** "only while the glasses are worn" uses `donState` / `hingeState`.
+
+### Added
+- **Standalone full-resolution photo** (`Camera.photo`, Meta beta) for high-detail vision, with one startup retry, a transfer-aware wait and the best video frame as fallback.
+- **"Hey Meta, start AutoLoom"** listener (`VoiceInvocationsStream`); needs Meta's Voice Invocation approval.
+- Diagnostics: device session and photo state; Hey Meta listener status in Settings → Hands-free.
+
 ## [AutoLoom Jarvis v1.1] — branch `autoloom-glasses-jarvis-v1`
 
 Baseline: `26f3685` (tag `baseline-26f3685-jarvis-v1`, CI run 36375889033). Nothing below is device-verified yet; see `TEST_REPORT.md`.

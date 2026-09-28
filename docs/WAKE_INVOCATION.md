@@ -1,5 +1,7 @@
 # Wake phrase and invocation
 
+> **DAT 1.0 variant (`autoloom-glasses-dat1`):** this branch links DAT 1.0.0. Where this page describes DAT 0.5.0 limits (no standalone photo, no worn state, no "Hey Meta"), `docs/DAT_1_MIGRATION.md` describes what the variant does instead. Nothing DAT 1.0-specific has been tested on glasses.
+
 What each platform really allows, and what AutoLoom does with it. Earlier notes: `VOICE_INVOCATION.md`.
 
 ## Who controls what

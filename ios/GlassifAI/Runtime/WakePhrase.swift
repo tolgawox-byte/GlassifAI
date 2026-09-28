@@ -121,7 +121,7 @@ final class WakePhraseListener: ObservableObject {
         background
           ? L.t("Hands-Free Ready (listening in the background)", "Eller serbest hazır (arka planda dinliyor)")
           : L.t("Listening for the wake phrase (on-device)", "Uyandırma ifadesi dinleniyor (cihazda)")
-      case .waitingForGlasses: L.t("Waiting for the glasses to connect", "Gözlüğün bağlanması bekleniyor")
+      case .waitingForGlasses: L.t("Waiting for the glasses to be worn", "Gözlüğün takılması bekleniyor")
       case .paused(let reason): L.t("Paused — ", "Duraklatıldı — ") + reason
       case .unavailable(let reason): L.t("Unavailable — ", "Kullanılamıyor — ") + reason
       }

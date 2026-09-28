@@ -1,5 +1,7 @@
 # Ray-Ban vision with the iPhone locked
 
+> **DAT 1.0 variant (`autoloom-glasses-dat1`):** this branch links DAT 1.0.0. Where this page describes DAT 0.5.0 limits (no standalone photo, no worn state, no "Hey Meta"), `docs/DAT_1_MIGRATION.md` describes what the variant does instead. Nothing DAT 1.0-specific has been tested on glasses.
+
 **Status: BUILD PASS and unit-tested; PHYSICAL TEST REQUIRED.** Nothing here is marked as working until the lock-screen test at the end passes on the owner's iPhone with Ray-Ban Meta Gen 1.
 
 ## The requirement
