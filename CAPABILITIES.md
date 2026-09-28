@@ -85,6 +85,21 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | App Intents: Start Conversation, Ask AutoLoom, Create AutoLoom Note, Start Live Vision | **EXPERIMENTAL** | "Ask AutoLoom" now also runs commands ("not al: …") |
 | OpenClaw agent gateway | **EXPERIMENTAL** (optional) | Off by default |
 
+## Ray-Ban connection (new in v1.2)
+
+See `docs/RAYBAN_CONNECTION.md` for the root causes and the physical test matrix A–L.
+
+| Capability | Status | Notes |
+|---|---|---|
+| Registration only when needed, once at a time; an already registered launch skips the connect screen | **PHYSICAL TEST REQUIRED** | `WearableConnectionCoordinator`; unit-tested state machine |
+| Meta AI callback handled whatever screen is showing (cold launch) | **PHYSICAL TEST REQUIRED** | Root `onOpenURL` |
+| Auto reconnect: the camera returns when the glasses wake, unfold or come back in range | **PHYSICAL TEST REQUIRED** | Link state and device selector events; bounded backoff 1–30 s; 25 s start watchdog |
+| "Meta AI didn't confirm" with one Try Again instead of an endless spinner | **PHYSICAL TEST REQUIRED** | 10 s (Meta AI did not open) / 12 s after returning |
+| Camera or codec failure shown separately from the connection | **EXPERIMENTAL** | Unit-tested mapping; HEVC → raw fallback unchanged |
+| Forget glasses (the only unregistration) | **PHYSICAL TEST REQUIRED** | Settings → Ray-Ban glasses, with confirmation |
+| Ray-Ban connection diagnostics and sanitized report | **EXPERIMENTAL** | Settings → Developer → Ray-Ban connection |
+| MWDAT MetaAppID / ClientToken = 0 (Developer Mode) | **PHYSICAL TEST REQUIRED** | Meta's documented Developer Mode value; build settings `META_APP_ID`, `CLIENT_TOKEN` |
+
 ## Camera and vision
 
 | Capability | Status | Notes |
@@ -107,6 +122,9 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Tabs: Assistant, Memory, Tasks, Settings | **PHYSICAL TEST REQUIRED** | |
 | Assistant screen without any technical camera text | **PHYSICAL TEST REQUIRED** | The overlay switch was removed |
 | Status words incl. "Saving" | **EXPERIMENTAL** | Unit-tested mapping |
+| v1.2: Ray-Ban status pill, "Ray-Ban Connected" confirmation, link animation, camera crossfades, paused-frame veil | **PHYSICAL TEST REQUIRED** | Driven by the connection phase; unit-tested animation mapping |
+| v1.2: orb states (ready, connecting, listening, thinking, searching, looking, speaking, saving, success, muted, error), microphone- and voice-reactive | **PHYSICAL TEST REQUIRED** | Canvas; levels from WebRTC `audioLevel` statistics; Reduce Motion gives still images |
+| v1.2: haptics (connect, wake, save, ready, error, tabs), press feedback, symbol transitions | **PHYSICAL TEST REQUIRED** | |
 | Settings: Assistant, Voice, AI, Vision, Memory, Tools, Privacy, Developer (Diagnostics, Action & task trace, Voice diagnostics, Camera diagnostics), About | **PHYSICAL TEST REQUIRED** | |
 | Turkish / English interface | **PARTIAL** | Main screens and settings; diagnostics stay English |
 

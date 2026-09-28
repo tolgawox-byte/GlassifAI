@@ -2,6 +2,30 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1.2 — Ray-Ban connection and animated UI] — branch `autoloom-glasses-jarvis-v1`
+
+Rollback tag: `rollback-dd1b756-before-connection-fix`. Not device-verified; see `docs/RAYBAN_CONNECTION.md` (tests A–L) and `TEST_REPORT.md`.
+
+### Fixed
+- **The Ray-Ban camera gave up after about a minute.** It was started by 20 tries 3 s apart, and every try failed while the glasses were asleep, folded or away. The camera permission check fails without a connected device (`PermissionError.noDevice` / `noDeviceWithConnection`). Nothing restarted it when the glasses came back. The camera now starts whenever the glasses are registered and linked, and again each time they return, with a bounded backoff.
+- **Meta AI's registration callback could be lost** on a cold launch, while sign-in was restoring and the glasses screen did not exist yet. It is now handled at the app root.
+- **Connect registered again** even when already registered, and could spin forever after Meta AI was closed without approving. Registration now runs only when needed and once at a time, and stops with "Meta AI didn't confirm" and one Try Again.
+- A camera or codec failure no longer looks like a connection failure.
+
+### Added
+- `WearableConnectionCoordinator`: the one source of truth for registration, devices, link, permission and camera, with states SDK_UNAVAILABLE … READY.
+- Settings → Ray-Ban glasses (status, Try Again, Forget glasses with confirmation) and Settings → Developer → Ray-Ban connection (every sub-state, the runtime MWDAT configuration without values, transitions, attempts, sanitized report, developer actions).
+- An explanation when Developer Mode's one-app registration was taken by another app.
+- MWDAT `MetaAppID` / `ClientToken` default to `0`, Meta's Developer Mode value, through build settings.
+- **Animated UI:**
+  - Ray-Ban status pill and "✓ Ray-Ban Connected" confirmation with haptic.
+  - Link animation driven by the real phase.
+  - Camera crossfades, and a veil instead of a frozen frame.
+  - The state word above the controls.
+  - The orb redrawn in Canvas with microphone- and voice-reactive states, orbit, radar, check and confirmation.
+  - Press feedback, symbol transitions, haptics; Reduce Motion respected.
+- Tests: `AutoLoomConnectionTests`.
+
 ## [AutoLoom Jarvis v1.1.1] — branch `autoloom-glasses-jarvis-v1`
 
 From the open-source review (brief §69, `docs/OPEN_SOURCE_RESEARCH.md`). Not device-verified.

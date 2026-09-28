@@ -1,4 +1,4 @@
-# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, Jarvis v1.1)
+# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, Jarvis v1.2)
 
 Result categories:
 - **BUILD PASS**: compiled into the Debug and Release IPAs in CI.
@@ -7,12 +7,50 @@ Result categories:
 
 Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
 
+## Ray-Ban connection and animated UI (v1.2)
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [36430433665](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36430433665) | `d8513c9` | **BUILD PASS · iOS 157/157 · Rust 8/8** | **Final run for v1.2 — install this Release IPA.** Connection coordinator, root callback handling, auto reconnect, diagnostics, animated UI |
+
+New tests (`AutoLoomConnectionTests`):
+
+| Area | Test |
+|---|---|
+| Already registered launch: no connect screen, no second registration; launch grace | `testAnAlreadyRegisteredLaunchNeverShowsTheConnectScreen` |
+| Registration steps, duplicate Connect ignored, Try Again after a stall | `testRegistrationStepsAndDuplicateConnectPrevention` |
+| Registration never spins forever (Meta AI did not open / back without approval / total limit) | `testRegistrationDoesNotSpinForever` |
+| Devices and link: no device, disconnected, connecting, connected, selected device; disconnect and reconnect | `testDeviceAndLinkStates` |
+| Camera only after the link: permission, start, streaming, frames | `testTheCameraStartsOnlyAfterTheGlassesAreLinked` |
+| A codec or camera failure stays "Ray-Ban Connected" | `testACameraOrCodecFailureIsNotAConnectionFailure` |
+| Backoff 1–30 s, never shorter, never unbounded | `testRetriesBackOffAndStayBounded` |
+| Plain words for every state; Try Again only where the user must act | `testEveryPhaseHasPlainWords` |
+| Link animation and orb follow the real state | `testAnimationsFollowTheRealState` |
+| Runtime MWDAT audit: broken callback found, secrets never shown | `testConfigurationAuditNeverShowsSecretsAndFindsABrokenCallback` |
+| Audio levels smoothed, back to silence without samples | `testAudioLevelsAreSmoothedAndFallBackToSilence` |
+
+**Physical tests:** the connection matrix A–L in `docs/RAYBAN_CONNECTION.md` (fresh install, restart, fold, out of range, Meta AI paired, lock, network change, permission, HEVC, double tap, cancelled Meta AI, Hey AutoLoom). Install the Release IPA from the run above; Diagnostics **Commit** = `d8513c92023c`, **DAT SDK** = 0.5.0. Meta AI must be in Developer Mode.
+
+Interface checks:
+
+| # | Check | Pass when | Result |
+|---|---|---|---|
+| V1 | Assistant screen with Ray-Ban | Status pill at the top; no resolution, FPS, codec or frame text anywhere | |
+| V2 | Glasses connect | "✓ Ray-Ban Connected" briefly with a light haptic; not spoken | |
+| V3 | Switch Ray-Ban → iPhone → Camera off | Smooth crossfades, no black flash | |
+| V4 | Talk, ask something, let it answer | Orb: connecting arc → listening follows your voice → thinking orbit → speaking rings follow the voice | |
+| V5 | "Not al: test" | The check mark, then a brief confirmation ring and a haptic | |
+| V6 | iOS Settings → Accessibility → Reduce Motion on | Orb and link animation still, no bouncing | |
+| V7 | Settings → Developer → Ray-Ban connection → Copy report | Report pasted into Notes has no device id, tokens or configuration values | |
+
+---
+
 ## Automated results — Jarvis v1.1
 
 <!-- AUTOMATED-RESULTS-V11 -->
 | Run | Commit | Result | Notes |
 |---|---|---|---|
-| [36392781351](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36392781351) | `a096060` | **BUILD PASS · iOS 146/146 · Rust 8/8** | **Final run for v1.1.1 — install this Release IPA.** Wake restart loop fix, DAT analytics opt-out, confirmation after camera/web/agent content |
+| [36392781351](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36392781351) | `a096060` | **BUILD PASS · iOS 146/146 · Rust 8/8** | v1.1.1: Wake restart loop fix, DAT analytics opt-out, confirmation after camera/web/agent content |
 | [36387415366](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36387415366) | `1d4651d` | **BUILD PASS · iOS 145/145 · Rust 8/8** | v1.1: daily briefing, possessive reminder phrasings, brief scenarios; docs |
 | [36385963557](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36385963557) | `98e5feb` | **BUILD PASS · iOS 143/143 · Rust 8/8** | Voice actions, memory, tasks, connection feedback, Jarvis Style; Debug + Release IPAs |
 | [36382827852](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36382827852) | `a720297` | **BUILD PASS · iOS 126/126 · Rust 8/8** | Camera background fix (lifecycle states, decoder, `bluetooth-central`) |
@@ -40,8 +78,8 @@ New iOS tests in v1.1 (`AutoLoomVoiceActionTests`, plus updated risk and greetin
 ## Physical tests for Jarvis v1.1 (iPhone + Ray-Ban Meta Gen 1)
 
 **Before you start**
-1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run, [36392781351](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36392781351) (`docs/WINDOWS_INSTALL.md`).
-2. Settings → Developer → Diagnostics: **Commit** = `a096060480ca`, **DAT SDK** = 0.5.0. (The DAT 1.0 variant has its own tests: `docs/DAT_1_MIGRATION.md`.)
+1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run, [36430433665](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36430433665) (`docs/WINDOWS_INSTALL.md`).
+2. Settings → Developer → Diagnostics: **Commit** = `d8513c92023c`, **DAT SDK** = 0.5.0. (The DAT 1.0 variant has its own tests: `docs/DAT_1_MIGRATION.md`.)
 3. Settings → Name & conversation: name **Jarvis**. Settings → Wake phrase & hands-free: phrase **Hey Jarvis**.
 4. After a failed test: Developer → Action & task trace → **Copy sanitized task trace** (it now includes the voice actions), and keep the text. For camera tests also copy the Camera diagnostics transitions.
 

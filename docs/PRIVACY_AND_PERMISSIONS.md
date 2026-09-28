@@ -43,6 +43,7 @@ Denied permissions degrade gracefully: without the camera the assistant still ta
 | Web searches | Yes | OpenAI's search (hosted tool or backend search endpoint) on your account | Source cards in memory only |
 | ChatGPT tokens | Only to OpenAI | auth.openai.com / chatgpt.com | iOS Keychain, `AfterFirstUnlockThisDeviceOnly` |
 | Diagnostics | Only if you copy and share the report yourself | — | In memory; sanitized |
+| Ray-Ban connection report (v1.2) | Only if you copy and share it yourself | — | In memory (last 60 transitions); states, counts and errors only. The device appears as a short hash, never its identifier; MetaAppID, ClientToken and TeamID appear only as set / empty / 0, never their values |
 
 The app has no AutoLoom backend and no analytics of its own, and it never uploads anything to AutoLoom, Supabase, Vercel, or any other service. Meta's DAT SDK collects analytics by default (and, from DAT 1.0, SDK crash reports); the app opts out of both in `Info.plist` (`MWDAT` → `Analytics` / `CrashReporting` → `OptOut` = YES), as the SDK's README describes.
 
