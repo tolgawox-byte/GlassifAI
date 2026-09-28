@@ -141,6 +141,9 @@ struct VisionFrameInfo: Equatable {
   var imageDetail = "high"
   /// Total image bytes in the request (all images).
   var totalImageBytes: Int?
+  /// Proof of origin: pipeline state and transport when the frame was taken
+  /// (for example "ScreenLockedStreaming · HEVC (hvc1) decoded glasses sample").
+  var pipeline: String?
 
   /// VIDEO, PHOTO, OCR+VIDEO or OCR+PHOTO.
   var sourceLabel: String {
@@ -158,6 +161,7 @@ struct VisionFrameInfo: Equatable {
     if let crop { text += "; crop \(crop)" }
     if let ocr { text += "; OCR \(ocr)" }
     if let totalImageBytes, totalImageBytes != jpegBytes { text += "; request images \(totalImageBytes / 1_024) KB" }
+    if let pipeline { text += "; \(pipeline)" }
     return text
   }
 }

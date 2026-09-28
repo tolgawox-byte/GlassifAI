@@ -19,7 +19,6 @@ struct AssistantHomeView: View {
   @ObservedObject private var liveVision = LiveVisionController.shared
   @ObservedObject private var wake = WakePhraseListener.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
-  @AppStorage(AssistantPreferences.debugOverlayKey) private var showsDeveloperOverlay = false
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
   @State private var typedText = ""
@@ -51,9 +50,6 @@ struct AssistantHomeView: View {
       VStack(spacing: 10) {
         header
         chips
-        if showsDeveloperOverlay {
-          DeveloperOverlay(captureSource: captureSource, glassesStream: glassesStream, metrics: metrics)
-        }
         Spacer(minLength: 8)
         conversationArea
         voiceBar
@@ -552,7 +548,8 @@ struct AssistantHomeView: View {
   }
 }
 
-/// Settings → Developer → "Camera metrics overlay" (off by default).
+/// Live camera numbers, shown only in Settings → Developer → Camera
+/// diagnostics (never on the assistant screen).
 struct DeveloperOverlay: View {
   let captureSource: CaptureSource
   @ObservedObject var glassesStream: StreamSessionViewModel

@@ -71,7 +71,6 @@ struct SettingsView: View {
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.webSearchKey) private var webSearchEnabled = true
   @AppStorage(AssistantPreferences.actionsKey) private var actionsEnabled = true
-  @AppStorage(AssistantPreferences.debugOverlayKey) private var showsDeveloperOverlay = false
   @AppStorage(ModelSelector.overrideKey) private var modelOverride = ""
 
   init(
@@ -151,10 +150,10 @@ struct SettingsView: View {
             row(L.t("Diagnostics", "Tanılama"), "stethoscope", value: nil)
           }
           NavigationLink { TaskTraceView(voice: voice) } label: {
-            row(L.t("Task trace", "Görev izi"), "list.bullet.rectangle", value: nil)
+            row(L.t("Action & task trace", "İşlem ve görev izi"), "list.bullet.rectangle", value: nil)
           }
-          Toggle(isOn: $showsDeveloperOverlay) {
-            Label(L.t("Camera metrics overlay", "Kamera ölçüm katmanı"), systemImage: "gauge.with.dots.needle.33percent")
+          NavigationLink { CameraDiagnosticsView(glassesStream: glassesStream) } label: {
+            row(L.t("Camera diagnostics", "Kamera tanılaması"), "gauge.with.dots.needle.33percent", value: nil)
           }
         }
 

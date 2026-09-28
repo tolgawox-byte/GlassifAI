@@ -82,6 +82,8 @@ final class AssistantOrchestrator: ObservableObject {
   /// request (argument: timeout), and the DAT stream state for explanations.
   var glassesStillPhoto: (@MainActor (TimeInterval) async -> StillPhoto?)?
   var glassesStreamState: @MainActor () -> String = { "unknown" }
+  /// The glasses stream's transport: "HEVC (hvc1)" or "raw".
+  var glassesTransport: @MainActor () -> String = { "—" }
 
   private(set) var sessionID: UUID?
   private(set) var turnID = 0
@@ -919,8 +921,12 @@ final class AssistantOrchestrator: ObservableObject {
         return photo
       }
       let state = glassesStreamState().lowercased()
+      let lifecycle = GlassesLifecycleMonitor.shared
+      lifecycle.evaluate(reason: "vision request without a fresh frame")
       let reason: String
-      if state.contains("paused") {
+      if let specific = lifecycle.unavailableReason(transportIsRaw: glassesTransport() == "raw") {
+        reason = specific
+      } else if state.contains("paused") {
         reason = "The Ray-Ban camera stream is paused (a tap on the glasses' temple pauses it; tapping again resumes it)."
       } else if state.contains("waiting") || state.contains("starting") {
         reason = "The app is still waiting for the Ray-Ban camera to start."
@@ -998,6 +1004,13 @@ final class AssistantOrchestrator: ObservableObject {
       frameAgeMs: selection.ageMs, captureLatencyMs: nil, reencoded: true, detail: detail)
     info.selection = selection.summary + (assist.note.map { "; \($0)" } ?? "")
     info.upscaled = encoded.width > frame.width
+    if frame.source == .glasses {
+      let transport = glassesTransport()
+      info.pipeline = "\(GlassesLifecycleMonitor.shared.state.rawValue) · \(transport) " +
+        (transport == "raw" ? "SDK-decoded glasses sample" : "app-decoded glasses sample")
+    } else {
+      info.pipeline = "iPhone camera sample"
+    }
     return finishAttachment(full: encoded.jpeg, assist: assist, info: info, taskID: taskID, profile: detail)
   }
 

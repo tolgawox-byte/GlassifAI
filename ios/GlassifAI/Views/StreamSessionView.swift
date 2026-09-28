@@ -76,6 +76,11 @@ struct StreamSessionView: View {
         await stream.captureStillForVision(timeout: timeout)
       }
       AssistantOrchestrator.shared.glassesStreamState = { stream.lastStreamState }
+      AssistantOrchestrator.shared.glassesTransport = { stream.activeTransport.shortLabel }
+      let lifecycle = GlassesLifecycleMonitor.shared
+      lifecycle.isStreamRunning = { stream.isStreaming }
+      lifecycle.transportLabel = { stream.activeTransport.shortLabel }
+      lifecycle.start()
       let voiceSession = voice
       LiveVisionController.shared.isVoiceActive = { voiceSession.isActive }
       WakePhraseListener.shared.isConversationActive = { voiceSession.isActive }
@@ -128,18 +133,13 @@ struct StreamSessionView: View {
       WakePhraseListener.shared.glassesConnected = connected
     }
     .onChange(of: scenePhase) { _, phase in
-      switch phase {
-      case .active:
-        guard captureSource == .glasses else { return }
-        glassesAutoStarted = false
-        Task { await activateCaptureSource() }
-      case .background:
-        // Battery: no idle glasses stream in the background. A running
-        // conversation keeps it.
-        Task { await pauseGlassesStreamIfIdle() }
-      default:
-        break
-      }
+      // The glasses stream is never stopped because the app left the
+      // screen: with the HEVC transport it keeps delivering while the phone
+      // is locked, and vision reads those frames, not the UI.
+      guard phase == .active, captureSource == .glasses, !viewModel.isStreaming else { return }
+      // A stream that stopped while away is started again.
+      glassesAutoStarted = false
+      Task { await activateCaptureSource() }
     }
     .onDisappear {
       VoiceStartCoordinator.shared.unregister()
@@ -162,12 +162,6 @@ struct StreamSessionView: View {
           let id = wearablesViewModel?.devices.first ?? wearables.devices.first,
           let device = wearables.deviceForIdentifier(id) else { return nil }
     return device.nameOrId()
-  }
-
-  private func pauseGlassesStreamIfIdle() async {
-    guard captureSource == .glasses, viewModel.isStreaming, !voice.isActive else { return }
-    await viewModel.stopSession()
-    glassesAutoStarted = false
   }
 
   /// Switching the camera no longer ends the conversation unless the audio

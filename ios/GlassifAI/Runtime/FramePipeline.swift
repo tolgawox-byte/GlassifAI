@@ -70,6 +70,19 @@ struct FrameMetricsSnapshot: Equatable {
   var lastPhotoResolution = "—"
   var lastPhotoLatencyMs: Int?
   var lastVisionImage = "—"
+  /// Glasses samples, decoded frames and decode failures while the app was
+  /// in the background (screen locked or another app in front).
+  var backgroundSamples: UInt64 = 0
+  var backgroundDecoded: UInt64 = 0
+  var backgroundFailures: UInt64 = 0
+  /// Compressed samples skipped while the decoder waited for a keyframe.
+  var keyframeWaits: UInt64 = 0
+  /// Last VideoToolbox error (OSStatus) and how long ago it happened.
+  var lastDecodeError: Int32?
+  var lastDecodeErrorAgeMs: Int?
+  /// Time since the last glasses sample arrived (decoded or not).
+  var lastSampleAgeMs: Int?
+  var softwareDecode = false
 
   var inputResolution: String {
     inputWidth > 0 ? "\(inputWidth)×\(inputHeight)" : "—"
@@ -137,21 +150,49 @@ final class FrameStore: @unchecked Sendable {
   private var lastPhotoResolution = "—"
   private var lastPhotoLatencyMs: Int?
   private var lastVisionImage = "—"
+  private var backgroundSamples: UInt64 = 0
+  private var backgroundDecoded: UInt64 = 0
+  private var backgroundFailures: UInt64 = 0
+  private var keyframeWaits: UInt64 = 0
+  private var lastDecodeError: Int32?
+  private var lastDecodeErrorAt: CFTimeInterval?
+  private var lastSampleAt: CFTimeInterval?
+  private var softwareDecode = false
 
   /// Describes a glasses sample buffer as delivered by the Meta SDK.
-  func recordGlassesSample(compressed: Bool, codec: String, width: Int, height: Int) {
+  func recordGlassesSample(compressed: Bool, codec: String, width: Int, height: Int, background: Bool = false) {
     lock.lock()
     glassesCompressed = compressed
     glassesCodec = codec
     glassesSampleSize = width > 0 ? "\(width)×\(height)" : "—"
     if compressed { compressedSamples &+= 1 } else { rawSamples &+= 1 }
+    if background { backgroundSamples &+= 1 }
+    lastSampleAt = CACurrentMediaTime()
     lock.unlock()
   }
 
-  func recordDecode(success: Bool) {
+  func recordDecode(success: Bool, background: Bool = false, error: Int32? = nil) {
     lock.lock()
-    if success { decodedFrames &+= 1 } else { decodeFailures &+= 1 }
+    if success {
+      decodedFrames &+= 1
+      if background { backgroundDecoded &+= 1 }
+    } else {
+      decodeFailures &+= 1
+      if background { backgroundFailures &+= 1 }
+      if let error {
+        lastDecodeError = error
+        lastDecodeErrorAt = CACurrentMediaTime()
+      }
+    }
     lock.unlock()
+  }
+
+  func recordKeyframeWait() {
+    lock.lock(); keyframeWaits &+= 1; lock.unlock()
+  }
+
+  func recordDecoderMode(software: Bool) {
+    lock.lock(); softwareDecode = software; lock.unlock()
   }
 
   func recordCopyFailure() {
@@ -321,6 +362,10 @@ final class FrameStore: @unchecked Sendable {
     decodedFrames = 0
     decodeFailures = 0
     copyFailures = 0
+    backgroundSamples = 0
+    backgroundDecoded = 0
+    backgroundFailures = 0
+    keyframeWaits = 0
     processing.reset()
     transport.reset()
     lock.unlock()
@@ -371,6 +416,14 @@ final class FrameStore: @unchecked Sendable {
     snapshot.lastPhotoResolution = lastPhotoResolution
     snapshot.lastPhotoLatencyMs = lastPhotoLatencyMs
     snapshot.lastVisionImage = lastVisionImage
+    snapshot.backgroundSamples = backgroundSamples
+    snapshot.backgroundDecoded = backgroundDecoded
+    snapshot.backgroundFailures = backgroundFailures
+    snapshot.keyframeWaits = keyframeWaits
+    snapshot.lastDecodeError = lastDecodeError
+    snapshot.lastDecodeErrorAgeMs = lastDecodeErrorAt.map { Int(((now - $0) * 1_000).rounded()) }
+    snapshot.lastSampleAgeMs = lastSampleAt.map { Int(((now - $0) * 1_000).rounded()) }
+    snapshot.softwareDecode = softwareDecode
     return snapshot
   }
 
@@ -780,6 +833,15 @@ final class GlassesFrameIngestor: @unchecked Sendable {
     decoder.setFrameCallback { [weak self] decoded in
       self?.handleDecoded(decoded)
     }
+    decoder.setFailureCallback { [weak self] status in
+      guard let self else { return }
+      self.store.recordDecode(success: false, background: self.isInBackground, error: status)
+    }
+  }
+
+  private var isInBackground: Bool {
+    lock.lock(); defer { lock.unlock() }
+    return inBackground
   }
 
   func configure(legacyPreview: Bool) {
@@ -795,6 +857,15 @@ final class GlassesFrameIngestor: @unchecked Sendable {
   func setBackground(_ background: Bool) {
     lock.lock(); inBackground = background; lock.unlock()
     renderer.setSuspended(background)
+    if !background {
+      // A software decoder chosen in the background hands back to the
+      // hardware decoder in the foreground (on the decode queue).
+      decodeQueue.async { [weak self] in
+        guard let self else { return }
+        self.decoder.preferHardware()
+        self.store.recordDecoderMode(software: false)
+      }
+    }
   }
 
   func resetFirstFrame() {
@@ -852,7 +923,8 @@ final class GlassesFrameIngestor: @unchecked Sendable {
     lock.unlock()
 
     let info = Self.describe(sampleBuffer)
-    store.recordGlassesSample(compressed: info.compressed, codec: info.codec, width: info.width, height: info.height)
+    store.recordGlassesSample(
+      compressed: info.compressed, codec: info.codec, width: info.width, height: info.height, background: background)
 
     if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
       // Decoded frame: copy it so the SDK's decoder pool is released at once.
@@ -894,17 +966,24 @@ final class GlassesFrameIngestor: @unchecked Sendable {
     if backlog < 8 { pendingDecodes += 1 }
     lock.unlock()
     if backlog >= 8 {
-      store.recordDecode(success: false)
+      store.recordDecode(success: false, background: background)
       return Result(handled: !legacy || background, isFirstFrame: first)
     }
     decodeQueue.async { [weak self] in
       guard let self else { return }
       do {
         try self.decoder.decode(sampleBuffer)
+      } catch DecoderError.waitingForKeyframe {
+        // Not a failure: P-frames after a reset wait for the next keyframe.
+        self.store.recordKeyframeWait()
       } catch {
-        self.store.recordDecode(success: false)
-        self.decoder.invalidateSession()
+        let decoderError = error as? DecoderError
+        self.store.recordDecode(success: false, background: self.isInBackground, error: decoderError?.status)
+        if let decoderError, case .configurationError = decoderError {
+          self.decoder.invalidateSession()
+        }
       }
+      self.store.recordDecoderMode(software: self.decoder.usesSoftwareDecoder)
       self.lock.lock(); self.pendingDecodes -= 1; self.lock.unlock()
     }
     // Legacy mode keeps the SDK's UIImage preview; the decoder still feeds
@@ -913,7 +992,7 @@ final class GlassesFrameIngestor: @unchecked Sendable {
   }
 
   private func handleDecoded(_ decoded: VideoDecoder.DecodedFrame) {
-    store.recordDecode(success: true)
+    store.recordDecode(success: true, background: isInBackground)
     let arrivedAt = CACurrentMediaTime()
     store.ingest(
       pixelBuffer: decoded.pixelBuffer,

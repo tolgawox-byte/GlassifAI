@@ -433,6 +433,9 @@ class StreamSessionViewModel: ObservableObject {
       try? await Task.sleep(nanoseconds: GlassesTransportWatchdog.gracePeriodNanoseconds)
       guard let self, !Task.isCancelled, self.sessionGeneration == generation,
             self.streamingStatus == .streaming, self.activeTransport == .hevc else { return }
+      // Only judged on screen: raw pauses in the background, so a fallback
+      // decided there would stop vision exactly when the phone is locked.
+      guard UIApplication.shared.applicationState == .active else { return }
       let now = FrameStore.shared.snapshot()
       let reason = GlassesTransportWatchdog.fallbackReason(
         compressedSamples: GlassesTransportWatchdog.delta(now.compressedSamples, since: baseline.compressedSamples),
@@ -516,7 +519,8 @@ class StreamSessionViewModel: ObservableObject {
       try? await Task.sleep(nanoseconds: 12_000_000_000)
       guard let self, !Task.isCancelled, self.sessionGeneration == generation,
             self.activeTransport == .hevc, self.streamingStatus != .streaming,
-            self.lastErrorWasStreamFailure else { return }
+            self.lastErrorWasStreamFailure,
+            UIApplication.shared.applicationState == .active else { return }
       await self.fallBackToRaw(reason: "HEVC stream did not start (\(self.lastStreamError ?? "stream error"))")
     }
   }
