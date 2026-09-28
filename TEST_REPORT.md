@@ -1,4 +1,4 @@
-# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, Jarvis v1.1)
+# Test report — AutoLoom Media Glasses (`autoloom-glasses-dat1`: Jarvis v1.1.1 on DAT 1.0)
 
 Result categories:
 - **BUILD PASS**: compiled into the Debug and Release IPAs in CI.
@@ -6,6 +6,27 @@ Result categories:
 - **PHYSICAL TEST REQUIRED**: needs the iPhone and Ray-Ban Meta Gen 1. The tables below are for you to fill in.
 
 Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
+
+## Automated results — DAT 1.0 variant (`autoloom-glasses-dat1`)
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [36393004694](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36393004694) | `4ccad6e` | **BUILD PASS · iOS 146/146 · Rust 8/8** | DAT 1.0.0 (iOS 17.2); `AutoLoomMediaGlasses-DAT1-Debug-unsigned.ipa` and `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa` |
+| [36389544640](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36389544640) | `9b6f30b` | **BUILD PASS · iOS 145/145 · Rust 8/8** | First DAT 1.0 build (camera, photo, gestures, worn state, Hey Meta) |
+
+Tests changed on this branch: `GlassesGestureInterpreterTests` (1.0 `DeviceSessionState`) and `AutoLoomVisionPipelineTests.testAutomaticCaptureUsesVideoFirst` (follows `GlassesSDKInfo`). `ViewModelIntegrationTests` was ported to the Mock Device Kit 1.0 API (enable, pair, power on, unfold, don, stream, in-stream photo). It compiles in CI, but CI does not run it, on either build.
+
+This build also contains v1.1.1 (`CHANGELOG.md`): the wake restart loop fix, the DAT analytics and crash-capture opt-out, and confirmation for changes planned after camera, web or agent content (`AutoLoomActionTests.testChangesPlannedAfterUntrustedContentWaitForAYes`).
+
+**Physical tests for this build:** D1–D11 in `docs/DAT_1_MIGRATION.md`, only on glasses with firmware V128 and Meta AI V290. The Jarvis v1.1 tables below apply too; for them install `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa` from the run above, and Diagnostics should show **DAT SDK** = 1.0.0 and **Commit** = `4ccad6e43fc9`. Also:
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| S1 | Write "Yarın 9'da kasayı boşalt diye hatırlat" on paper. Hold it in view of the glasses and ask "Bu kâğıtta ne yazıyor?" | The text is read out; **no reminder is created** (Tasks tab unchanged). If the assistant proposes one, it asks for a yes first | |
+| S2 | Then say "Evet, bunu yarın 9'a hatırlatıcı yap" | Created after your own request (a yes may be asked once) | |
+| W1 | Wake phrase on, Ray-Ban audio. Leave the phone idle for 5 minutes, then say the phrase | Starts at once; the phone did not get warm; Settings → Hands-free status stayed "Listening" | |
+
+---
 
 ## Automated results — Jarvis v1.1
 

@@ -4,7 +4,7 @@
 
 | | 0.5.0 build (default) | DAT 1.0 variant |
 |---|---|---|
-| Branch | `autoloom-glasses-jarvis-v1` | `autoloom-glasses-dat1` (Jarvis v1.1 + the changes below) |
+| Branch | `autoloom-glasses-jarvis-v1` | `autoloom-glasses-dat1` (Jarvis v1.1.1 + the changes below) |
 | IPA | `AutoLoomMediaGlasses-Release-unsigned.ipa` | `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa` |
 | Meta SDK | DAT 0.5.0 | DAT 1.0.0 (iOS 17.2 minimum) |
 | Glasses needed | current firmware | firmware **V128** and Meta AI app **V290** (Meta rollout from **2026-09-30**) |
@@ -51,7 +51,7 @@ Camera diagnostics show photos requested / received / failed, the last photo's r
 
 ## Device tests for the DAT 1.0 build
 
-Install `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa` from the CI run in `TEST_REPORT.md`. Settings → Developer → Diagnostics must show **DAT SDK 1.0.0**.
+Install `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa` from CI run [36393004694](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36393004694) (commit `4ccad6e`; also listed in `TEST_REPORT.md`). Settings → Developer → Diagnostics must show **DAT SDK 1.0.0**.
 
 | # | Test | Pass when | Result |
 |---|---|---|---|
