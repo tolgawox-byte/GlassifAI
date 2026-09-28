@@ -10,12 +10,40 @@ Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actio
 ## Automated results
 
 <!-- AUTOMATED-RESULTS -->
-Filled in from the final CI run. See the section below.
+### Final build: run [36362397832](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36362397832), commit `3cb0437`
+
+**BUILD PASS · iOS 99/99 UNIT PASS (0 skipped) · Rust 5/5 UNIT PASS.** Artifact `AutoLoomMediaGlasses-unsigned-IPAs` (51 MB) contains `AutoLoomMediaGlasses-Release-unsigned.ipa` (install this one) and `AutoLoomMediaGlasses-Debug-unsigned.ipa`. Compared with `bdbf24a`, it adds:
+- the Mode B audio-safety fix
+- the HEVC never-started fallback
+- rendered-fps and battery diagnostics
+- the requested/actual line in Settings
+- documentation
+
+### Previous complete result: run [36361068283](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36361068283), commit `bdbf24a`
+
+- **BUILD PASS**: Rust bridge (3 iOS targets), Swift Debug and Release, and both unsigned IPAs (artifact `AutoLoomMediaGlasses-unsigned-IPAs`).
+- **iOS: 99 passed, 0 failed, 0 skipped** (from the `.xcresult` bundle). The OCR test skips itself if Apple Vision is unavailable; 0 skipped means the real OCR pass ran and passed. Per-class counts come from the test sources and add up to the same 99.
+  - `AutoLoomCoreTests` 23
+  - `AutoLoomVisionTests` 10
+  - `AutoLoomVisionPipelineTests` 13
+  - `AutoLoomActionTests` 11
+  - `AutoLoomModelTests` 8
+  - `AutoLoomTaskTests` 7
+  - `AutoLoomAssistantTests` 6
+  - `AutoLoomAgentTests` 5
+  - `AutoLoomCameraTests` 5
+  - `AutoLoomLiveVisionTests` 5
+  - `AutoLoomVoiceTests` 3
+  - `GlassesGestureInterpreterTests` 3
+  - The Meta mock-device integration class is excluded by design (long fixed sleeps).
+- **Rust: 5 passed, 0 failed.**
 
 ### Runs on `autoloom-glasses-vNext`
 
 | Run | Commit | Result | Notes |
 |---|---|---|---|
+| [36362397832](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36362397832) | `3cb0437` (final) | **BUILD PASS · iOS 99/99 · Rust 5/5** | Release IPA for the phone |
+| [36361068283](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36361068283) | `bdbf24a` (all features + agent gateway) | **BUILD PASS · iOS 99/99 UNIT PASS · Rust 5/5 UNIT PASS** | |
 | [36358353416](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36358353416) | `5bf325b` (DAT 0.5.0, HEVC, profiles) | **BUILD PASS · iOS 54/54 UNIT PASS · Rust 5/5 UNIT PASS** | First build against DAT 0.5.0 |
 | [36360275311](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36360275311) | `b3a64ca` (vision pipeline, models, Live Vision, voice, actions) | BUILD PASS · test target did not compile | `ModelHealth` main-actor call from a non-isolated test |
 | [36360687135](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36360687135) | `8fd60fe` (+ brand, Mode B, shortcuts) | BUILD PASS · test target did not compile | Missing `import CoreMedia` (MemberImportVisibility). Found through the new error annotations |
