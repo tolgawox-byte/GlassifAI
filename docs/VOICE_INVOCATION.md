@@ -1,6 +1,6 @@
 # Voice invocation and the assistant name
 
-Researched 2026-09-27 from Meta's official Wearables documentation ("Respond to Hey Meta voice invocations", https://wearables.developer.meta.com/docs/develop/dat/voice-invocations, DAT SDK v1.0 docs) and from the symbols in the Meta DAT binaries: `VoiceInvocation*` types exist in `MWDATCore` **1.0.0** and are absent from **0.4.0**, the version this app uses.
+Researched 2026-09-27 from Meta's official Wearables documentation ("Respond to Hey Meta voice invocations", https://wearables.developer.meta.com/docs/develop/dat/voice-invocations, DAT SDK v1.0 docs) and from the symbols in the Meta DAT binaries: `VoiceInvocation*` types exist in `MWDATCore` **1.0.0** and are absent from **0.4.0** and **0.5.0** (this build uses 0.5.0).
 
 ## Two separate things
 
@@ -24,7 +24,7 @@ The assistant name never becomes a system wake word. The app does not pretend ot
 | Start a speech session immediately? | The app receives `LaunchApp` and can start its own voice session. Every invocation must be answered exactly once through `responseHandle.sendSuccess`/failure. | voice-invocations |
 | Is ASR text after the phrase delivered? | **No.** The only documented invocation type is `LaunchApp` (on iOS it carries the `deviceIdentifier`). No transcript is included. | voice-invocations, API reference |
 | Best practice | Avoid "AI" in the app name, because it is confused with Meta AI. Open the stream early at app launch. | voice-invocations |
-| SDK version | `VoiceInvocationsStream` exists only in DAT **1.0.0** (not in 0.4.0) | binary symbols |
+| SDK version | `VoiceInvocationsStream` exists only in DAT **1.0.0** (not in 0.4.0 or 0.5.0) | binary symbols |
 | Device and app requirements | DAT 1.0 needs glasses firmware **V128** and Meta AI **V290**. Rollout starts **2026-09-30**. Integration versions created before 1.0 do not work with 1.0 builds. | version-dependencies docs |
 | Displayless Ray-Ban Meta | Invocation is voice only. The app answers through audio; nothing is shown on the glasses. | — |
 
@@ -40,16 +40,30 @@ The assistant name never becomes a system wake word. The app does not pretend ot
 
 ## Status in this build
 
+The brief's three modes:
+
+| Mode | What it is | Status |
+|---|---|---|
+| **A — Active conversation** | While a conversation runs, the microphone is live and you address the assistant by name ("Jarvis, what am I looking at?"). No wake word is needed. | **Experimental** (name in instructions; "only answer when called by name" is an optional toggle) |
+| **B — App-armed listening** | Opt-in (Settings → Hands-Free). While the app is **open on screen**, on-device speech recognition listens for "Jarvis" or "Hey Jarvis" and starts a conversation. | **Experimental** |
+| **C — System invocation** | "Hey Siri, start AutoLoom" (App Shortcut), or a personal Shortcuts phrase named after the assistant. "Hey Meta, start …" needs DAT 1.0. | Siri **experimental**; Hey Meta **not available** |
+
+Mode B safeguards:
+- It never runs in the background: it stops when the app leaves the screen and resumes when it returns.
+- On-device recognition only (`requiresOnDeviceRecognition`). On a phone without on-device English recognition it refuses to run and says so; audio is never streamed to a server while waiting.
+- The iOS orange microphone indicator and an on-screen chip ("Say “Jarvis” to start") are visible while it listens.
+- It hands the microphone to the conversation before the call starts, and re-arms after the call ends.
+- Recognition sessions restart every ~50 s. Only a counter of name detections is kept; no audio or transcript is stored.
+- Useful with the phone mounted and unlocked, for example in a car.
+
 | Feature | Status |
 |---|---|
-| Custom assistant name (Settings → Assistant) | **Implemented.** Stored locally, validated (letters required, max 24 characters, default "AutoLoom"), and injected into the voice session's instructions. Applies from the next conversation. |
-| Addressing by name in an active conversation | **Implemented** through the existing realtime session. The model treats "Jarvis, …" as getting its attention; no extra recognizer runs. |
-| "Only answer when called by name" | **Experimental** toggle (off by default). It is an instruction to the voice model, not a gate on the microphone. |
+| Custom assistant name (Settings → Assistant) | **Implemented.** Stored locally, validated (letters required, max 24 characters, default "AutoLoom"), injected into the voice instructions. |
 | "Hey Siri, start AutoLoom" and a custom Siri shortcut | **Implemented** (App Intent + App Shortcut). Physical test required. |
-| Idempotent start (button, Siri, future Meta invocation) | **Implemented** (`VoiceStartCoordinator`). A second request during a start or an active call is ignored. Unit tested. |
+| Siri "Ask AutoLoom" and "Start Live Vision" | **Implemented** (App Shortcuts). |
+| Idempotent start (button, Siri, wake phrase, future Meta invocation) | **Implemented** (`VoiceStartCoordinator`, unit tested). |
 | "Hey Meta, start AutoLoom" | **Not available in this build.** Needs the DAT 1.0 upgrade, Developer Center configuration, and Voice Invocation approval. |
-| Custom "Hey Jarvis" system wake word | **Not supported by the current Meta or iOS platforms.** Not implemented, not faked. |
-| Always-on background custom wake word | **Not supported by the current platform.** |
+| Custom system-wide wake word ("Hey Jarvis" with the app closed or the phone locked) | **Not supported by iOS or Meta** for third-party apps. Not implemented, not faked. |
 
 ## Plan for "Hey Meta" (after the DAT 1.0 upgrade)
 
@@ -69,4 +83,5 @@ The assistant name never becomes a system wake word. The app does not pretend ot
 
 - The assistant name is stored in `UserDefaults` only.
 - Invocation diagnostics keep the time, type, and outcome of the last 10 invocations, in memory. No wake audio is recorded or stored.
-- The microphone is live only while a conversation is active and visible, and it respects mute and end-call.
+- The microphone is live only while a conversation is active, or while Mode B is armed and the app is open on screen. Both are visible, and both respect mute and end-call.
+- Mode B uses on-device recognition only. Nothing it hears is stored or sent.

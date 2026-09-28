@@ -1,148 +1,106 @@
-# Ray-Ban camera capabilities (Meta Wearables DAT)
+# Ray-Ban camera: capabilities, root causes, and the quality pipeline
 
-Researched 2026-09-27 from Meta's official DAT documentation (wearables.developer.meta.com), the SDK repository (github.com/facebook/meta-wearables-dat-ios) and its changelog/`.swiftinterface`. Items marked UNVERIFIED come from non-staff forum posts or could not be confirmed officially.
+Researched 2026-09-27 from Meta's official sources:
+- the **Meta Wearables docs MCP server** (`https://mcp.developer.meta.com/wearables`, tool `search_dat_docs`), queried directly
+- the SDK repository `facebook/meta-wearables-dat-ios` (tags 0.4.0 → 1.0.0, `CHANGELOG.md`)
+- the published `.swiftinterface` files of DAT 0.4.0 and 0.5.0, diffed line by line
+
+Items marked PHYSICAL TEST REQUIRED have not been measured on the glasses yet.
 
 ## Short version
 
-- The app is pinned to **DAT 0.4.0**. The latest SDK is **1.0.0** (tagged 2026-09-24) and it needs Meta AI app **V290** and glasses firmware **V128**; Meta's rollout of those starts **2026-09-30**. Upgrading now could break the working glasses connection, so this release stays on 0.4.0 and fixes the phone-side pipeline instead.
-- On 0.4.0, requesting `.high` (720×1280) did not reliably take effect — the fix landed in 0.5.0. The diagnostics screen now shows the resolution that actually arrives.
-- Third-party video goes over **Bluetooth Classic**, and the glasses compress harder as resolution and frame rate go up. Wi-Fi streaming arrived in 0.8.0 and needs Wi-Fi entitlements from a **paid Apple developer team**, which a free sideloading account can't provide. Meta AI's own experience is not limited this way, so some softness compared with it is a platform limit, not an app bug.
-- The phone-side pipeline had real problems, and this release fixes them: every frame hopped to the main thread and was converted to a `UIImage` there, SDK buffers were retained until that ran, and a JPEG was encoded every second. Meta's SDK calls the frame callback inline, so holding its buffers can drain the decoder pool and stall the stream (UNVERIFIED staff-adjacent report, consistent with the observed lag).
+1. **Root cause 1: the SDK could not deliver 720p.** The app was pinned to DAT **0.4.0**. Meta's 0.5.0 release notes say *"Fixed: High resolution (720x1280) video can now be requested."* On 0.4.0, a `.high` request most likely arrived at a lower resolution, which matches the *504×896* the brief quotes. This build moves to **DAT 0.5.0**.
+2. **Root cause 2: too many frames for the Bluetooth link.** Meta's documentation: *"The image delivered to your app may appear lower quality than expected, even when the resolution reports high or medium. This is due to per-frame compression that adapts to available Bluetooth Classic bandwidth. Requesting a lower resolution, a lower frame rate, or both can yield higher visual quality with less compression loss."* The old default asked for 720p at 24 fps. The new default is **720p at 15 fps**, with a **720p at 7 fps** max-detail profile for reading.
+3. **Root cause 3: the AI image was not chosen or labelled for detail.**
+   - Vision used whatever frame was newest, even a blurred one.
+   - The image went out without an explicit `detail` value.
+   - Reading requests had no text-specific help.
 
-## Vision reliability fix: "preview visible, but no fresh frame"
+   This build picks the sharpest recent frame, sends `detail: "high"`, enlarges small frames toward the model's patch budget, and adds on-device OCR plus a zoomed crop of the text.
+4. **Not a phone-side bug:** the glasses compress video to fit Bluetooth Classic. Meta AI's own camera path is not limited the same way, so some softness compared with the glasses' own photos is a platform limit. Full-resolution stills (up to the native sensor) need DAT 1.0's `Camera.photo`, which needs glasses firmware V128 and Meta AI V290 (Meta's rollout starts 2026-09-30).
 
-What the code showed in the previous build (`8f04249`):
+## Official version requirements (Meta docs, "Version Dependencies")
 
-1. **Compressed samples never reached vision in the foreground.**
-   - `GlassesFrameIngestor.handle` fed `FrameStore` only for samples with an image buffer. A compressed sample (data buffer, no image buffer) returned "not handled".
-   - In the foreground it then reached only the legacy `makeUIImage()` preview, which decodes internally. That produced a visible preview and no vision frame.
-   - The app's own decoder ran only in the background.
-2. **No fallback when the stream stalls.** Vision required a frame at most 1.0 s old and waited only 1.5 s. Several things can make the stream stall while the preview keeps showing the last frame:
-   - a temple tap, which pauses the DAT session
-   - Bluetooth congestion while HFP voice audio is active
-   - the dropped-I-frame freeze Meta staff reported for DAT
-   
-   The original GlassifAI accepted frames up to **10 s** old, which hid stalls but could describe a stale view.
-3. **A frame whose buffer could not be copied on the CPU was dropped** instead of being kept for vision.
+| DAT SDK | Meta AI app | Ray-Ban Meta firmware | Notes |
+|---|---|---|---|
+| 0.4.0 (previous build) | V254 | V20 | `.high` request not reliably honoured |
+| **0.5.0 (this build)** | **V254** | **V22** | 720p fixed; `hvc1` codec (streams in background) |
+| 0.6.0 | V254 | V22 | `DeviceSession` API added |
+| 0.7.0 / 0.8.0 | V272 / V275 | V125 | Types renamed (`Stream`, `StreamConfiguration`); Wi-Fi transport (needs paid-team entitlements) |
+| 0.9.0 | V282 | V126 | Consolidated `Camera`; iOS 17.2 minimum |
+| 1.0.0 (tagged 2026-09-24) | V290 | V128 | `Camera.photo` full-resolution stills (beta), Hey Meta voice invocations |
 
-Which of these hit the physical device has not been measured yet. If the preview was visible in the default low-latency mode, the frames were raw, which points to (2). Diagnostics now shows the exact path: *Delivered as* raw or compressed, codec, decoded frames and failures, copy fallbacks, stream state, and each task's image source.
+Why 0.5.0 and not newer: 0.5.0 has the same `StreamSession` API as 0.4.0. The only compile changes were `StreamSessionError.audioStreamingError` → `.thermalCritical` and the removal of `HingeState`/`DeviceState`, which the app did not use. The MockDeviceKit test API is unchanged. Its firmware requirement (V22) is far below current firmware. 0.7+ is a larger migration with higher firmware requirements and no stream-quality change over 0.5.0.
 
-**Fix**
-- **Every sample is fed to vision.**
-  - Raw samples: copy, then `FrameStore`, then preview. If the copy fails, the original buffer is kept.
-  - Compressed samples: hardware decode (`VTDecompressionSession`) on a serial queue in **both foreground and background**, then `FrameStore` and preview.
-  - Rule enforced: if a Ray-Ban frame can be shown, vision can use it.
-- **Ray-Ban vision requests never use the iPhone camera, a preview screenshot, an earlier task's photo, or a stale frame.**
-  - Video frames must be ≤ 1.0 s old (the app waits up to 2.0 s).
-  - Photos are requested per task and accepted only while that task's request is pending.
-  - Switching camera source clears the frame cache and cancels a pending photo.
-- **Fallback:** if no fresh video frame arrives, the app asks the glasses for a still photo (4 s timeout). If that also fails, the assistant explains why, using the DAT stream state ("paused — tap the temple", "waiting for glasses", "not running"), and never describes an older image.
+## The chain, stage by stage
 
-## Quality path for AI vision
+```text
+Ray-Ban camera ─► glasses encoder (adaptive to Bluetooth bandwidth)                 [not observable]
+  ─► Bluetooth Classic ─► DAT 0.5.0 StreamSession
+      HEVC (default):  VideoFrame.sampleBuffer = compressed hvc1 sample             [codec, size, count]
+        ─► VTDecompressionSession (hardware) on a serial queue ─► 420v CVPixelBuffer [decode ok/fail]
+      raw (fallback):  SDK-decoded CVPixelBuffer ─► one copy into an app pool         [copy fallbacks]
+  ─► FrameStore: newest 8 glasses frames (arrival, capture time, sequence, epoch)   [FPS, age, sequence]
+  ├─► PIPELINE A – live preview: single pending slot ─► AVSampleBufferDisplayLayer   [rendered/dropped]
+  └─► PIPELINE B – AI vision, only when a question needs it:
+        profile by request (FAST / BALANCED / HIGH_DETAIL)
+        ─► best-frame selection (sharpness, exposure, freshness, same scene)         [best of n, sharpness]
+        ─► one encode: Lanczos resample, clamped edges, JPEG q0.75/0.85/0.92          [size, quality, bytes]
+        ─► HIGH_DETAIL: enlarge small frames ≤1.6× within 2048 px / 2500 patches
+                        + Apple Vision OCR (≤1.5 s) + enlarged crop of the text area [lines, confidence, crop]
+        ─► Responses request with detail: "high"                                     [T0–T5 timings]
+```
 
-| Request | Ray-Ban image | Profile |
+There is no main-thread work per frame, no `UIImage` per frame, no JPEG per frame, and no screenshot of the preview anywhere in the AI path.
+
+## What changed in this build
+
+| Area | Before (0.4.0 build) | Now |
 |---|---|---|
-| General ("what am I looking at?") | Freshest decoded video frame → fallback still photo | **Standard**: long side ≤ 1280 px (the 720×1280 stream is never downscaled), JPEG q0.80, ≤ 1 MB |
-| Reading / fine detail ("read this sign", VIN, badge, label, screen, price, warning) — `TASK: vision_read` or `look_at_camera(detail: high)` | Fresh still photo first → fallback video frame | **High detail**: long side ≤ 2048 px and ≤ 2500 patches of 32 px (Codex's image limits), JPEG q0.92, ≤ 2.6 MB. A photo that already fits is sent **unchanged** (no recompression) |
-| Vision + web (identify, then research) | Same as reading | High detail |
-
-- The mode can be changed in Settings → Ray-Ban → Vision image: *Automatic* (default), *Video frames only*, or *Still photo first*.
-- Each task records:
-  - source and kind (PHOTO or VIDEO)
-  - frame sequence
-  - pixel format
-  - source and encoded size
-  - JPEG quality and bytes
-  - frame age or capture latency
-  - profile
-- The last AI image is summarized in Diagnostics as metadata only; the image itself is never logged.
-
-## Still photo support (DAT 0.4.0)
-
-- `StreamSession.capturePhoto(format: .jpeg)` works only **during an active stream**. Video pauses briefly and resumes.
-- Meta maintainers describe in-stream photos as frames of the video stream, so they are **not higher resolution than the stream**. They may still be a cleaner single JPEG than a decoded video frame. Diagnostics shows *last photo* resolution and latency, and Test 3 compares the two.
-- The photo publisher carries **no request ID**, and photos taken with the glasses' shutter button arrive on the same publisher. The app therefore:
-  - keeps at most one capture in flight
-  - accepts a photo only while a request is pending
-  - rejects late or unsolicited photos (unit tested)
-- Full-resolution photos (up to 4032×3024, `Camera.photo`) require **DAT 1.0** and cannot run during a stream. They are part of the upgrade plan below.
-
-## Text reading strategy
-
-- The best available source image goes straight to the multimodal model. There is no separate OCR engine.
-- Reading requests get the high-detail profile, a fresh photo first, and instructions to transcribe exactly: keep letters, digits, units, and codes exact, and say which parts are unreadable instead of guessing.
-- Legibility is limited by the glasses' optics and Bluetooth compression. Moving closer and holding still helps more than any encoder setting.
+| SDK | DAT 0.4.0 | DAT 0.5.0 |
+| Transport | raw only (SDK decodes; pauses in background) | **HEVC** by default: hardware-decoded by the app to native 4:2:0, keeps streaming with the phone locked. A watchdog falls back to raw once if no frame decodes within 8 s of streaming. Selectable in Settings |
+| Default profile | 720p @ 24 fps | **720p @ 15 fps**; also 720p @ 7 fps (max detail), 720p @ 24 (original), 504p @ 30 |
+| Diagnostics | resolution that arrived | **Requested vs actual** (size, fps, codec), DAT version, glasses name/type/compatibility, transport and fallback reason |
+| Frames kept | newest only | newest **8** glasses frames (iPhone: newest only, to spare the capture pool) |
+| AI frame | newest frame | **sharpest recent frame of the same scene** (Laplacian variance on luma, exposure check, freshness weight). Frames from before a scene change are never used |
+| Profiles | standard / high | **FAST** (768 px, q0.75), **BALANCED** (1280 px, q0.85), **HIGH_DETAIL** (≤2048 px & ≤2500 patches, q0.92) |
+| Profile routing | voice model's choice | Voice model's choice, **upgraded by request words**: read/label/sign/VIN/badge/dashboard/warning/screen/menu/price, oku/yazı/etiket/tabela/şasi/plaka/uyarı/gösterge… → HIGH_DETAIL; colour questions → FAST |
+| Reading help | none | On-device OCR as an untrusted hint; enlarged crop of the recognised text as a second image |
+| `detail` | not sent (service default) | `"high"`, as Codex sends |
+| Photos | photo first for reading | **Video first**: Meta documents in-stream photos as "a frame lifted out of a video stream", so they add latency without detail on 0.5.0. Photos remain the fallback when video stalls, and a "photo first" setting exists for comparison |
+| Stale protection | ≤1.0 s, source filter, reset on switch | Same, plus a **frame epoch**: a frame selected before a camera switch is rejected even if its encode finishes after the switch |
 
 ## Capability table
 
-| Capability | Current behavior (this build) | Official DAT max | Can improve? | Platform limitation? | Physical test? |
-|---|---|---|---|---|---|
-| Stream resolution | Requests 720×1280 by default (original profile). Actual size is shown in Diagnostics | 720×1280 (`.high`), 504×896 (`.medium`), 360×640 (`.low`) | Yes: upgrade to ≥0.5.0 so `.high` is honored. Try the "Smooth" or "Sharper frames" profile now | Yes. The ladder drops resolution first, then fps (never below 15), when Bluetooth bandwidth is low | Yes (Test 6) |
-| Frame rate | 24 fps requested (original). Profiles: 30 fps (504p) or 15 fps (720p) | 2, 7, 15, 24, 30 fps | Yes. Fewer fps means less compression loss per frame | Yes (adaptive) | Yes |
-| Codec | `.raw` requested (the only case in 0.4.0). Both decoded and compressed samples are handled; compressed ones are hardware-decoded by the app | `.raw` (foreground only), `.hvc1` (HEVC, 0.5.0+, foreground and background) | Yes, after upgrading: `.hvc1` plus hardware decode | — | Yes |
-| Transport | Bluetooth Classic | Bluetooth Classic, or Wi-Fi (0.8.0+) | Only with Wi-Fi entitlements (paid Apple team) | Yes, bandwidth | — |
-| Still capture | In-stream `capturePhoto(format: .jpeg)` per vision task: first for reading requests, and as the fallback when video stalls (4 s timeout). One request at a time; late or unsolicited photos rejected | 1.0.0 `Camera.photo` up to 4032×3024 JPEG/HEIC. Experimental, can't run during a stream, can't be published | Yes, after the 1.0.0 upgrade (dev builds) | Yes | Yes (Test 3) |
-| Frame timestamps | Arrival time on the phone; PTS used only if it is on the host clock | `VideoFrame` exposes only `sampleBuffer` and `makeUIImage()`; clock origin undocumented | — | Yes: no official capture timestamp | Stopwatch test |
-| Preview pipeline | One buffer copy on the callback thread, then `AVSampleBufferDisplayLayer`; latest frame wins; no main-thread work | — | Done | — | Yes |
-| AI image | Standard: freshest frame (≤1 s old), ≤1280 px, q0.80. High detail: fresh photo or frame, ≤2048 px and ≤2500 patches, q0.92; photos that already fit are passed through unchanged | Codex caps images at 2048 px and 2500 32-px patches | Done | — | Yes (Test 2, 3) |
-| Sessions | One DAT stream plus the gesture session | Only one session per device; some Meta AI features pause while a third-party session is active | — | Yes | — |
-| Devices | Ray-Ban Meta (tested) | Ray-Ban Meta Gen 1/2, Meta Ray-Ban Display, Oakley Meta HSTN/Vanguard (1.0.0 needs firmware V128) | — | — | — |
+| Capability | This build | Official max | Physical test |
+|---|---|---|---|
+| Stream resolution | 720×1280 requested (profile) | 720×1280 (`.high`), 504×896, 360×640. The glasses lower resolution first when bandwidth is short | **Required**: record *Actual* in Diagnostics |
+| Frame rate | 15 fps requested (7/24/30 selectable) | 2, 7, 15, 24, 30 fps; the ladder never goes below 15 fps on its own | Required |
+| Codec | HEVC (hvc1) + app hardware decode; raw fallback | raw (foreground only), hvc1 (foreground + background) | Required: Transport must stay HEVC |
+| Background frames | Yes with HEVC (phone locked, conversation running) | hvc1 only | Required (Test 14) |
+| Still photo | In-stream `capturePhoto(format: .jpeg)` as fallback | 1.0 `Camera.photo` up to native resolution (beta, stream must stop) | Compare in Test 5 |
+| Best-frame choice | Newest 8 frames, same scene, ≤1.0 s | — | Diagnostics → Recent tasks shows "best of n" |
+| OCR | Apple Vision accurate, tr-TR + en-US (when the system supports Turkish), no language correction | — | Tests 4–6 |
+| AI image | See profiles above | Codex high detail: ≤2048 px, ≤2500 patches of 32 px | Test 5 |
+| Capture timestamps | Host-clock PTS when plausible, else arrival time | `VideoFrame` exposes only the sample buffer | — |
 
-## The measured chain
+## What cannot be measured by the app
 
-```text
-Ray-Ban camera
- → glasses encoder (adaptive to Bluetooth bandwidth)        [not observable]
- → DAT SDK decode (.raw → 420v CVPixelBuffer)              [pixel format, resolution]
- → frame callback (inline on the SDK thread)               [arrival time, FPS, count]
- → one copy into an app-owned IOSurface buffer             [processing time]
- ├→ FrameStore (latest frame only)                         [frame age]
- │    └→ on a vision request: select fresh frame (≤1 s)    [T1 frame selected]
- │         → scale ≤1600 px + JPEG q0.82 (once)            [T2, bytes, dimensions]
- │         → Responses request                             [T3 sent, T4 first output]
- │         → delegation back to the voice model            [T5 delivered → speech]
- └→ preview layer (single pending slot, stale frame dropped) [rendered / dropped]
-```
+Glass-to-glass latency: the glasses' capture clock is not exposed. Use the stopwatch method below.
 
-Diagnostics → Camera pipeline shows:
-- input resolution and pixel format
-- measured FPS, frames received, preview rendered/dropped, preview failures
-- phone processing time (median and p95)
-- capture→phone latency (median and p95), when the frame PTS is on the host clock
-- last frame age
+## Physical test procedure (camera part of `TEST_REPORT.md`)
 
-Recent tasks show each vision request's frame (source size → encoded size, JPEG quality and bytes, frame age) and the T0–T5 stage timings.
+1. Settings → Camera → **Show camera metrics overlay** on. Select **Ray-Ban**.
+2. With the glasses on for 10 s, read the overlay: *Requested* and *Actual* (resolution, fps, pixel format), dropped frames, processing times, frame age.
+3. Repeat for each stream profile: Detail 720p/15, Max detail 720p/7, Balanced 720p/24, Smooth 504p/30. Switch the camera to iPhone and back after changing a profile.
+4. Latency: point the glasses at a phone showing a millisecond stopwatch, take one photo of both screens with a third device, and compare the times. Repeat 3 times.
+5. Reading: hold a label about 40 cm away and ask "Jarvis, etiketteki küçük yazıyı oku". Diagnostics → Recent tasks shows the image source (`OCR+VIDEO`), best-of-n, upscale, crop, and OCR line count. Compare with Text detail mode off.
+6. Record every number in `TEST_REPORT.md`. Don't claim "Meta AI quality" without them.
 
-**What the app cannot measure:** glass-to-glass latency. The glasses' capture clock isn't exposed, so use the stopwatch test below.
+## Upgrade path to DAT 1.0 (after the Meta rollout reaches the glasses)
 
-## What changed in this release
-
-1. **No main-thread work per frame.** The SDK callback copies the frame once and returns. Nothing runs on the main actor for each frame.
-2. **Latest frame wins.** The preview has a single pending slot, so a slow display replaces the waiting frame instead of queueing it. There is no backlog.
-3. **SDK buffers are released immediately.** The copy goes into the app's own pool, so the decoder pool can't be drained.
-4. **Preview is separate from the AI frame.** The preview goes straight to the display layer. The AI frame is encoded once, only when a question needs it, from the source buffer. It is never a screenshot of the preview.
-5. **Freshness guard.** Vision uses a frame only if it is at most 1.0 s old, and waits up to 1.5 s for a new one. Otherwise the assistant says no fresh frame is available. Switching camera source clears the cache.
-6. **A/B switch.** Settings → Ray-Ban → Preview → "Legacy (original)" restores the old path for a direct comparison.
-7. **Stream profiles.** Balanced (original 720p/24), Smooth (504p/30), Sharper frames (720p/15). The profile applies on the next stream start.
-
-## Physical test procedure (Test 6 and Test 7)
-
-1. Settings → Camera → turn on **Show camera metrics overlay**. Select **Ray-Ban**.
-2. Wait 10 s with the glasses on and unfolded. Note resolution, FPS, dropped frames, processing median/p95 and frame age.
-3. **Latency (stopwatch):** point the glasses at a phone or computer showing a millisecond stopwatch. Photograph both screens together with a third device. The difference between the two displayed times is glass-to-glass latency. Repeat 3 times.
-4. Repeat steps 2–3 with Preview = **Legacy (original)**. This gives the before/after comparison.
-5. Repeat with the **Smooth** and **Sharper frames** profiles. Stop and restart the glasses stream by switching the camera to iPhone and back to Ray-Ban.
-6. Ask "What am I looking at?" and open Diagnostics → Recent tasks. Record the frame size, age and stage timings.
-7. Subjective comparison with Meta AI's own camera experience: note sharpness, smoothness and delay.
-
-Record the numbers in `TEST_REPORT.md`. Don't claim "Meta AI quality" without them.
-
-## Recommended next step: SDK upgrade (after 2026-09-30)
-
-Once the glasses show firmware V128 and the Meta AI app is V290 or later:
-
-1. Move the package to 1.0.0. Migrate `StreamSession` to `Wearables.createSession(deviceSelector:)` → `session.addCamera(config:)` → `camera.stream` (renames: `StreamSessionConfig` → `StreamConfiguration`, and so on). `start()`/`stop()` become synchronous. `DeviceStateSession` usage in the gesture code must be re-checked.
-2. Use `.hvc1` and decode it yourself with `VTDecompressionSession` (hardware). Render with the existing low-latency layer. This also makes background frames work.
-3. For AI stills in development builds, use `Camera.photo` at `.full`. It needs a stream stop/start and gives about 4032×3024.
-4. Wi-Fi transport only if a paid Apple developer team is available.
-5. Keep the current build as a rollback, because integration versions created before 1.0 don't work with 1.0 builds.
+1. The glasses must show firmware V128 and Meta AI V290 or later.
+2. Migrate to `Wearables.createSession` → `session.addCamera(config:)` → `camera.stream` (type renames from 0.7.0), and `DeviceStateSession` → `Device.addDeviceStateListener`.
+3. For reading requests, use `Camera.photo` at `.full`/`.high` (stop the stream, capture, restart). The existing high-detail pipeline (OCR, crop, `detail: high`, patch budget) then works on a much larger source.
+4. Add the Hey Meta `VoiceInvocationsStream` (see `VOICE_INVOCATION.md`).
+5. Keep the 0.5.0 build as a rollback. Integration versions created before 1.0 don't work with 1.0 builds.

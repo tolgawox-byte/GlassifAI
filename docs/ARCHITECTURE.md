@@ -1,44 +1,46 @@
 # AutoLoom Media Glasses architecture
 
-AutoLoom Media Glasses is an iPhone app for natural voice, vision, and web answers on the iPhone and Meta glasses. It is built on GlassifAI (MIT) and combines:
+AutoLoom Media Glasses is an iPhone app for natural voice, vision, web research, and confirmed iPhone actions on the iPhone and Meta Ray-Ban glasses. It is built on GlassifAI (MIT) and combines:
 - a native SwiftUI app
-- Meta's Wearables Device Access Toolkit (DAT 0.4.0)
+- Meta's Wearables Device Access Toolkit (**DAT 0.5.0**)
 - LiveKit's WebRTC framework
 - a small Rust bridge built from pinned OpenAI Codex sources
+- Apple frameworks: Vision (OCR), Speech (on-device name listening), EventKit, App Intents
 
-It has no backend. Everything runs on the iPhone against the user's own ChatGPT account.
+There is no AutoLoom backend. Everything runs on the iPhone against the user's own ChatGPT account, plus the user's own OpenClaw gateway if they connect one.
 
-Internal type, target, and module names keep the `GlassifAI` prefix. The project structure, bundle ID, URL scheme, and Keychain service are unchanged, so the device-verified setup keeps working.
+Internal type, target, and module names keep the `GlassifAI` prefix. The bundle ID, URL scheme, and Keychain service are unchanged, so the device-verified setup keeps working.
 
 ## System overview
 
 ```text
-┌──────────────────────────────────── iPhone ─────────────────────────────────────┐
-│                                                                                 │
-│  Capture                               FrameStore (latest frame per source)     │
-│  ├─ Ray-Ban (DAT raw 420v) ─ copy ──┬─► single pending slot ─► preview layer    │
-│  │   (callback thread, no main hop) └─► latest frame + FPS/latency metrics      │
-│  └─ iPhone AVCapture ─ ≤10 fps ─────────► latest frame (preview via AVCapture)  │
-│                                                                                 │
-│  GlassifAIRealtimeSession (WebRTC mic/speaker, data channel, captions)          │
-│        │  delegation.created (TASK/QUERY envelope)                              │
-│        ▼                                                                        │
-│  AssistantOrchestrator ── TaskLedger (session/turn/task IDs, phases, T0–T5)     │
-│   ├─ verify route (camera off? web off? action?)                                │
-│   ├─ VISION ─────────► fresh frame ≤1 s ─► JPEG once ─┐                         │
-│   ├─ WEB / VISION+WEB ► hosted web_search (fallback: backend search) ─┐         │
-│   ├─ DEEP_REASONING / GENERAL_CHAT / LOCAL_MEMORY ─────────────────────┤         │
-│   └─ no envelope ────► executor chooses tools (web, look_at_camera) ───┤         │
-│                                                    ResponsesClient (SSE)        │
-│        ▲ speakable result (sideband, ≤500 B chunks)          │                  │
-│        └──────────────────────────────────────────────────────┘                 │
-│                                                                                 │
-│  ConversationContext (in memory) · LocalMemoryStore (opt-in) · Keychain (OAuth) │
-│  GlassifAICodexBridge (Rust): call creation, reconnecting sideband, event queue │
-└───────────────────────────────┬─────────────────────────────────────────────────┘
-                                │
-        auth.openai.com (device OAuth) · chatgpt.com/backend-api/codex (voice, responses, search)
-        · api.openai.com/v1/live/{call_id} (sideband)
+┌──────────────────────────────────────────── iPhone ──────────────────────────────────────────────┐
+│ Capture                                                                                          │
+│  Ray-Ban (DAT 0.5.0 StreamSession) ─ HEVC ─► VT hardware decode (420v) ─┐                        │
+│                                    └ raw ─► one copy into app pool ─────┼─► FrameStore           │
+│  iPhone AVCapture ─ ≤10 fps ────────────────────────────────────────────┘   (newest 8 glasses    │
+│                                                                              frames, epoch, age)  │
+│   PIPELINE A  preview: single pending slot ─► AVSampleBufferDisplayLayer                         │
+│   PIPELINE B  AI vision (on demand): profile ─► best-frame ─► one encode (+OCR, +crop)            │
+│                                                                                                  │
+│ GlassifAIRealtimeSession (WebRTC mic/speaker, data channel, captions, reconnect budget, metrics) │
+│      │ delegation.created  "TASK: … | QUERY: …"                         ▲ speakable result /     │
+│      ▼                                                                  │ silent context notes   │
+│ AssistantOrchestrator ── TaskLedger (session/turn/task IDs, phases, T0–T5, vision profile)       │
+│  ├─ vision / vision_read / vision_web ─► VisionAttachment (full view, text crop, OCR hint)        │
+│  ├─ web ─► hosted web_search (fallback backend search)          ┐                                │
+│  ├─ reasoning / chat / memory                                   ├─► ResponsesClient (SSE)        │
+│  ├─ report ─► web research ─► AutoLoom note with sources        │   model per role from          │
+│  ├─ action ─► ActionGuard ─► planner JSON ─► validate ─► confirm │   ModelCatalog / ModelHealth    │
+│  ├─ agent ─► confirm ─► AgentGatewayClient (user's OpenClaw)    ┘                                │
+│  ├─ confirm_action / cancel_action / cancel                                                       │
+│  └─ live_vision_start/stop ─► LiveVisionController ─► scene notes as commentary context           │
+│                                                                                                  │
+│ ConversationContext · LocalMemoryStore · AutoLoomNotesStore · WakePhraseListener (Mode B)        │
+│ Keychain: ChatGPT OAuth, agent gateway token        GlassifAICodexBridge (Rust): call, sideband   │
+└───────────────────────────────┬──────────────────────────────────────────────────────────────────┘
+        auth.openai.com · chatgpt.com/backend-api/codex (voice, models, responses, search)
+        · the user's OpenClaw gateway (optional) · EventKit (local)
 ```
 
 ## Components
@@ -46,115 +48,123 @@ Internal type, target, and module names keep the `GlassifAI` prefix. The project
 | Component | Responsibility | Files |
 |---|---|---|
 | App root | Restores login, picks onboarding or the main experience, initializes DAT | `GlassifAIApp.swift` |
-| Authentication | Device-code login, refresh (including forced refresh after a 401), model discovery | `Runtime/ChatGPTAuthSession.swift`, `Runtime/ChatGPTKeychain.swift` |
-| Voice session | Audio session, WebRTC, data channel, captions, turn tracking, local stop-speaking, v2 start with baseline fallback | `Runtime/GlassifAIRealtimeSession.swift` |
-| Native bridge | Call creation (v1 baseline and v2 options), sideband with reconnect and generation guard, bounded event queue, context append | `native/GlassifAICodexBridge/src/lib.rs` |
-| Routing policy | Delegation envelope parser, realtime and executor instructions, model selection, tool definitions, user preferences | `Runtime/RoutingPolicy.swift` |
-| Orchestrator | Verifies routes, runs tasks, cancellation, stale-result guard, sources, activity state | `Runtime/AssistantOrchestrator.swift`, `Runtime/AssistantTasks.swift` |
-| Responses client | Streaming SSE client, error mapping and retry, citations and search-call parsing; direct search fallback | `Runtime/ResponsesClient.swift` |
-| Context and memory | Bounded conversation context, resume summary, opt-in on-device memory | `Runtime/ConversationContext.swift` |
-| Frame pipeline | Latest-frame store, metrics, pixel-buffer copy, low-latency preview, on-demand vision encoder | `Runtime/FramePipeline.swift` |
-| Glasses stream | DAT session, permissions, stream profiles, legacy preview path, background decode | `ViewModels/StreamSessionViewModel.swift`, `ViewModels/VideoDecoder.swift` |
+| Authentication and models | Device-code login, refresh, **model catalog** (full `/models` metadata) | `Runtime/ChatGPTAuthSession.swift`, `Runtime/ChatGPTKeychain.swift` |
+| Model routing | Roles (general, vision, reasoning, web), automatic choice by capability, overrides, health, GPT-6 Astra detection, effort mapping | `Runtime/ModelCatalog.swift`, `Runtime/ModelSettingsView.swift`, `Runtime/RoutingPolicy.swift` (`ModelSelector`) |
+| Voice session | Audio session, WebRTC, data channel, captions, turn tracking, stop-speaking, **auto-reconnect**, **latency metrics** | `Runtime/GlassifAIRealtimeSession.swift` |
+| Native bridge | Call creation (v1 and v2), sideband with reconnect and generation guard, context append (speakable or silent commentary) | `native/GlassifAICodexBridge/src/lib.rs` |
+| Routing policy | Envelope parser, realtime and executor instructions, tool and action schemas, preferences | `Runtime/RoutingPolicy.swift` |
+| Orchestrator | Verifies routes, runs tasks, vision attachments, reports, actions, agent, cancellation, stale-result guard | `Runtime/AssistantOrchestrator.swift`, `Runtime/AssistantTasks.swift` |
+| Responses client | Streaming SSE client, error mapping and retry, citations; direct search fallback | `Runtime/ResponsesClient.swift` |
+| Frame pipeline | FrameStore (ring, epoch, metrics), pixel-buffer copy, low-latency preview, vision encoder (resample, upscale, crop) | `Runtime/FramePipeline.swift` |
+| Frame selection | Luma sharpness, exposure, scene-change thumbnails, best-frame choice | `Runtime/FrameSelection.swift` |
+| Vision profiles | FAST/BALANCED/HIGH_DETAIL, query classifier, still-photo coordination, assist settings | `Runtime/VisionCapture.swift` |
+| OCR | Apple Vision text recognition with timeout, reading order, focus region | `Runtime/TextRecognition.swift` |
+| Live Vision | Adaptive scene notes during a conversation | `Runtime/LiveVision.swift` |
+| Glasses stream | DAT session, permissions, profiles, **HEVC/raw transport and watchdog**, device info | `ViewModels/StreamSessionViewModel.swift`, `ViewModels/VideoDecoder.swift` |
 | iPhone camera | AVCapture session and preview; throttled frame hand-off | `Runtime/GlassifAICamera.swift` |
-| Audio route | Route/interruption/media-reset monitoring; glasses HFP selection that ignores other headsets | `Runtime/AudioRouteMonitor.swift` |
+| Actions | Action kinds and risk, local guard, plan parser and validation, EventKit executor, notes store | `Runtime/DeviceActions.swift`, `Runtime/ActionViews.swift` |
+| Agent gateway | Optional OpenClaw client, address policy, Keychain token | `Runtime/AgentGateway.swift`, `Runtime/AgentGatewaySettingsView.swift` |
+| Hands-free | Start coordinator, Siri intents and shortcuts, Mode B name listener | `Runtime/VoiceInvocation.swift`, `Runtime/WakePhrase.swift` |
+| Audio route | Route, interruption and media-reset monitoring; glasses HFP selection | `Runtime/AudioRouteMonitor.swift` |
 | Safety | Log sanitizer, SSRF-safe URL checks, untrusted-content wrapper | `Runtime/PrivacyGuards.swift` |
-| UI | Main screen, camera switch, status, text input, source cards, settings, diagnostics, licenses | `Runtime/GlassifAIExperienceView.swift`, `Settings/SettingsView.swift`, `Runtime/SettingsSections.swift` |
+| UI | Main screen, camera switch, Live Vision toggle, status, action card, settings, diagnostics | `Runtime/GlassifAIExperienceView.swift`, `Settings/SettingsView.swift`, `Runtime/SettingsSections.swift` |
+| Brand | Theme, mark; assets generated from `assets/brand/LOGO 2.png` | `Runtime/GlassifAITheme.swift`, `scripts/make-brand-assets.py` |
 
 ## Task routing
 
-The realtime voice model answers ordinary conversation itself; it doesn't delegate chat. It delegates only for vision, current information, deep reasoning, memory, or cancellation. The delegation is a structured line:
+The realtime voice model answers ordinary conversation itself. It delegates only when needed, with one structured line:
 
 ```text
-TASK: <vision|web|vision_web|reasoning|memory|cancel> | QUERY: <self-contained request with conversation details>
+TASK: <vision|vision_read|web|vision_web|reasoning|memory|action|confirm_action|cancel_action|report|live_vision_start|live_vision_stop|cancel> | QUERY: <self-contained request>
 ```
 
-1. **Verified delegation.** `DelegationEnvelopeParser` accepts the line format or JSON and maps the task to a known kind. Unknown kinds or empty queries are rejected.
-2. **Verification.** Before anything runs, the orchestrator checks the route against real state:
-   - camera off → the assistant says so
-   - web search disabled → vision+web becomes vision only; web-only is declined
-   - memory off → the assistant says so
-   - `AUTHORIZED_ACTION` → declined honestly
-3. **Tool routing fallback.** If the delegation has no valid envelope (for example, the model sent the raw user transcript), the executor model gets the request plus context. It chooses tools itself: hosted `web_search` and a `look_at_camera` function. When it calls `look_at_camera`, the app takes a fresh frame and runs the vision (or vision+web) path.
-4. **Web search fallback.** If a model rejects the hosted tool (HTTP 400), the app remembers that for this run. It then uses the backend search endpoint and hands the results to the model as untrusted content. In tool routing, a client `search_web` function replaces the hosted tool.
+`agent` is described to the voice model only when an agent gateway is connected.
 
-No keyword lists decide the route. The decision comes from the voice model's structured output, the executor's tool choice, and explicit state checks.
+1. **Verified delegation.** `DelegationEnvelopeParser` maps the line (or JSON) to a known command; unknown kinds or empty queries are rejected.
+2. **Verification against real state:**
+   - camera off, web search off, memory off, or actions off → an honest reply
+   - vision requests get a profile from the request text (`VisionQueryClassifier`)
+3. **Tool routing fallback.** Without a valid envelope, the executor model chooses tools itself: hosted `web_search`, or a `look_at_camera` function that triggers the vision path.
+4. **Web fallback.** A model that rejects the hosted tool is remembered for the session, and the backend search endpoint is used instead.
+5. **Actions and the agent** are staged and confirmed as described in `TOOLS_AND_ACTIONS.md`.
 
-### Task tracking and cancellation
+### Task tracking, cancellation, freshness
 
-- Each task records session ID, turn ID, task ID, handoff ID, source (voice/typed), start time, kind, route origin, model, phase, frame details, and a timeline.
-- A newer delegation supersedes older voice tasks. "Görevi iptal et" (`TASK: cancel`) and the on-screen cancel button cancel the Swift task, which also cancels the URL request.
-- A result is delivered only if its task is still running and belongs to the live voice session. Results from cancelled, superseded, or earlier-session tasks are discarded. The same handoff arriving over both the data channel and the sideband runs once.
+- Each task records session, turn, task, and handoff IDs, source, kind, route origin, model, vision profile, phase, image details, and a T0–T5 timeline.
+- A newer delegation supersedes older voice tasks. "Görevi iptal et" and the cancel button cancel the Swift task and its request.
+- Results are delivered only while the task runs and belongs to the live voice session. The same handoff arriving twice runs once.
+- A frame selected before a camera switch is rejected by its **epoch**, even if its encode finishes after the switch.
 
-### Latency timeline (vision)
+### Vision attachment (per request)
 
-| Mark | Meaning |
-|---|---|
-| T0 | Delegation received (speech intent detected by the voice model) |
-| T1 | Fresh frame selected |
-| T2 | JPEG prepared |
-| T3 | Request sent |
-| T4 | First model output (network + model) |
-| T5 | Speech started after the result was handed back |
-
-These appear per task in Diagnostics → Recent tasks, broken down as camera, image processing, network + model, voice start, and total.
+1. Wait up to 2 s for a frame at most 1 s old (camera-specific). For reading requests, wait up to 0.4 s more for a few frames.
+2. `FrameSelector` picks the sharpest, well-exposed, fresh frame showing the same scene as the newest one.
+3. Encode once from the source buffer:
+   - FAST 768 px q0.75
+   - BALANCED 1280 px q0.85
+   - HIGH_DETAIL: small frames enlarged ≤1.6× within 2048 px / 2500 patches, q0.92
+4. HIGH_DETAIL only: Apple Vision OCR (≤1.5 s, concurrent with the encode). Low-confidence results are dropped. The recognised text region is cropped and enlarged (≤3×) as a second image.
+5. The request carries `detail: "high"`; OCR text is wrapped as untrusted content.
 
 ## Voice call lifecycle
 
-1. Configure `AVAudioSession` (`.playAndRecord`, `.voiceChat`). Glasses HFP is preferred when the audio route asks for it. The Meta-named port is chosen, and a lone unnamed HFP port is used only if it is the only one, so AirPods are never grabbed by mistake. The "iPhone" route forces the built-in mic and speaker.
-2. Create the WebRTC peer, mic track, send-only video transceiver, and negotiated data channel.
-3. Create the SDP offer and wait briefly for ICE gathering.
-4. Get fresh tokens. Call `glassifai_codex_realtime_start_v2` with AutoLoom instructions, the voice, and an optional resume summary. If the server rejects it, the app retries at once with the original `glassifai_codex_realtime_start` configuration, which is device-verified.
-5. Apply the answer SDP and wait for the data channel. The bridge joins the sideband.
-6. Captions and turns come from the data channel. Delegations come from both the sideband and the data channel (deduplicated).
-7. Sideband drops are retried with the same call ID (200 ms → 5 s backoff, 6 attempts; stops on 404/410). Only a terminal `ended:` status fails the call. A generation counter stops late events from a previous call leaking into the next one.
-8. Teardown closes the sideband, data channel, tracks, peer, and audio session, and ends the orchestrator session so pending results are discarded.
+1. Configure `AVAudioSession` (`.playAndRecord`, `.voiceChat`) with glasses HFP when preferred. Other headsets are never grabbed by mistake.
+2. Create the WebRTC peer, mic track, send-only video transceiver, and negotiated data channel. Create the offer and wait briefly for ICE gathering.
+3. Start the call with AutoLoom instructions and voice (`glassifai_codex_realtime_start_v2`). If rejected, fall back to the verified baseline start.
+4. Captions and turns come from the data channel; delegations come from both the sideband and the data channel (deduplicated).
+5. **Mid-call failures** (ICE failed, task channel ended, audio services reset, a result that cannot be delivered) reconnect automatically within a budget of 3 in 2 minutes, resuming with the conversation summary. Initial-start failures and user hang-ups never reconnect.
+6. Teardown closes everything, ends the orchestrator session (discarding pending results), and stops Live Vision.
 
-Interruptions (phone calls, Siri) and media-server resets are observed. A media reset ends the call with a "tap to reconnect" message.
+Metrics: connect time, and the median time from the end of the user's turn to the first words of the answer (Diagnostics → Realtime).
 
-## Hands-free active-call controls
+## Live Vision
 
-Unchanged from GlassifAI. A capability-free DAT `DeviceStateSession` maps running↔paused transitions to microphone mute toggles, and active→stopped (long press, doff, fold, link loss) to ending the call.
+`LiveVisionController` ticks every 0.5 s while a conversation is running and a camera is on.
+- It measures only the newest frame for scene change. It re-checks at most once a second when the view is stable, and never sends more often than every 6 s. That interval stretches to 12 s on low battery and 15 s when the phone is warm, and it pauses at critical temperature.
+- When a note is due, it picks the best recent frame, asks the vision model for a one- or two-sentence description (FAST image, low effort), and appends it as **silent commentary context**, which is never spoken.
+- It stops at the time limit (default 10 min), when the conversation ends, or on a privacy wipe.
 
-## Camera pipeline
+## Hands-free
 
-See `RAYBAN_CAMERA_CAPABILITIES.md` for the full measured chain. In summary:
-- Ray-Ban frames are copied once on the SDK callback thread into an app-owned buffer and sent to `AVSampleBufferDisplayLayer` through a single pending slot. There is no main-thread work, no `UIImage`, and no backlog.
-- iPhone frames are stored at up to 10 fps; `AVCaptureVideoPreviewLayer` draws the preview.
-- Vision frames are encoded on demand from the newest source buffer (at most 1.0 s old, waiting up to 1.5 s). They are never taken from the preview. The cache is cleared when the camera source changes.
+`VoiceStartCoordinator` is the single start path for the call button, Siri shortcuts, Mode B, and a future Hey Meta invocation. It is idempotent. Mode B (`WakePhraseListener`) runs only while armed, the app is active, and no conversation is running; it uses on-device recognition only.
 
 ## Concurrency
 
-- UI, orchestrator, ledger, context, and audio monitor are `@MainActor`.
-- Frame ingestion, the preview renderer, the frame store, and the copier are lock-protected and run on capture/SDK threads.
+- UI, orchestrator, ledger, context, model health, Live Vision, actions, and the audio monitor are `@MainActor`.
+- Frame ingestion, the preview renderer, the frame store, and the copier are lock-protected and run on capture/SDK threads. Sharpness scoring, encoding, and OCR run on background tasks and queues.
 - Model requests are async `URLSession` byte streams. Cancelling the Swift task cancels the request.
-- The bridge runs call creation on a short-lived Tokio runtime and the sideband on its own thread. The C ABI queues are mutex-protected and bounded (256 events, 8 pending commands).
+- The bridge runs call creation on a short-lived Tokio runtime and the sideband on its own thread, with bounded queues.
 
 ## Persistence
 
 | Stored | Where |
 |---|---|
-| OAuth tokens, account ID, expiry | Keychain (`AfterFirstUnlockThisDeviceOnly`) |
-| Settings (camera source, audio route, voice, language, verbosity, web search, region, stream profile, preview mode, model override, memory toggle) | UserDefaults |
-| Opt-in memory items | `Application Support/AutoLoom/memory.json` (complete file protection) |
+| ChatGPT OAuth tokens | Keychain (`AfterFirstUnlockThisDeviceOnly`) |
+| Agent gateway token (optional) | Keychain (`com.autoloom.agentgateway`, this device only) |
+| Settings (camera, profiles, transport, vision quality, assist toggles, Live Vision limit, audio, voice, language, web, region, model overrides, memory, actions, agent address, Mode B) | UserDefaults |
+| Model health (which models worked or failed) | UserDefaults (no request content) |
+| Opt-in memory | `Application Support/AutoLoom/memory.json` (complete file protection) |
+| AutoLoom notes and reports | `Application Support/AutoLoom/notes.json` (complete file protection) |
 
-Not stored: camera frames, audio, transcripts, sideband messages, SDP, call IDs, model results, sources.
+Not stored: camera frames, audio, transcripts, OCR text, Live Vision notes, sideband messages, SDP, call IDs, model results (except notes you saved), sources.
 
 ## Failure behaviour
 
-| Failure | User-visible result | Recovery |
+| Failure | Result | Recovery |
 |---|---|---|
-| Customized realtime session rejected | Transparent fallback to the baseline session (shown in Diagnostics) | Automatic |
-| Sideband drop | "reconnecting (n)" in Diagnostics; queued results are sent after reconnect | Automatic; the call fails only after `ended:` |
-| No fresh frame / camera off | Spoken explanation | Point or enable the camera |
+| Customized realtime session rejected | Baseline session (shown in Diagnostics) | Automatic |
+| Network or audio drop mid-call | "Connecting" and automatic reconnect with context | Automatic (budgeted); otherwise tap |
+| HEVC yields no decodable frames | One automatic switch to raw, note in Settings and Diagnostics | Automatic |
+| No fresh frame / camera off / camera switched mid-request | Spoken explanation; never an older image | Point or enable the camera |
+| Model rejected by the service | Next model, once; marked failed for the session | Automatic |
+| Explicit image `detail` rejected | Resent without it for the session | Automatic |
 | Hosted web search rejected | Backend search fallback | Automatic |
-| Network drop (Wi-Fi ↔ cellular) | One quick retry, then a spoken failure | Ask again |
-| 401 | Forced token refresh, then retry | Sign in again if the refresh fails |
-| 429 | "Rate-limited, try again shortly" | Wait |
-| Glasses unavailable or folded | Placeholder text | Wake or unfold the glasses |
-| Phone-call interruption | Audio resumes when iOS allows; the call fails only if ICE fails | Tap to reconnect |
+| 401 / 429 | Forced refresh and retry / "try again shortly" | Automatic / wait |
+| Reminders or Calendar permission not granted | Honest reply; asks to open the app when locked | User |
+| Agent gateway unreachable or token rejected | Honest reply | User (Settings → Agent gateway → Test connection) |
 
 ## Compatibility policy
 
-- The DAT 0.4.0 and LiveKit WebRTC Swift packages are pinned. The Codex source is vendored at 0.149.0, and its realtime wire code is byte-identical to upstream `main` as of 2026-09-27.
-- The DAT 1.0.0 upgrade is planned after the Meta firmware and app rollout (see the camera document).
-- The private ChatGPT transport is unsupported. A server change may need a bridge update.
+- Pinned packages: DAT **0.5.0** and LiveKit WebRTC. The Codex source is vendored at 0.149.0.
+- The DAT 1.0 upgrade (full-resolution stills, Hey Meta) is planned after Meta's firmware and app rollout reaches the glasses; see `RAYBAN_CAMERA_CAPABILITIES.md`.
+- The private ChatGPT transport is unsupported by OpenAI. A server change may need a bridge update.

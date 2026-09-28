@@ -1,4 +1,15 @@
-> **AutoLoom Media Glasses** — this fork rebrands and extends GlassifAI for AutoLoom Media. It is a general-purpose assistant for iPhone and Ray-Ban Meta: natural voice, vision on request, live web search with sources, task routing and cancellation, and a low-latency camera pipeline. See [CAPABILITIES.md](CAPABILITIES.md), [BASELINE.md](BASELINE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/WINDOWS_INSTALL.md](docs/WINDOWS_INSTALL.md) and [TEST_REPORT.md](TEST_REPORT.md). It is an independent app, not affiliated with OpenAI, Meta, or Ray-Ban. The original GlassifAI README follows, and its MIT attribution is preserved.
+> **AutoLoom Media Glasses** is an independent app by AutoLoom Media, built on GlassifAI (MIT). It is a general-purpose assistant for iPhone and Ray-Ban Meta:
+> - natural realtime voice through your ChatGPT account
+> - Ray-Ban vision with a detail-first pipeline: DAT 0.5.0 720p, sharpest recent frame, on-device OCR and zoomed text crops
+> - Live Vision
+> - live web search and research reports
+> - model routing based on what your connection actually exposes
+> - confirmed iPhone actions (reminders, calendar, notes, maps, calls, messages)
+> - an optional OpenClaw agent gateway
+>
+> Start with [CAPABILITIES.md](CAPABILITIES.md) (honest status of every feature), [docs/WINDOWS_INSTALL.md](docs/WINDOWS_INSTALL.md), and [TEST_REPORT.md](TEST_REPORT.md). Then see [BASELINE.md](BASELINE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/RAYBAN_CAMERA_CAPABILITIES.md](docs/RAYBAN_CAMERA_CAPABILITIES.md), [docs/MODEL_CAPABILITIES.md](docs/MODEL_CAPABILITIES.md), [docs/TOOLS_AND_ACTIONS.md](docs/TOOLS_AND_ACTIONS.md), [docs/VOICE_INVOCATION.md](docs/VOICE_INVOCATION.md), and [docs/PRIVACY_AND_PERMISSIONS.md](docs/PRIVACY_AND_PERMISSIONS.md).
+>
+> It is not made, endorsed, or supported by OpenAI, ChatGPT, Meta, Ray-Ban, or EssilorLuxottica. The original GlassifAI README follows, with its MIT attribution preserved.
 
 <p align="center">
   <img src="assets/glassifai-social.png" alt="GlassifAI — Your world. Understood." width="100%" />

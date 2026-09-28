@@ -1,42 +1,104 @@
-# AutoLoom Media Glasses — capability matrix
+# AutoLoom Media Glasses — capability report
 
-Signing in with ChatGPT does **not** unlock every feature of the official ChatGPT app. This app reaches ChatGPT through the same account-backed endpoints that OpenAI's Codex CLI uses (`chatgpt.com/backend-api/codex/*`). Anything outside those endpoints is not available, and the app says so instead of pretending.
+Branch `autoloom-glasses-vNext`. Status meanings:
+- **WORKING**: verified on the physical iPhone and Ray-Ban Meta Gen 1 by the owner.
+- **PARTIAL**: works with a stated limit.
+- **EXPERIMENTAL**: implemented and covered by automated tests in CI, but not yet verified on the phone.
+- **UNAVAILABLE**: not possible on the current platforms or connection, or deliberately not built.
 
-Status legend: **Official** = public, documented API · **Private** = undocumented endpoint used by an official OpenAI client (Codex) · **Experimental** = implemented here but not yet verified on the physical device · **Not available** = not implemented and not reachable through this interface.
+Nothing is marked WORKING without a device test. Features that changed in vNext go back to EXPERIMENTAL until they are re-tested, even when the earlier version was WORKING. `TEST_REPORT.md` has the test for each item.
 
-| Capability | Current support | Provider / interface | Auth required | Extra cost | Official / private | Automated test | Physical test | Known limitations |
-|---|---|---|---|---|---|---|---|---|
-| Natural realtime voice | **Yes** (baseline, device-verified) | ChatGPT realtime `gpt-live-1-codex` over WebRTC; call created by the embedded Codex bridge (`/realtime/calls`, `openai-alpha: quicksilver=v2`, FramelessBidi) | ChatGPT account (Codex device-code OAuth) | None from this app; uses your ChatGPT plan's limits | Private | Bridge option parsing, reconnect backoff (Rust unit) | Required (Test 1, 5) | Private protocol can change without notice. The bridge sends a static `x-oai-attestation` value copied from upstream GlassifAI; OpenAI could start rejecting it. Voices other than Juniper are experimental (automatic fallback). |
-| General conversation | **Yes** | Voice model answers directly; new instructions stop it from routing everything to the camera | Same | None | Private | Instruction content (unit) | Required (Test 1) | Answers come from the voice model's own knowledge; anything current is delegated to web search. |
-| Vision ("what am I looking at?") | **Yes**, on request | Delegation → Codex Responses with one fresh camera frame (`gpt-5.6-sol` default, device-verified model) | Same | None | Private | Frame freshness, encoder, routing (unit) | Required (Test 3) | Uses the freshest stream frame (≤1 s old). The Ray-Ban stream is limited by DAT 0.4.0 over Bluetooth — see `docs/RAYBAN_CAMERA_CAPABILITIES.md`. |
-| Ray-Ban still photo for vision | **Experimental.** In-stream `capturePhoto` is used for reading requests and as the fallback when video stalls | Meta DAT 0.4.0 | Meta AI app registration | None | Official (DAT) | Late/unsolicited photo rejection, processing (unit) | Required (Test 2, 3) | On 0.4.0 photos are stream-resolution frames; full-resolution stills need DAT 1.0 |
-| Custom assistant name ("Jarvis") | **Yes.** Local setting, injected into the voice instructions | App | — | None | App-local | Validation, persistence, instructions (unit) | Required (Test 1) | Identity only, not a wake word |
-| "Hey Siri, start AutoLoom" / custom Siri shortcut | **Experimental** (implemented) | iOS App Intents / App Shortcuts | — | None | Official (Apple) | Idempotent start (unit) | Required | iPhone must be unlocked; whether Siri can be triggered through the glasses is unverified |
-| "Hey Meta, start <app>" | **Not available in this build** | Meta DAT 1.0 `VoiceInvocationsStream` | Developer Center app + Voice Invocation approval | None | Official (Meta) | — | — | Needs the DAT 1.0 upgrade, firmware V128 and Meta AI V290. See `docs/VOICE_INVOCATION.md` |
-| Custom "Hey Jarvis" system wake word | **Not supported by the current platforms** | — | — | — | — | — | — | Meta's wake phrase is fixed ("Hey Meta"); iOS gives third-party apps no always-on wake word |
-| Web search | **Experimental** (implemented, not yet device-verified) | Hosted `web_search` tool (`external_web_access: true`) on Codex Responses, preferring `gpt-5.5`; automatic fallback to the Codex backend search endpoint (`/alpha/search`) + model summary | Same | None from this app | Private | SSE/citation parsing, fallback parsing, source filtering (unit) | Required (Test 2, 4) | Upstream Codex allows hosted search with ChatGPT auth, but whether each model accepts it on this backend is unverified — the fallback covers a rejection. Source links appear only when the service returns them; publish dates are not provided by the service and are never invented. |
-| Vision + web ("price of what I see") | **Experimental** | Frame + hosted web search in one request (fallback as above) | Same | None | Private | Routing (unit) | Required (Test 4) | Identification quality depends on the frame (see camera doc). |
-| Reasoning | **Yes** (experimental routing) | Same Responses endpoint with higher reasoning effort | Same | None | Private | Routing (unit) | Recommended | Slower (up to 90 s timeout); the voice model says a short filler while waiting. |
-| Conversation context / follow-ups | **Yes** | Voice model keeps its own call context; the app keeps a bounded in-memory transcript + earlier task results for delegated tasks and to resume after a reconnect | — | None | App-local | Context compaction, untrusted wrapping (unit) | Required (Test 1–4) | Context lives only while the app runs. |
-| Memory | **App-local, opt-in** | JSON file on the iPhone (complete file protection), editable/deletable in Settings → Memory | — | None | App-local | Opt-in, add/forget/delete (unit) | Required (Test 11) | **Not** ChatGPT's memory; nothing is synced with your ChatGPT account. |
-| ChatGPT chat history | **Not available** | — | — | — | — | — | — | No endpoint for reading or writing ChatGPT conversations. Requests use `store: false`. |
-| Interrupt / "dur" | **Yes** | Server-side barge-in (voice model stops when you talk) + on-screen stop button that silences assistant audio locally | — | None | Private | — | Required (Test 5) | The realtime protocol has no client "cancel response" message; the local stop mutes playback until you speak again or the turn ends. |
-| Task cancellation ("görevi iptal et") | **Yes** | Voice model emits `TASK: cancel`; on-screen cancel button; tasks tracked by session/turn/task ID, late results discarded | — | None | App-local | Ledger + duplicate/stale handling (unit) | Required | — |
-| Work (ChatGPT Work / business features) | **Not available** | — | — | — | — | — | — | Not exposed through the Codex endpoints. No UI is shown for it. |
-| Codex tasks (coding agent, cloud tasks) | **Not available** | — | — | — | — | — | — | The app uses the Codex backend only for voice and model access. Future extension point: a separate, explicitly confirmed action flow. |
-| Connected apps (Gmail, Calendar, GitHub …) | **Not available** | — | — | — | — | — | — | ChatGPT connectors are not reachable here. Would need separate OAuth integrations. Requests are declined honestly. |
-| File creation | **Not available** | — | — | — | — | — | — | — |
-| Email / calendar actions | **Not available** | — | — | — | — | Decline path (unit) | — | Routed to `AUTHORIZED_ACTION`, which declines. Any future action must require explicit on-screen confirmation — a spoken "yes" will not count. |
-| Browser actions | **Not available** | — | — | — | — | — | — | The app never fetches web pages itself (SSRF-safe by design). |
+This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex uses (`chatgpt.com/backend-api/codex/*`). Signing in does not unlock every feature of the ChatGPT app.
 
-## Cost summary
+## Voice and conversation
 
-- No new paid service, API key, or subscription is used. Everything runs on the ChatGPT account you sign in with and counts against that plan's normal usage limits.
-- An official OpenAI API key path (public Realtime API + `web_search`) would be billed per use; it is **not** implemented and was not needed. If the private endpoints stop working, that is the documented fallback option and would require your approval first.
+| Capability | Status | Notes |
+|---|---|---|
+| ChatGPT sign-in (device code) | **WORKING** | Unchanged from the verified build |
+| Natural realtime voice (`gpt-live-1-codex`, WebRTC) | **WORKING** | Unchanged call setup. Realtime models are not listed by the service, so the verified model is used |
+| Ray-Ban microphone and speaker routing | **WORKING** | Unchanged |
+| Barge-in / "dur", "bekle", "hayır" | **PARTIAL** | Server-side barge-in plus a local stop button. The protocol has no client "cancel response" message; the stop words are now in the instructions |
+| Auto-reconnect after a network or audio drop | **EXPERIMENTAL** | Up to 3 times in 2 minutes, resumes with a conversation summary |
+| Voice latency metrics | **EXPERIMENTAL** | Connect time and median time to first answer in Diagnostics |
+| Custom assistant name ("Jarvis") | **EXPERIMENTAL** | Local setting, part of the voice instructions |
+| Conversation context and follow-ups | **EXPERIMENTAL** | Bounded in-memory context, resumed after reconnect |
+| Visual translation ("read this and translate to Turkish") | **EXPERIMENTAL** | High-detail reading profile with OCR, answer in the requested language |
 
-## Honesty rules built into the assistant
+## Camera and vision
 
-- Never claims to see without a fresh frame; says when the camera is off or the frame is stale.
-- Never invents facts, prices, or sources; says when a search failed or returned nothing.
-- Never claims to have performed an action.
-- States that it is an independent AutoLoom Media app, not an official OpenAI, ChatGPT, Meta, or Ray-Ban product.
+| Capability | Status | Notes |
+|---|---|---|
+| iPhone camera vision | **WORKING** (earlier pipeline) / **EXPERIMENTAL** (vNext) | vNext adds profiles, OCR and crop |
+| Ray-Ban camera preview | **WORKING** on DAT 0.4.0 / **EXPERIMENTAL** on 0.5.0 | Low-latency layer unchanged; the source changed to HEVC + app decode |
+| Ray-Ban vision | **WORKING** on the previous build / **EXPERIMENTAL** vNext | Same freshness and source guards, plus best-frame selection |
+| Ray-Ban 720×1280 stream | **EXPERIMENTAL** | DAT 0.5.0 fixes `.high`. Diagnostics shows requested vs actual; the glasses may still lower it on a weak link |
+| Ray-Ban frames with the phone locked | **EXPERIMENTAL** | HEVC transport streams in the background; raw fallback does not |
+| Ray-Ban high-quality (full sensor) photo | **UNAVAILABLE** | Needs DAT 1.0 `Camera.photo` plus glasses firmware V128 and Meta AI V290 (rollout from 2026-09-30) |
+| Ray-Ban in-stream photo | **PARTIAL** | A frame lifted out of the video stream (Meta docs); used as the fallback when video stalls |
+| Best-frame selection | **EXPERIMENTAL** | Sharpest of the last 8 frames of the same scene, ≤1 s old |
+| FAST / BALANCED / HIGH_DETAIL profiles | **EXPERIMENTAL** | Chosen from the request; reading words always get HIGH_DETAIL |
+| On-device OCR assist and zoomed text crop | **EXPERIMENTAL** | Apple Vision; hints are untrusted and never replace the image |
+| Live Vision | **EXPERIMENTAL** | Silent scene notes when the view changes (≥6 s apart, adaptive, time-limited) |
+| Stale-frame protection | **EXPERIMENTAL** (vNext epoch) | ≤1 s age, source filter, epoch check across camera switches |
+| Face recognition | **UNAVAILABLE** | Deliberately not built in this phase (privacy first; camera quality came first) |
+
+## Models
+
+| Capability | Status | Notes |
+|---|---|---|
+| Model capability discovery | **EXPERIMENTAL** | Full `/models` metadata; Settings → AI models |
+| Task-specific routing (general, vision, reasoning, web) | **EXPERIMENTAL** | Follows the service's order and each model's capabilities; per-role overrides |
+| GPT-6 Astra | **EXPERIMENTAL** detection | Used automatically only if this connection lists it. **Not yet checked**; Settings → AI models shows the answer |
+| Realtime model choice | **UNAVAILABLE** | Not listed by the service; the verified model is fixed |
+
+## Web and research
+
+| Capability | Status | Notes |
+|---|---|---|
+| Live web search with sources | **EXPERIMENTAL** | Hosted `web_search` on the ChatGPT account; backend search fallback |
+| Vision + web ("price of this in Canada") | **EXPERIMENTAL** | High-detail image, identification, then search |
+| Research reports saved as notes | **EXPERIMENTAL** | `report` task; note with source links |
+
+## iPhone actions and tasks
+
+| Capability | Status | Notes |
+|---|---|---|
+| Reminders (create, list) | **EXPERIMENTAL** | EventKit; spoken yes or tap to save |
+| Calendar (today, upcoming, create) | **EXPERIMENTAL** | EventKit |
+| AutoLoom notes | **EXPERIMENTAL** | On this iPhone; shareable to Apple Notes |
+| Apple Notes direct write | **UNAVAILABLE** | No public API; Share is offered |
+| Maps directions, open link, copy, share | **EXPERIMENTAL** | Tap to confirm (copy runs directly) |
+| Call and message | **EXPERIMENTAL** | Tap to confirm; the system app sends. Contacts are not searched |
+| Email, purchases, payments, deleting data, posting | **UNAVAILABLE** | Refused locally, before any model call |
+| AutoLoom Tasks (reports, notes, confirmed actions) | **EXPERIMENTAL** | Settings → AutoLoom Tasks & Notes |
+| OpenClaw agent gateway | **EXPERIMENTAL** (optional) | Off by default; needs your own gateway and token; confirmation before sending |
+| ChatGPT Work | **UNAVAILABLE** | Not exposed through this connection |
+| Codex cloud tasks | **UNAVAILABLE** | Codex endpoints are used for voice and models only |
+| Siri shortcuts (Start Conversation, Ask AutoLoom, Start Live Vision) | **EXPERIMENTAL** | App Shortcuts |
+
+## Memory
+
+| Capability | Status | Notes |
+|---|---|---|
+| AutoLoom on-device memory (opt-in) | **EXPERIMENTAL** | Editable and deletable in Settings → Memory |
+| ChatGPT account memory / chat history | **UNAVAILABLE** | No access through this connection; requests use `store: false` |
+
+## Hands-free invocation
+
+| Capability | Status | Notes |
+|---|---|---|
+| Mode A: active conversation, address by name | **EXPERIMENTAL** | No wake word needed while a conversation runs |
+| Mode B: app-armed name listening | **EXPERIMENTAL** | Opt-in, app open on screen only, on-device recognition only |
+| Mode C: "Hey Siri, start AutoLoom" | **EXPERIMENTAL** | App Shortcut; a custom phrase through the Shortcuts app |
+| "Hey Meta, start AutoLoom" | **UNAVAILABLE** | Needs DAT 1.0, firmware V128, and Meta's Voice Invocation approval |
+| Always-on custom system wake word ("Hey Jarvis" anywhere) | **UNAVAILABLE** | Not offered by iOS or the Meta glasses to third-party apps |
+
+## Offline
+
+| Capability | Status | Notes |
+|---|---|---|
+| Offline mode (local models) | **UNAVAILABLE** | Not built. On-device OCR and the name listener already run locally; a local model would plug in behind the same task routing |
+
+## Cost
+
+No new paid service, API key, or subscription is used. Everything runs on the ChatGPT account you sign in with, within that plan's usage limits. The optional agent gateway is your own OpenClaw installation.

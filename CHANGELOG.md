@@ -2,6 +2,50 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom vNext] — branch `autoloom-glasses-vNext`
+
+Baseline: `44f089d` (tag `baseline-44f089d-vision-working`), the build on the phone.
+
+### Camera and vision
+- **Meta DAT 0.4.0 → 0.5.0.** 0.4.0 could not reliably deliver 720×1280; 0.5.0 fixes that and adds the HEVC codec. Official requirement: Meta AI app V254 and glasses firmware V22.
+- **HEVC transport by default.** Frames are hardware-decoded by the app to native 4:2:0 and keep streaming with the phone locked. A watchdog switches to the SDK's raw transport once if nothing decodes.
+- **Profiles follow Meta's guidance** (fewer frames per second means less compression per frame):
+  - new default 720p/15
+  - new max-detail 720p/7
+  - original 720p/24 and 504p/30 kept
+- **Requested vs actual** resolution, fps, and codec in Diagnostics and the overlay, plus the DAT version, the glasses, and the transport fallback reason.
+- **Best-frame selection** from the newest 8 frames: sharpness, exposure, freshness, and the same scene only. A camera-switch **epoch** rejects frames from before a switch.
+- **FAST / BALANCED / HIGH_DETAIL** vision profiles. Reading words (read, label, VIN, badge, dashboard, oku, yazı, etiket, plaka…) always get HIGH_DETAIL.
+- **HIGH_DETAIL** enlarges small frames within the model's 2048 px / 2500-patch budget. It adds on-device OCR (Apple Vision, untrusted hint) and a zoomed crop of the text region.
+- Images are sent with `detail: "high"`, as Codex does.
+- Automatic capture uses the sharpest video frame. Meta documents in-stream photos as frames of the video stream; photos are the fallback when video stalls.
+- **Live Vision:** adaptive, time-limited scene notes sent as silent context during a conversation ("start live vision", eye button, Siri).
+
+### Models
+- **Capability discovery** from the full `/models` metadata: modalities, reasoning levels, verbosity, web search type, responses-lite, context.
+- **Routing per job** (general, vision, reasoning, web) following the service's order. Requests send only parameters the model supports. A rejected model is skipped for the session and the task retries once. Model health is recorded.
+- **GPT-6 Astra** is used only if this connection lists it; Settings → AI models says whether it does.
+
+### Voice and hands-free
+- **Automatic reconnect** after mid-call network or audio failures (3 in 2 minutes), resuming with context.
+- Connect time and response latency metrics.
+- More interruption words (bekle, hayır, başka bir şey soracağım).
+- **Mode B:** opt-in listening for the assistant's name while the app is open (on-device recognition only).
+- **Siri:** Ask AutoLoom and Start Live Vision shortcuts.
+
+### Actions and tasks
+- **iPhone actions:** reminders, calendar, AutoLoom notes, Maps directions, links, copy, share, calls, messages.
+  - Saves need a spoken yes or a tap; anything leaving the app needs a tap.
+  - Email, payments, deleting data, posting, and code changes are refused locally.
+- **Reports:** web research written up and saved as a note with sources.
+- **AutoLoom Tasks & Notes** screen.
+- **Optional OpenClaw agent gateway:** off by default, Keychain token, private-network rule for plain http, confirmation before sending.
+
+### Brand, CI, docs
+- App icon (with dark and tinted variants), brand mark, and launch screen built from **LOGO 2** (kept unchanged in `assets/brand`) by `scripts/make-brand-assets.py`.
+- CI publishes Swift compile errors as annotations.
+- New docs: `MODEL_CAPABILITIES.md` and `TOOLS_AND_ACTIONS.md`. Camera, architecture, capabilities, privacy, voice invocation, Windows install, and test report updated.
+
 ## [AutoLoom 1.0-next] — branch `autoloom-glasses-next`
 
 AutoLoom Media Glasses, built on GlassifAI. Baseline: `74d9be5` (tag `baseline-74d9be5-working`).
