@@ -153,6 +153,14 @@ final class WakePhraseListener: ObservableObject {
       Task { await refresh() }
     }
   }
+  /// Whether the glasses are worn (DAT 1.0 `donState`); nil when unknown.
+  /// When known it decides glasses arming instead of the link state.
+  var glassesWorn: Bool? {
+    didSet {
+      guard glassesWorn != oldValue else { return }
+      Task { await refresh() }
+    }
+  }
 
   /// Created only when listening actually starts, so a disarmed listener
   /// never touches the audio hardware (the voice call owns it).
@@ -206,7 +214,7 @@ final class WakePhraseListener: ObservableObject {
       if !isArmed { status = .off }
       return
     }
-    if WakePhraseSettings.armsWithGlasses, glassesConnected != true {
+    if WakePhraseSettings.armsWithGlasses, (glassesWorn ?? glassesConnected) != true {
       if isListening { stopListening(reason: nil, releaseAudioSession: true) }
       status = .waitingForGlasses
       return

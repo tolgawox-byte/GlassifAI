@@ -7,6 +7,7 @@ on:
       - autoloom-glasses-next
       - autoloom-glasses-vNext
       - autoloom-glasses-jarvis-v1
+      - autoloom-glasses-dat1
 
 concurrency:
   group: ipa-${{ github.ref }}
@@ -96,15 +97,15 @@ jobs:
             rm -rf Payload
             mkdir -p Payload
             cp -R "build/Build/Products/${configuration}-iphoneos/GlassifAI.app" Payload/
-            zip -qr "AutoLoomMediaGlasses-${configuration}-unsigned.ipa" Payload
+            zip -qr "AutoLoomMediaGlasses-DAT1-${configuration}-unsigned.ipa" Payload
           done
           ls -la *.ipa
 
       - name: Upload IPAs
         uses: actions/upload-artifact@v4
         with:
-          name: AutoLoomMediaGlasses-unsigned-IPAs
-          path: AutoLoomMediaGlasses-*-unsigned.ipa
+          name: AutoLoomMediaGlasses-DAT1-unsigned-IPAs
+          path: AutoLoomMediaGlasses-DAT1-*-unsigned.ipa
 
       - name: Unit tests (iOS Simulator)
         run: |

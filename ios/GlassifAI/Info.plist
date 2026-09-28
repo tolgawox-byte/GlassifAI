@@ -89,7 +89,11 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Only if you connect your own agent gateway (OpenClaw) on your home network or tailnet in Settings.</string>
+	<string>Lets your iPhone find and stream from your Meta glasses over Wi-Fi, and reach your own agent gateway (OpenClaw) if you connect one.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_bonjour._tcp</string>
+	</array>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Only when you turn on the wake phrase: on-device speech recognition listens for your phrase (while the app is open, or in the background if you turn on Hands-Free Ready) to start a conversation. Audio is not stored or sent.</string>
 	<key>NSContactsUsageDescription</key>

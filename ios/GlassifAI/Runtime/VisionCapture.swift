@@ -201,7 +201,10 @@ enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
 
   var label: String {
     switch self {
-    case .automatic: "Automatic (sharpest recent frame; photo if video stalls)"
+    case .automatic:
+      GlassesSDKInfo.supportsFullResolutionPhoto
+        ? "Automatic (full-resolution photo for reading, sharpest frame otherwise)"
+        : "Automatic (sharpest recent frame; photo if video stalls)"
     case .videoOnly: "Video frames only"
     case .photoFirst: "Still photo first (experiment)"
     }

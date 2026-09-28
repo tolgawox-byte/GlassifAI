@@ -9,9 +9,11 @@
 //
 // StreamSessionViewModel.swift
 //
-// Core view model demonstrating video streaming from Meta wearable devices using the DAT SDK.
-// This class showcases the key streaming patterns: device selection, session management,
-// video frame handling, photo capture, and error handling.
+// Ray-Ban camera on the DAT 1.0 session API: one `DeviceSession` for the
+// glasses, its consolidated `Camera` with the `stream` child for video and the
+// `photo` child for standalone full-resolution stills (DAT 1.0, beta), and the
+// same frame ingestion, transport fallback and still-photo coordination as the
+// 0.5.0 build.
 //
 
 import AVFoundation
@@ -37,10 +39,10 @@ enum StreamingMode {
 /// The Meta Wearables Device Access Toolkit version this build links
 /// (see Package.resolved). Shown in Diagnostics.
 enum GlassesSDKInfo {
-  static let datVersion = "0.5.0"
+  static let datVersion = "1.0.0"
   /// DAT 1.0 `Camera.photo`: standalone stills at up to the native sensor
-  /// resolution. Not in DAT 0.5.0 (in-stream photos are video frames).
-  static let supportsFullResolutionPhoto = false
+  /// resolution (4032×3024). Meta marks it beta.
+  static let supportsFullResolutionPhoto = true
 }
 
 /// Resolution / frame-rate trade-offs for the glasses stream. Meta's DAT
@@ -98,15 +100,14 @@ enum GlassesStreamProfile: String, CaseIterable, Identifiable {
     "\(requestedSize.width)×\(requestedSize.height) @ \(frameRate) fps"
   }
 
-  func makeConfig(transport: GlassesVideoTransport) -> StreamSessionConfig {
-    StreamSessionConfig(videoCodec: transport.codec, resolution: resolution, frameRate: frameRate)
+  func makeConfig(transport: GlassesVideoTransport) -> StreamConfiguration {
+    StreamConfiguration(videoCodec: transport.codec, resolution: resolution, frameRate: frameRate)
   }
 }
 
-/// How glasses frames reach the phone. HEVC (DAT 0.5+) delivers compressed
-/// samples that this app decodes in hardware and keeps delivering while the
-/// app is in the background; raw frames are decoded by the SDK and pause when
-/// the app is backgrounded.
+/// How glasses frames reach the phone. HEVC delivers compressed samples that
+/// this app decodes and that keep coming while the app is in the background;
+/// raw frames are decoded by the SDK and pause when the app is backgrounded.
 enum GlassesVideoTransport: String, CaseIterable, Identifiable {
   case hevc
   case raw
@@ -171,13 +172,19 @@ class StreamSessionViewModel: ObservableObject {
   @Published var selectedResolution: StreamingResolution = .high
   @Published private(set) var streamProfile: GlassesStreamProfile = .sharp
   @Published private(set) var lastStreamState = "stopped"
-  /// Transport the current stream session was created with (may differ from
-  /// the preference after an automatic fallback).
+  /// Transport the current camera was created with (may differ from the
+  /// preference after an automatic fallback).
   @Published private(set) var activeTransport: GlassesVideoTransport = .hevc
   /// Why the app switched transports automatically, if it did.
   @Published private(set) var transportNote: String?
   /// Name, type and compatibility of the active glasses, for Diagnostics.
   @Published private(set) var deviceDescription = "—"
+  /// The device session's state. The temple-gesture interpreter reads it:
+  /// a tap pauses and resumes the session, a long press or fold stops it.
+  @Published private(set) var deviceSessionState: DeviceSessionState = .idle
+  /// The standalone photo child (DAT 1.0 `Camera.photo`); "started" means a
+  /// full-resolution still can be taken.
+  @Published private(set) var photoState = "stopped"
 
   var isStreaming: Bool {
     streamingStatus != .stopped
@@ -200,22 +207,25 @@ class StreamSessionViewModel: ObservableObject {
   /// the shared latest-frame store and a hand-off to the preview layer.
   let frameIngestor = GlassesFrameIngestor()
 
-  // The core DAT SDK StreamSession - handles all streaming operations.
-  // nil when the Wearables SDK is unavailable (simulator, or a build without
-  // glasses); the iPhone camera path never touches it.
-  private var streamSession: StreamSession?
-  // Listener tokens are used to manage DAT SDK event subscriptions
-  private var stateListenerToken: AnyListenerToken?
-  private var videoFrameListenerToken: AnyListenerToken?
-  private var errorListenerToken: AnyListenerToken?
-  private var photoDataListenerToken: AnyListenerToken?
   private let wearables: WearablesInterface?
   private let deviceSelector: AutoDeviceSelector?
+  /// One device session per pair of glasses (DAT 1.0 allows no second one).
+  private var deviceSession: DeviceSession?
+  /// The consolidated camera on that session: `stream` and `photo` children.
+  private var camera: Camera?
+  private let sessionTokens = ListenerTokenBag()
+  /// The stream child's listeners; taken out afresh whenever the stream is
+  /// started again after a standalone photo.
+  private let streamTokens = ListenerTokenBag()
+  private let photoTokens = ListenerTokenBag()
   private var deviceMonitorTask: Task<Void, Never>?
   private var lifecycleObservers: [NSObjectProtocol] = []
-  /// Bumped whenever the stream session is replaced, so a late callback from
-  /// a previous session can never change the current state.
+  /// Bumped whenever the camera is replaced, so a late callback from a
+  /// previous camera can never change the current state.
   private var sessionGeneration = 0
+  /// Bumped whenever the stream's listeners are replaced, so a listener that
+  /// outlives its replacement is ignored.
+  private var streamGeneration = 0
   /// Set when HEVC produced no usable frames; the preferred transport is
   /// skipped until the user picks a different one.
   private var fallbackFrom: GlassesVideoTransport?
@@ -224,6 +234,11 @@ class StreamSessionViewModel: ObservableObject {
   /// The last stream error was a stream failure (not glasses off, folded,
   /// or missing permission), which is what an unsupported codec looks like.
   private var lastErrorWasStreamFailure = false
+  /// The photo child's state, for the hand-over between the children.
+  private var photoStateValue: PhotoState = .stopped
+  private var photoStartRequested = false
+  /// A standalone photo is being taken: the stream is set aside on purpose.
+  private var isTakingStandalonePhoto = false
   /// One app-requested still capture at a time; photos that do not answer a
   /// pending request (shutter button, late arrivals) never reach vision.
   let stillPhotos = StillPhotoCoordinator()
@@ -237,13 +252,6 @@ class StreamSessionViewModel: ObservableObject {
       // Let the SDK auto-select from available devices
       let selector = AutoDeviceSelector(wearables: wearables)
       self.deviceSelector = selector
-      // The profile's resolution and frame rate are a request: the glasses
-      // step resolution down on weak Bluetooth links. Diagnostics shows the
-      // resolution and frame rate that actually arrive.
-      streamSession = StreamSession(
-        streamSessionConfig: profile.makeConfig(transport: transport), deviceSelector: selector)
-
-      // Monitor device availability
       deviceMonitorTask = Task { @MainActor [weak self] in
         for await device in selector.activeDeviceStream() {
           guard let self else { return }
@@ -260,7 +268,6 @@ class StreamSessionViewModel: ObservableObject {
     activeTransport = transport
     selectedResolution = profile.resolution
     frameIngestor.configure(legacyPreview: AssistantPreferences.usesLegacyPreview)
-    attachListeners()
     observeLifecycle()
   }
 
@@ -268,27 +275,12 @@ class StreamSessionViewModel: ObservableObject {
     "\(device.nameOrId()) · \(device.deviceType().rawValue) · \(String(describing: device.compatibility()))"
   }
 
-  /// The transport to use for the next session: the user's preference unless
+  /// The transport to use for the next camera: the user's preference unless
   /// it already failed in this app run.
   private var effectiveTransport: GlassesVideoTransport {
     let preferred = GlassesVideoTransport.preferred
     if let fallbackFrom, fallbackFrom == preferred { return .raw }
     return preferred
-  }
-
-  /// Asks the glasses for a fresh still photo for one vision request.
-  /// Returns nil when the stream is not running, the SDK refuses, or no photo
-  /// arrives before the timeout.
-  func captureStillForVision(timeout: TimeInterval) async -> StillPhoto? {
-    guard streamingStatus == .streaming, streamSession != nil else { return nil }
-    FrameStore.shared.recordPhotoRequest()
-    let photo = await stillPhotos.capture(timeout: timeout) { [weak self] in
-      guard let session = self?.streamSession else { return false }
-      return session.capturePhoto(format: .jpeg)
-    }
-    FrameStore.shared.recordPhoto(
-      width: photo?.width, height: photo?.height, latencyMs: photo?.latencyMs, success: photo != nil)
-    return photo
   }
 
   private func observeLifecycle() {
@@ -305,8 +297,10 @@ class StreamSessionViewModel: ObservableObject {
     })
   }
 
-  /// Applies the stream profile and transport chosen in Settings. The session
-  /// is only recreated when one of them changed and the stream is stopped.
+  // MARK: Profile and transport
+
+  /// Applies the stream profile and transport chosen in Settings; they are
+  /// used by the next camera (while the stream is stopped).
   func applyStreamProfileIfNeeded() {
     let profile = GlassesStreamProfile.current
     let transport = effectiveTransport
@@ -316,46 +310,193 @@ class StreamSessionViewModel: ObservableObject {
       fallbackFrom = nil
       transportNote = nil
     }
-    guard profile != streamProfile || transport != activeTransport, !isStreaming, let deviceSelector else { return }
-    recreateSession(profile: profile, transport: transport, selector: deviceSelector)
-  }
-
-  private func recreateSession(
-    profile: GlassesStreamProfile,
-    transport: GlassesVideoTransport,
-    selector: AutoDeviceSelector
-  ) {
-    streamSession = StreamSession(
-      streamSessionConfig: profile.makeConfig(transport: transport), deviceSelector: selector)
+    guard profile != streamProfile || transport != activeTransport, !isStreaming else { return }
     streamProfile = profile
     activeTransport = transport
     selectedResolution = profile.resolution
-    attachListeners()
-    NSLog("[Stream] Stream session: %@ %@", profile.requestedSummary, transport.shortLabel)
+    NSLog("[Stream] next camera: %@ %@", profile.requestedSummary, transport.shortLabel)
   }
 
-  private func attachListeners() {
-    guard let streamSession else { return }
-    sessionGeneration += 1
-    let generation = sessionGeneration
-    let previousTokens = [stateListenerToken, videoFrameListenerToken, errorListenerToken, photoDataListenerToken]
-    Task {
-      for token in previousTokens { await token?.cancel() }
-    }
+  // MARK: Starting and stopping
 
-    // Subscribe to session state changes using the DAT SDK listener pattern
-    stateListenerToken = streamSession.statePublisher.listen { [weak self] state in
-      Task { @MainActor [weak self] in
-        guard let self, self.sessionGeneration == generation else { return }
-        self.updateStatusFromState(state)
+  /// Glasses-state conditions the call screen's placeholder can name --
+  /// the app's own voice, replacing the sample's alert dialogs.
+  enum GlassesIssue: Equatable {
+    case sdkUnavailable
+    case permissionNeeded
+    case hingesClosed
+    case reconnecting
+    case thermal
+  }
+
+  @Published var glassesIssue: GlassesIssue?
+  @Published private(set) var lastStreamError: String?
+
+  func handleStartStreaming() async {
+    glassesIssue = nil
+    guard let wearables else {
+      glassesIssue = .sdkUnavailable
+      return
+    }
+    applyStreamProfileIfNeeded()
+    do {
+      let status = try await wearables.checkPermissionStatus(.camera)
+      if status == .granted {
+        await startSession()
+        return
+      }
+      let requestStatus = try await wearables.requestPermission(.camera)
+      if requestStatus == .granted {
+        await startSession()
+        return
+      }
+      glassesIssue = .permissionNeeded
+    } catch {
+      // Sleeping or out-of-range glasses are a wait state, not an error.
+      let text = String(describing: error).lowercased()
+      if text.contains("powered off") || text.contains("disconnected") || text.contains("no device") {
+        NSLog("[Stream] glasses unavailable, waiting: %@", String(describing: error))
+        glassesIssue = nil
+      } else {
+        glassesIssue = .reconnecting
       }
     }
+  }
 
-    // Subscribe to video frames from the device camera. The SDK invokes this
-    // inline on its decoder thread, so the fast path must not hop to the main
-    // actor or retain the SDK's buffer.
+  /// Creates (or reuses) the device session, waits until it is started,
+  /// attaches the camera and starts the stream.
+  func startSession() async {
+    guard let wearables, let deviceSelector else { return }
+    armStartWatchdog()
+    streamingStatus = .waiting
+    let session: DeviceSession
+    if let existing = deviceSession, existing.state != .stopped, existing.state != .stopping {
+      session = existing
+    } else {
+      do {
+        let created = try wearables.createSession(deviceSelector: deviceSelector)
+        deviceSession = created
+        // Subscribe before start() so no transition is missed.
+        observeSession(created)
+        deviceSessionState = .starting
+        try created.start()
+        session = created
+      } catch {
+        handleSessionError(error)
+        cleanupSession()
+        streamingStatus = .stopped
+        return
+      }
+    }
+    // `addCamera` returns nil until the session is started.
+    guard await waitUntil(timeout: 20, { session.state == .started }) else {
+      NSLog("[Stream] device session did not start (state %@)", String(describing: session.state))
+      glassesIssue = .reconnecting
+      if camera == nil { streamingStatus = .stopped }
+      return
+    }
+    attachCameraIfNeeded(to: session)
+    camera?.stream.start()
+  }
+
+  func stopSession() async {
+    camera?.stop()
+    deviceSession?.stop()
+    guard await waitUntil(timeout: 3, { self.deviceSession == nil }) else {
+      // No `stopped` arrived: forget the session anyway, so the next start
+      // creates a fresh one.
+      NSLog("[Stream] device session did not report stopped; cleared")
+      clearCamera()
+      cleanupSession()
+      return
+    }
+  }
+
+  private func observeSession(_ session: DeviceSession) {
+    session.statePublisher.listen { [weak self] state in
+      Task { @MainActor [weak self] in self?.handleSessionState(state) }
+    }.store(in: sessionTokens)
+    session.errorPublisher.listen { [weak self] error in
+      Task { @MainActor [weak self] in self?.handleSessionError(error) }
+    }.store(in: sessionTokens)
+  }
+
+  private func handleSessionState(_ state: DeviceSessionState) {
+    NSLog("[GlassifAI] glasses session state: %@", String(describing: state))
+    deviceSessionState = state
+    if state == .stopped {
+      clearCamera()
+      cleanupSession()
+    }
+  }
+
+  private func handleSessionError(_ error: Error) {
+    lastStreamError = LogSanitizer.sanitize(error.localizedDescription, limit: 200)
+    NSLog("[Stream] device session error: %@", lastStreamError ?? "")
+  }
+
+  private func cleanupSession() {
+    sessionTokens.clear()
+    deviceSession = nil
+    deviceSessionState = .stopped
+  }
+
+  // MARK: Camera
+
+  /// Adds the consolidated camera to a started session, subscribes to both
+  /// children before anything starts, and remembers which camera is current.
+  private func attachCameraIfNeeded(to session: DeviceSession) {
+    guard camera == nil else { return }
+    let transport = effectiveTransport
+    activeTransport = transport
+    let config = streamProfile.makeConfig(transport: transport)
+    do {
+      guard let created = try session.addCamera(config: config) else {
+        NSLog("[Stream] the camera would not attach yet")
+        glassesIssue = .reconnecting
+        return
+      }
+      camera = created
+      sessionGeneration += 1
+      streamGeneration += 1
+      photoStartRequested = false
+      attachStreamListeners(created.stream, generation: streamGeneration)
+      attachPhotoListeners(created.photo, generation: sessionGeneration)
+      NSLog("[Stream] camera attached: %@ %@", streamProfile.requestedSummary, transport.shortLabel)
+    } catch {
+      handleSessionError(error)
+    }
+  }
+
+  /// Detaches the camera (idempotent) so a later `addCamera` can register a
+  /// new one, and cancels its listeners.
+  private func clearCamera() {
+    camera?.stop()
+    camera = nil
+    streamTokens.clear()
+    photoTokens.clear()
+    photoStateValue = .stopped
+    photoState = "stopped"
+    photoStartRequested = false
+    isTakingStandalonePhoto = false
+    updateStatusFromState(.stopped)
+  }
+
+  private func attachStreamListeners(_ stream: MWDATCamera.Stream, generation: Int) {
+    stream.statePublisher.listen { [weak self] state in
+      Task { @MainActor [weak self] in
+        guard let self, self.streamGeneration == generation else { return }
+        self.updateStatusFromState(state)
+        // The sensor is awake: the photo child can start on it now (a photo
+        // start on a cold camera never finishes).
+        if state == .streaming { self.startPhotoIfNeeded() }
+      }
+    }.store(in: streamTokens)
+
+    // The SDK invokes this inline on its decoder thread, so the fast path
+    // must not hop to the main actor or retain the SDK's buffer.
     let ingestor = frameIngestor
-    videoFrameListenerToken = streamSession.videoFramePublisher.listen { [weak self] videoFrame in
+    stream.videoFramePublisher.listen { [weak self] videoFrame in
       let result = ingestor.handle(videoFrame.sampleBuffer)
       if result.isFirstFrame {
         Task { @MainActor [weak self] in
@@ -363,10 +504,8 @@ class StreamSessionViewModel: ObservableObject {
         }
       }
       if result.handled { return }
-
-      // Legacy preview path (the original behaviour), foreground only. The
-      // ingestor has already fed the frame store (raw copy or decode), so
-      // vision works in this mode too.
+      // Legacy preview path, foreground only. The ingestor already fed the
+      // frame store, so vision works in this mode too.
       Task { @MainActor [weak self] in
         guard let self, UIApplication.shared.applicationState != .background else { return }
         if let image = videoFrame.makeUIImage() {
@@ -376,53 +515,136 @@ class StreamSessionViewModel: ObservableObject {
           }
         }
       }
-    }
+    }.store(in: streamTokens)
 
-    // Subscribe to streaming errors
-    errorListenerToken = streamSession.errorPublisher.listen { [weak self] error in
+    stream.errorPublisher.listen { [weak self] error in
       Task { @MainActor [weak self] in
-        guard let self, self.sessionGeneration == generation else { return }
-        // One voice: glasses-state conditions render as placeholder text on
-        // the call screen, never as alert dialogs. Sleeping/absent glasses are
-        // a plain wait; everything else maps to a typed issue.
-        switch error {
-        case .videoStreamingError, .internalError, .timeout:
-          self.lastErrorWasStreamFailure = true
-        default:
-          self.lastErrorWasStreamFailure = false
-        }
-        switch error {
-        case .deviceNotConnected, .deviceNotFound:
-          self.glassesIssue = nil
-        case .hingesClosed:
-          self.glassesIssue = .hingesClosed
-        case .permissionDenied:
-          self.glassesIssue = .permissionNeeded
-        case .thermalCritical:
-          self.glassesIssue = .thermal
-        default:
-          self.glassesIssue = .reconnecting
-        }
-        self.lastStreamError = self.formatStreamingError(error)
+        guard let self, self.streamGeneration == generation else { return }
+        self.handleStreamError(error)
       }
-    }
+    }.store(in: streamTokens)
 
-    updateStatusFromState(streamSession.state)
-
-    // Subscribe to photo capture events. A photo that answers a pending vision
-    // request goes to that request only; anything else keeps the original
-    // preview behaviour and is never used for vision.
+    // In-stream photos (the preview's capture button). A photo that answers
+    // a pending vision request goes to that request only.
     let photos = stillPhotos
-    photoDataListenerToken = streamSession.photoDataPublisher.listen { [weak self] photoData in
+    stream.photoDataPublisher.listen { [weak self] photoData in
       if photos.deliver(photoData.data) { return }
       Task { @MainActor [weak self] in
-        guard let self else { return }
-        guard let uiImage = UIImage(data: photoData.data) else { return }
-        self.capturedPhoto = uiImage
+        guard let self, let image = UIImage(data: photoData.data) else { return }
+        self.capturedPhoto = image
         self.showPhotoPreview = true
       }
-    }
+    }.store(in: streamTokens)
   }
+
+  private func attachPhotoListeners(_ photo: Photo, generation: Int) {
+    photo.statePublisher.listen { [weak self] state in
+      Task { @MainActor [weak self] in
+        guard let self, self.sessionGeneration == generation else { return }
+        self.photoStateValue = state
+        self.photoState = String(describing: state)
+      }
+    }.store(in: photoTokens)
+    // Standalone stills arrive here, including ones the wearer takes with
+    // the shutter button; only a pending app request accepts one.
+    let photos = stillPhotos
+    photo.photoDataPublisher.listen { data in
+      photos.deliver(data.imageData)
+    }.store(in: photoTokens)
+    photo.errorPublisher.listen { error in
+      NSLog("[Stream] standalone photo error: %@", LogSanitizer.sanitize(error.description, limit: 160))
+    }.store(in: photoTokens)
+  }
+
+  private func startPhotoIfNeeded() {
+    guard !photoStartRequested, let photo = camera?.photo else { return }
+    photoStartRequested = true
+    photo.start()
+  }
+
+  private func handleStreamError(_ error: StreamError) {
+    // Setting the stream aside for a photo is not a failure.
+    guard !isTakingStandalonePhoto else { return }
+    switch error {
+    case .videoStreamingError, .internalError, .timeout:
+      lastErrorWasStreamFailure = true
+    default:
+      lastErrorWasStreamFailure = false
+    }
+    switch error {
+    case .deviceNotConnected, .deviceNotFound:
+      glassesIssue = nil
+    case .hingesClosed:
+      glassesIssue = .hingesClosed
+    case .permissionDenied:
+      glassesIssue = .permissionNeeded
+    case .thermalHot, .peakPowerLimit, .batteryLow:
+      glassesIssue = .thermal
+    default:
+      glassesIssue = .reconnecting
+    }
+    lastStreamError = formatStreamingError(error)
+  }
+
+  // MARK: Still photos for vision
+
+  /// One fresh still for a vision request. DAT 1.0: a standalone photo from
+  /// the native sensor (`.full`, `.high`), taken by setting the stream aside,
+  /// because the two children compete for the camera; the stream starts
+  /// again however the capture ends. nil when it is not possible (the caller
+  /// then uses the best video frame).
+  func captureStillForVision(timeout: TimeInterval) async -> StillPhoto? {
+    guard streamingStatus == .streaming, let camera else { return nil }
+    guard photoStateValue == .started else {
+      NSLog("[Stream] standalone photo not ready (%@)", photoState)
+      return nil
+    }
+    FrameStore.shared.recordPhotoRequest()
+    isTakingStandalonePhoto = true
+    defer { isTakingStandalonePhoto = false }
+    // Frames and stills compete for the sensor; a running stream wins.
+    camera.stream.stop()
+    _ = await waitUntil(timeout: 2) { camera.stream.state == .stopped }
+    // A full-resolution still takes a few seconds to cross the link (Meta's
+    // BirdSpotter sample allows 15 s).
+    let photo = await stillPhotos.capture(timeout: max(timeout, 15)) {
+      camera.photo.capturePhoto(resolution: .full, quality: .high)
+      return true
+    }
+    FrameStore.shared.recordPhoto(
+      width: photo?.width, height: photo?.height, latencyMs: photo?.latencyMs, success: photo != nil)
+    // The session may have ended during the capture (glasses folded).
+    guard self.camera === camera else { return photo }
+    // Whether listeners survive a stream stop and start is not documented,
+    // so the stream's are taken out afresh before it starts again.
+    streamTokens.clear()
+    streamGeneration += 1
+    attachStreamListeners(camera.stream, generation: streamGeneration)
+    camera.stream.start()
+    return photo
+  }
+
+  /// The preview's capture button: an in-stream photo, as before.
+  func capturePhoto() {
+    _ = camera?.stream.capturePhoto(format: .jpeg)
+  }
+
+  func dismissPhotoPreview() {
+    showPhotoPreview = false
+    capturedPhoto = nil
+  }
+
+  private func showError(_ message: String) {
+    errorMessage = message
+    showError = true
+  }
+
+  func dismissError() {
+    showError = false
+    errorMessage = ""
+  }
+
+  // MARK: Transport watchdogs
 
   /// HEVC is decoded by this app. If a stream reports `.streaming` but no
   /// frame has been decoded after the grace period, fall back to the
@@ -450,77 +672,28 @@ class StreamSessionViewModel: ObservableObject {
     }
   }
 
+  /// Replaces the camera with a raw one on the same session.
   private func fallBackToRaw(reason: String) async {
-    guard let deviceSelector, activeTransport == .hevc else { return }
+    guard activeTransport == .hevc, let session = deviceSession else { return }
     NSLog("[Stream] HEVC transport fallback to raw: %@", reason)
     fallbackFrom = .hevc
     transportNote = "Switched to raw automatically: \(reason)"
-    await streamSession?.stop()
-    recreateSession(profile: streamProfile, transport: .raw, selector: deviceSelector)
-    await streamSession?.start()
-  }
-
-  /// Glasses-state conditions the call screen's placeholder can name --
-  /// the app's own voice, replacing the sample's alert dialogs.
-  enum GlassesIssue: Equatable {
-    case sdkUnavailable
-    case permissionNeeded
-    case hingesClosed
-    case reconnecting
-    case thermal
-  }
-
-  @Published var glassesIssue: GlassesIssue?
-  @Published private(set) var lastStreamError: String?
-
-  func handleStartStreaming() async {
-    glassesIssue = nil
-    guard let wearables else {
-      glassesIssue = .sdkUnavailable
-      return
-    }
-    applyStreamProfileIfNeeded()
-    let permission = Permission.camera
-    do {
-      let status = try await wearables.checkPermissionStatus(permission)
-      if status == .granted {
-        await startSession()
-        return
-      }
-      let requestStatus = try await wearables.requestPermission(permission)
-      if requestStatus == .granted {
-        await startSession()
-        return
-      }
-      glassesIssue = .permissionNeeded
-    } catch {
-      // Sleeping or out-of-range glasses are a wait state, not an error.
-      let text = String(describing: error).lowercased()
-      if text.contains("powered off") || text.contains("disconnected") || text.contains("no device") {
-        NSLog("[Stream] glasses unavailable, waiting: %@", String(describing: error))
-        glassesIssue = nil
-      } else {
-        glassesIssue = .reconnecting
-      }
-    }
-  }
-
-  func startSession() async {
-    armStartWatchdog()
-    await streamSession?.start()
+    clearCamera()
+    guard await waitUntil(timeout: 2, { session.state == .started }) else { return }
+    attachCameraIfNeeded(to: session)
+    camera?.stream.start()
   }
 
   /// If an HEVC stream has not started 12 s after a start request and the
   /// SDK reported a stream failure (not glasses off, folded or permission),
   /// fall back to raw once, so the camera works even if HEVC is refused.
   private func armStartWatchdog() {
-    guard activeTransport == .hevc, fallbackFrom == nil else { return }
+    guard effectiveTransport == .hevc, fallbackFrom == nil else { return }
     startWatchdogTask?.cancel()
     lastErrorWasStreamFailure = false
-    let generation = sessionGeneration
     startWatchdogTask = Task { @MainActor [weak self] in
       try? await Task.sleep(nanoseconds: 12_000_000_000)
-      guard let self, !Task.isCancelled, self.sessionGeneration == generation,
+      guard let self, !Task.isCancelled,
             self.activeTransport == .hevc, self.streamingStatus != .streaming,
             self.lastErrorWasStreamFailure,
             UIApplication.shared.applicationState == .active else { return }
@@ -528,34 +701,15 @@ class StreamSessionViewModel: ObservableObject {
     }
   }
 
-  private func showError(_ message: String) {
-    errorMessage = message
-    showError = true
-  }
+  // MARK: State
 
-  func stopSession() async {
-    await streamSession?.stop()
-  }
-
-  func dismissError() {
-    showError = false
-    errorMessage = ""
-  }
-
-  func capturePhoto() {
-    streamSession?.capturePhoto(format: .jpeg)
-  }
-
-  func dismissPhotoPreview() {
-    showPhotoPreview = false
-    capturedPhoto = nil
-  }
-
-  private func updateStatusFromState(_ state: StreamSessionState) {
+  private func updateStatusFromState(_ state: StreamState) {
     NSLog("[GlassifAI] glasses stream state: %@", String(describing: state))
     lastStreamState = String(describing: state)
     switch state {
     case .stopped:
+      // Setting the stream aside for a standalone photo keeps the rest alive.
+      if isTakingStandalonePhoto { return }
       currentVideoFrame = nil
       hasReceivedFirstFrame = false
       frameIngestor.resetFirstFrame()
@@ -563,6 +717,7 @@ class StreamSessionViewModel: ObservableObject {
       watchdogTask?.cancel()
       streamingStatus = .stopped
     case .waitingForDevice, .starting, .stopping, .paused:
+      if isTakingStandalonePhoto { return }
       streamingStatus = .waiting
     case .streaming:
       let wasStreaming = streamingStatus == .streaming
@@ -574,7 +729,17 @@ class StreamSessionViewModel: ObservableObject {
     }
   }
 
-  private func formatStreamingError(_ error: StreamSessionError) -> String {
+  /// Polls a condition on the main actor until it holds or the time is up.
+  private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) async -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while !condition() {
+      guard Date() < deadline, !Task.isCancelled else { return false }
+      try? await Task.sleep(nanoseconds: 100_000_000)
+    }
+    return true
+  }
+
+  private func formatStreamingError(_ error: StreamError) -> String {
     switch error {
     case .internalError:
       return "An internal error occurred. Please try again."
@@ -586,12 +751,18 @@ class StreamSessionViewModel: ObservableObject {
       return "The operation timed out. Please try again."
     case .videoStreamingError:
       return "Video streaming failed. Please try again."
-    case .thermalCritical:
+    case .audioStreamingError:
+      return "Audio streaming failed."
+    case .thermalHot:
       return "The glasses are too warm. The camera may slow down or stop until they cool down."
+    case .peakPowerLimit, .batteryLow:
+      return "The glasses' battery or power limit stopped the camera."
     case .permissionDenied:
-      return "Camera permission denied. Please grant permission in Settings."
+      return "Camera permission denied. Please grant permission in the Meta AI app."
     case .hingesClosed:
-      return "The hinges on the glasses were closed. Please open the hinges and try again."
+      return "The hinges on the glasses were closed, or the glasses were taken off."
+    case .photoCaptureFailed:
+      return "The photo could not be taken."
     @unknown default:
       return "An unknown streaming error occurred."
     }

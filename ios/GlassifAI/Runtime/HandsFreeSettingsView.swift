@@ -6,6 +6,7 @@ import SwiftUI
 struct HandsFreeSettingsView: View {
   @ObservedObject private var wake = WakePhraseListener.shared
   @ObservedObject private var coordinator = VoiceStartCoordinator.shared
+  @ObservedObject private var metaInvocation = MetaVoiceInvocationListener.shared
   @AppStorage(WakePhraseSettings.phraseKey) private var phrase = ""
   @AppStorage(WakePhraseSettings.backgroundKey) private var listensInBackground = false
   @AppStorage(WakePhraseSettings.readyMinutesKey) private var readyMinutes = 60
@@ -51,7 +52,7 @@ struct HandsFreeSettingsView: View {
           ForEach(WakePhraseSettings.readyMinuteChoices, id: \.self) { Text("\($0) min").tag($0) }
         }
         .disabled(!listensInBackground)
-        Toggle(L.t("Only while the glasses are connected", "Yalnızca gözlük bağlıyken"), isOn: $armsWithGlasses)
+        Toggle(L.t("Only while the glasses are worn", "Yalnızca gözlük takılıyken"), isOn: $armsWithGlasses)
           .disabled(!wake.isArmed)
           .onChange(of: armsWithGlasses) { _, _ in Task { await wake.refresh() } }
       }
@@ -82,7 +83,12 @@ struct HandsFreeSettingsView: View {
         header: Text(L.t("Meta glasses — system invocation", "Meta gözlük — sistem çağrısı")),
         footer: Text(HandsFreeCapabilities.metaInvocationRequirement)) {
         LabeledContent(L.t("System wake word", "Sistem uyandırma sözcüğü"), value: "Hey Meta")
-        LabeledContent("“Hey Meta, start …”", value: L.t("Not available in this build", "Bu sürümde yok"))
+        if HandsFreeCapabilities.metaInvocationAvailable {
+          LabeledContent("“Hey Meta, start …”", value: metaInvocation.status)
+          LabeledContent(L.t("Launches received", "Gelen başlatmalar"), value: "\(metaInvocation.launches)")
+        } else {
+          LabeledContent("“Hey Meta, start …”", value: L.t("Not available in this build", "Bu sürümde yok"))
+        }
         LabeledContent(L.t("Custom wake word on the glasses", "Gözlükte özel uyandırma"), value: L.t("Not supported by Meta", "Meta desteklemiyor"))
         LabeledContent(L.t("During a conversation", "Konuşma sırasında"), value: L.t("Temple tap mutes; fold to end", "Sap dokunuşu susturur; katlayınca biter"))
       }

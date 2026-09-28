@@ -1,3 +1,4 @@
+import Combine
 import MWDATCore
 import SwiftUI
 import UIKit
@@ -85,6 +86,11 @@ struct StreamSessionView: View {
       LiveVisionController.shared.isVoiceActive = { voiceSession.isActive }
       WakePhraseListener.shared.isConversationActive = { voiceSession.isActive }
       WakePhraseListener.shared.glassesConnected = wearablesViewModel?.glassesLinkConnected
+      WakePhraseListener.shared.glassesWorn = wearablesViewModel?.glassesWorn
+      if let wearables {
+        MetaVoiceInvocationListener.shared.listen(
+          wearables: wearables, deviceId: wearablesViewModel?.devices.first ?? wearables.devices.first)
+      }
       VoiceStartCoordinator.shared.register(isActive: { voiceSession.isActive }) { reason in
         // The conversation takes over the microphone.
         WakePhraseListener.shared.stopListening(reason: nil)
@@ -104,8 +110,8 @@ struct StreamSessionView: View {
           await activateCaptureSource()
         }
       }
-      if gestureSession == nil, let wearables {
-        gestureSession = GlassesGestureSession(wearables: wearables)
+      if gestureSession == nil, wearables != nil {
+        gestureSession = GlassesGestureSession(states: viewModel.$deviceSessionState.eraseToAnyPublisher())
       }
       glassesRegistered =
         wearablesViewModel?.registrationState == .registered ||
@@ -127,8 +133,21 @@ struct StreamSessionView: View {
         await WakePhraseListener.shared.refresh()
       }
     }
-    .onChange(of: wearablesViewModel?.devices.first) { _, _ in
+    .onChange(of: wearablesViewModel?.devices.first) { _, device in
       Task { await updateGestureSession() }
+      if let wearables {
+        MetaVoiceInvocationListener.shared.listen(wearables: wearables, deviceId: device ?? wearables.devices.first)
+      }
+    }
+    .onChange(of: wearablesViewModel?.registrationState) { _, _ in
+      if let wearables {
+        MetaVoiceInvocationListener.shared.listen(
+          wearables: wearables, deviceId: wearablesViewModel?.devices.first ?? wearables.devices.first)
+      }
+    }
+    .onChange(of: wearablesViewModel?.glassesWorn) { _, worn in
+      // DAT 1.0: glasses put on arm hands-free listening; taken off, it rests.
+      WakePhraseListener.shared.glassesWorn = worn
     }
     .onChange(of: wearablesViewModel?.glassesLinkConnected) { previous, connected in
       // A real SDK event: the glasses' link to the phone came up or dropped.
@@ -222,11 +241,15 @@ struct StreamSessionView: View {
     switch captureSource {
     case .iPhoneCamera:
       glassesAutoStarted = false
+      // The gestures follow the glasses session (DAT 1.0): the app's own stop
+      // must not read as the wearer ending the call.
+      await gestureSession?.stop()
       if viewModel.isStreaming { await viewModel.stopSession() }
       await camera.start()
     case .off:
       glassesAutoStarted = false
       await camera.stop()
+      await gestureSession?.stop()
       if viewModel.isStreaming { await viewModel.stopSession() }
       FrameStore.shared.reset()
     case .glasses:

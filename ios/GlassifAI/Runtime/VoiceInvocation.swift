@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import MWDATCore
 
 /// What asked the app to start listening.
 enum VoiceStartReason: String {
@@ -204,14 +205,85 @@ struct AutoLoomShortcuts: AppShortcutsProvider {
 /// What hands-free invocation this build can really do. Shown in Settings so
 /// the UI never claims more than the platforms allow.
 enum HandsFreeCapabilities {
-  static let metaInvocationAvailable = false
+  /// This build links DAT 1.0 and listens for "Hey Meta, start …" launches.
+  static let metaInvocationAvailable = true
   static let metaInvocationPhrase = "Hey Meta, start <app name registered in the Meta Developer Center>"
   static let metaInvocationRequirement =
-    "Needs Meta Wearables DAT 1.0 (this build uses \(GlassesSDKInfo.datVersion)), glasses firmware V128 and Meta AI app V290 " +
-    "(rollout from 2026-09-30), and Voice Invocation approval in the Wearables Developer Center."
+    "This DAT \(GlassesSDKInfo.datVersion) build listens for it. Meta only delivers it with glasses firmware V128, Meta AI app V290 " +
+    "and Voice Invocation approval for this app in the Wearables Developer Center (not granted in Developer Mode). Experimental."
   /// No system-wide custom wake word exists for third-party apps on iOS or
   /// the Meta glasses. The app's own wake phrase uses on-device recognition
   /// while the app is open, or in the background with Hands-Free Ready.
   static let customWakeWordSupported = false
   static let siriPhrase = "Hey Siri, start AutoLoom"
+}
+
+
+/// "Hey Meta, start AutoLoom" (DAT 1.0 `VoiceInvocationsStream`, experimental).
+/// Meta routes a launch only to a registered app whose Voice Invocation
+/// permission was approved in the Wearables Developer Center. Each `LaunchApp`
+/// is answered at once — Meta AI holds it open until the app replies — and the
+/// conversation then starts through the same coordinator as every other start.
+@MainActor
+final class MetaVoiceInvocationListener: ObservableObject {
+  static let shared = MetaVoiceInvocationListener()
+
+  @Published private(set) var status = L.t("Off", "Kapalı")
+  @Published private(set) var launches = 0
+
+  private var stream: VoiceInvocationsStream?
+  private let tokens = ListenerTokenBag()
+  private var listeningOn: DeviceIdentifier?
+
+  private init() {}
+
+  /// Opens the channel (once) and listens on the given glasses; asked again
+  /// on every device or registration change.
+  func listen(wearables: WearablesInterface, deviceId: DeviceIdentifier?) {
+    guard wearables.registrationState == .registered else {
+      status = L.t("Waiting for registration", "Kayıt bekleniyor")
+      return
+    }
+    if stream == nil {
+      do {
+        let created = try VoiceInvocationsStream(wearables: wearables)
+        created.invocationsPublisher.listen { invocation in
+          Task { @MainActor in await MetaVoiceInvocationListener.shared.answer(invocation) }
+        }.store(in: tokens)
+        created.errorPublisher.listen { error in
+          Task { @MainActor in MetaVoiceInvocationListener.shared.dropped(error.description) }
+        }.store(in: tokens)
+        stream = created
+      } catch {
+        status = L.t("Unavailable: ", "Kullanılamıyor: ") + LogSanitizer.sanitize(error.localizedDescription, limit: 120)
+        return
+      }
+    }
+    guard let deviceId, deviceId != listeningOn, let stream else { return }
+    if listeningOn != nil { stream.stop() }
+    listeningOn = nil
+    do {
+      try stream.start(deviceIdentifier: deviceId)
+      listeningOn = deviceId
+      status = L.t("Listening (needs Meta approval)", "Dinliyor (Meta onayı gerekir)")
+    } catch {
+      status = L.t("Not started: ", "Başlamadı: ") + LogSanitizer.sanitize(error.localizedDescription, limit: 120)
+    }
+  }
+
+  private func answer(_ invocation: any VoiceInvocation) async {
+    guard let launch = invocation as? LaunchApp else { return }
+    launches += 1
+    // Answered before anything else: Meta AI waits for this reply.
+    if await launch.responseHandle.sendSuccess(actionOutput: nil) == false {
+      NSLog("[AutoLoom] Hey Meta launch: the answer did not deliver")
+    }
+    _ = await VoiceStartCoordinator.shared.request(.metaInvocation)
+  }
+
+  /// A dropped channel is reopened on the next device change.
+  private func dropped(_ description: String) {
+    status = L.t("Channel error: ", "Kanal hatası: ") + LogSanitizer.sanitize(description, limit: 120)
+    listeningOn = nil
+  }
 }

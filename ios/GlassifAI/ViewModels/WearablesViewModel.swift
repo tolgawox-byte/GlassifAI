@@ -33,6 +33,9 @@ class WearablesViewModel: ObservableObject {
   /// `LinkState`); nil until a device is known. Used to arm hands-free
   /// listening only from real SDK events.
   @Published var glassesLinkConnected: Bool?
+  /// Whether the glasses are worn with the hinges open (DAT 1.0
+  /// `DeviceState.donState` / `hingeState`); nil while unknown.
+  @Published var glassesWorn: Bool?
 
   private var registrationTask: Task<Void, Never>?
   private var deviceStreamTask: Task<Void, Never>?
@@ -40,6 +43,7 @@ class WearablesViewModel: ObservableObject {
   private let wearables: WearablesInterface
   private var compatibilityListenerTokens: [DeviceIdentifier: AnyListenerToken] = [:]
   private var linkStateListenerTokens: [DeviceIdentifier: AnyListenerToken] = [:]
+  private var deviceStateListenerTokens: [DeviceIdentifier: AnyListenerToken] = [:]
 
   init(wearables: WearablesInterface) {
     self.wearables = wearables
@@ -91,7 +95,11 @@ class WearablesViewModel: ObservableObject {
     let deviceSet = Set(devices)
     compatibilityListenerTokens = compatibilityListenerTokens.filter { deviceSet.contains($0.key) }
     linkStateListenerTokens = linkStateListenerTokens.filter { deviceSet.contains($0.key) }
-    if devices.isEmpty { glassesLinkConnected = nil }
+    deviceStateListenerTokens = deviceStateListenerTokens.filter { deviceSet.contains($0.key) }
+    if devices.isEmpty {
+      glassesLinkConnected = nil
+      glassesWorn = nil
+    }
 
     // Add listeners for new devices
     for deviceId in devices {
@@ -119,6 +127,23 @@ class WearablesViewModel: ObservableObject {
           guard isPrimary else { return }
           Task { @MainActor in
             self?.glassesLinkConnected = state == .connected
+          }
+        }
+      }
+
+      if deviceStateListenerTokens[deviceId] == nil {
+        let isPrimary = deviceId == devices.first
+        // Delivered at once and on every change (DAT 1.0).
+        deviceStateListenerTokens[deviceId] = device.addDeviceStateListener { [weak self] state in
+          guard isPrimary else { return }
+          let worn: Bool?
+          switch state.donState {
+          case .donned: worn = state.hingeState != .closed
+          case .doffed: worn = false
+          case .unknown: worn = state.hingeState == .closed ? false : nil
+          }
+          Task { @MainActor in
+            self?.glassesWorn = worn
           }
         }
       }

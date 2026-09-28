@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import MWDATCore
 
@@ -6,25 +7,29 @@ enum GlassesGestureAction: Equatable {
   case endCall
 }
 
+/// Turns device-session transitions into call controls. DAT exposes session
+/// states rather than raw gesture events:
+/// - started → paused or paused → started: temple tap, toggle microphone mute
+/// - an active session → stopped: long press, doff, fold or link loss, end call
 struct GlassesGestureInterpreter {
-  private(set) var previousState: SessionState?
+  private(set) var previousState: DeviceSessionState?
   private var becameActive = false
 
-  mutating func receive(_ state: SessionState) -> GlassesGestureAction? {
+  mutating func receive(_ state: DeviceSessionState) -> GlassesGestureAction? {
     let previous = previousState
     previousState = state
 
     switch state {
-    case .running:
+    case .started:
       becameActive = true
       return previous == .paused ? .toggleMicrophoneMute : nil
     case .paused:
-      return previous == .running ? .toggleMicrophoneMute : nil
+      return previous == .started ? .toggleMicrophoneMute : nil
     case .stopped:
       guard becameActive else { return nil }
       becameActive = false
       return .endCall
-    case .waitingForDevice, .unknown:
+    case .idle, .starting, .stopping:
       return nil
     }
   }
@@ -35,28 +40,23 @@ struct GlassesGestureInterpreter {
   }
 }
 
-/// Runs a capability-free DAT session alongside an active voice call and turns
-/// Meta's fixed temple gestures into call controls.
+/// Meta's fixed temple gestures as call controls during a voice call.
 ///
-/// DAT exposes session-state transitions rather than raw gesture events:
-/// - running → paused or paused → running: temple tap, toggle microphone mute
-/// - any active state → stopped: long press, doff, fold, or link loss, end call
-///
-/// `stopped` does not include a reason, so those stop cases cannot be
-/// distinguished. Programmatic teardown is suppressed explicitly.
+/// DAT 1.0 allows one `DeviceSession` per pair of glasses, so this no longer
+/// runs a session of its own (as it did on 0.5.0): it follows the camera's
+/// session, whose state the stream view model publishes. `stopped` carries no
+/// reason, so the stop cases cannot be told apart; the app's own teardown is
+/// ignored explicitly.
 @MainActor
 final class GlassesGestureSession {
-  private let wearables: WearablesInterface
-  private var session: DeviceStateSession?
-  private var listenerToken: (any AnyListenerToken)?
-  private var activeDeviceId: DeviceIdentifier?
+  private let states: AnyPublisher<DeviceSessionState, Never>
+  private var subscription: AnyCancellable?
   private var interpreter = GlassesGestureInterpreter()
-  private var isStopping = false
   private var onTap: (() -> Void)?
   private var onStop: (() -> Void)?
 
-  init(wearables: WearablesInterface) {
-    self.wearables = wearables
+  init(states: AnyPublisher<DeviceSessionState, Never>) {
+    self.states = states
   }
 
   func start(
@@ -64,63 +64,32 @@ final class GlassesGestureSession {
     onTap: @escaping () -> Void,
     onStop: @escaping () -> Void
   ) async {
-    if activeDeviceId == deviceId, session != nil {
-      self.onTap = onTap
-      self.onStop = onStop
-      return
-    }
-    await stop()
-    activeDeviceId = deviceId
-
     self.onTap = onTap
     self.onStop = onStop
+    guard subscription == nil else { return }
     interpreter.reset()
-    isStopping = false
-
-    let selector = SpecificDeviceSelector(device: deviceId)
-    let session = DeviceStateSession(deviceSelector: selector)
-    self.session = session
-    listenerToken = await wearables.addDeviceSessionStateListener(forDeviceId: deviceId) {
-      [weak self] state in
-      Task { @MainActor in
+    subscription = states
+      .removeDuplicates()
+      .sink { [weak self] state in
         self?.receive(state)
       }
-    }
-
-    do {
-      try await session.start()
-      NSLog("[GlassifAI] glasses gesture session started")
-    } catch {
-      NSLog("[GlassifAI] glasses gesture session unavailable: %@", error.localizedDescription)
-      await stop()
-    }
+    NSLog("[GlassifAI] glasses gestures follow the camera session")
   }
 
   func stop() async {
-    isStopping = true
-    let token = listenerToken
-    listenerToken = nil
-    await token?.cancel()
-
-    if let session {
-      try? await session.stop()
-    }
-    self.session = nil
-    activeDeviceId = nil
+    subscription?.cancel()
+    subscription = nil
     interpreter.reset()
     onTap = nil
     onStop = nil
-    isStopping = false
   }
 
-  private func receive(_ state: SessionState) {
+  private func receive(_ state: DeviceSessionState) {
     let previous = interpreter.previousState
     NSLog(
       "[GlassifAI] glasses gesture state: %@ -> %@",
       previous?.description ?? "none",
       state.description)
-
-    guard !isStopping else { return }
     switch interpreter.receive(state) {
     case .toggleMicrophoneMute:
       onTap?()

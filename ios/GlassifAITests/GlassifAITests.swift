@@ -17,30 +17,34 @@ import XCTest
 @MainActor
 class ViewModelIntegrationTests: XCTestCase {
 
-  private var mockDevice: MockRaybanMeta?
-  private var cameraKit: MockCameraKit?
+  private var mockDevice: (any MockGlasses)?
+  private var cameraKit: (any MockCameraKit)?
 
   override func setUp() async throws {
     try await super.setUp()
     try? Wearables.configure()
 
-    // Pair mock device and set up camera kit
-    let pairedMockDevice = MockDeviceKit.shared.pairRaybanMeta()
+    // DAT 1.0: Mock Device Kit is enabled first (registered, permissions
+    // granted), then the glasses are paired.
+    MockDeviceKit.shared.enable()
+    let pairedMockDevice = try MockDeviceKit.shared.pairGlasses(model: .rayBanMeta)
     mockDevice = pairedMockDevice
-    cameraKit = pairedMockDevice.getCameraKit()
+    cameraKit = pairedMockDevice.services.camera
 
-    // Power on and unfold the device to make it available
+    // Power on, unfold and wear the glasses to make them available
     pairedMockDevice.powerOn()
     pairedMockDevice.unfold()
+    pairedMockDevice.don()
 
     // Wait for device to be available in Wearables
     try await Task.sleep(nanoseconds: 1_000_000_000)
   }
 
   override func tearDown() async throws {
-    MockDeviceKit.shared.pairedDevices.forEach { mockDevice in
-      MockDeviceKit.shared.unpairDevice(mockDevice)
+    for device in MockDeviceKit.shared.pairedDevices {
+      await MockDeviceKit.shared.unpairDevice(device)
     }
+    await MockDeviceKit.shared.disable()
     mockDevice = nil
     cameraKit = nil
     try await super.tearDown()
@@ -60,7 +64,7 @@ class ViewModelIntegrationTests: XCTestCase {
     }
 
     // Setup camera feed
-    await camera.setCameraFeed(fileURL: videoURL)
+    camera.setCameraFeed(fileURL: videoURL)
 
     let viewModel = StreamSessionViewModel(wearables: Wearables.shared)
 
@@ -114,8 +118,8 @@ class ViewModelIntegrationTests: XCTestCase {
     }
 
     // Setup camera feed
-    await camera.setCameraFeed(fileURL: videoURL)
-    await camera.setCapturedImage(fileURL: imageURL)
+    camera.setCameraFeed(fileURL: videoURL)
+    camera.setCapturedImage(fileURL: imageURL)
 
     let viewModel = StreamSessionViewModel(wearables: Wearables.shared)
 
@@ -162,19 +166,21 @@ class ViewModelIntegrationTests: XCTestCase {
 }
 
 final class GlassesGestureInterpreterTests: XCTestCase {
-  func testRunningPausedTransitionsToggleMicrophoneMute() {
+  func testStartedPausedTransitionsToggleMicrophoneMute() {
     var interpreter = GlassesGestureInterpreter()
 
-    XCTAssertNil(interpreter.receive(.waitingForDevice))
-    XCTAssertNil(interpreter.receive(.running))
+    XCTAssertNil(interpreter.receive(.idle))
+    XCTAssertNil(interpreter.receive(.starting))
+    XCTAssertNil(interpreter.receive(.started))
     XCTAssertEqual(interpreter.receive(.paused), .toggleMicrophoneMute)
-    XCTAssertEqual(interpreter.receive(.running), .toggleMicrophoneMute)
+    XCTAssertEqual(interpreter.receive(.started), .toggleMicrophoneMute)
   }
 
   func testStopAfterActiveSessionEndsCallOnce() {
     var interpreter = GlassesGestureInterpreter()
 
-    XCTAssertNil(interpreter.receive(.running))
+    XCTAssertNil(interpreter.receive(.started))
+    XCTAssertNil(interpreter.receive(.stopping))
     XCTAssertEqual(interpreter.receive(.stopped), .endCall)
     XCTAssertNil(interpreter.receive(.stopped))
   }
@@ -183,6 +189,8 @@ final class GlassesGestureInterpreterTests: XCTestCase {
     var interpreter = GlassesGestureInterpreter()
 
     XCTAssertNil(interpreter.receive(.stopped))
-    XCTAssertNil(interpreter.receive(.unknown))
+    XCTAssertNil(interpreter.receive(.idle))
+    XCTAssertNil(interpreter.receive(.starting))
+    XCTAssertNil(interpreter.receive(.stopped))
   }
 }

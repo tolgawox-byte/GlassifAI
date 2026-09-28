@@ -17,7 +17,9 @@ struct CameraDiagnosticsView: View {
         row("Transport", glassesStream?.activeTransport.shortLabel ?? "—")
         if let note = glassesStream?.transportNote { row("Transport note", note) }
         row("DAT SDK", GlassesSDKInfo.datVersion)
+        row("Device session", glassesStream?.deviceSessionState.description ?? "—")
         row("Stream state", glassesStream?.lastStreamState ?? "—")
+        row("Standalone photo (beta)", glassesStream?.photoState ?? "—")
       }
       Section("Glasses frames") {
         row("Requested", glassesStream.map { "\($0.streamProfile.requestedSummary), \($0.activeTransport.shortLabel)" } ?? "—")
