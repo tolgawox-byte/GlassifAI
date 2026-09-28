@@ -62,7 +62,10 @@ final class WakePhraseListener: ObservableObject {
   /// Whether a conversation is running (it owns the microphone then).
   var isConversationActive: () -> Bool = { false }
 
-  private let engine = AVAudioEngine()
+  /// Created only when listening actually starts, so a disarmed listener
+  /// never touches the audio hardware (the voice call owns it).
+  private var engine: AVAudioEngine?
+  private var tapInstalled = false
   private var recognizer: SFSpeechRecognizer?
   private var request: SFSpeechAudioBufferRecognitionRequest?
   private var task: SFSpeechRecognitionTask?
@@ -75,7 +78,7 @@ final class WakePhraseListener: ObservableObject {
     observers.append(center.addObserver(
       forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
     ) { [weak self] _ in
-      Task { @MainActor in self?.stopListening(reason: nil) }
+      Task { @MainActor in self?.stopListening(reason: nil, releaseAudioSession: true) }
     })
     observers.append(center.addObserver(
       forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
@@ -88,11 +91,16 @@ final class WakePhraseListener: ObservableObject {
   /// screen, and no conversation running.
   func refresh() async {
     guard isArmed, UIApplication.shared.applicationState == .active, !isConversationActive() else {
-      stopListening(reason: nil)
+      if isListening { stopListening(reason: nil, releaseAudioSession: !isConversationActive()) }
+      if !isArmed, case .unavailable = status { status = .off }
       return
     }
-    guard task == nil else { return }
+    guard !isListening else { return }
     await startListening()
+  }
+
+  private var isListening: Bool {
+    task != nil || tapInstalled || engine?.isRunning == true
   }
 
   private func startListening() async {
@@ -128,12 +136,18 @@ final class WakePhraseListener: ObservableObject {
       request.shouldReportPartialResults = true
       let name = AssistantIdentity.name
       request.contextualStrings = [name, "Hey \(name)"]
+      let engine = AVAudioEngine()
+      self.engine = engine
       let input = engine.inputNode
       let format = input.outputFormat(forBus: 0)
-      input.removeTap(onBus: 0)
+      guard format.sampleRate > 0, format.channelCount > 0 else {
+        stopListening(reason: "no microphone input available")
+        return
+      }
       input.installTap(onBus: 0, bufferSize: 1_024, format: format) { buffer, _ in
         request.append(buffer)
       }
+      tapInstalled = true
       engine.prepare()
       try engine.start()
       self.recognizer = recognizer
@@ -174,17 +188,24 @@ final class WakePhraseListener: ObservableObject {
     }
   }
 
-  func stopListening(reason: String?) {
+  func stopListening(reason: String?, releaseAudioSession: Bool = false) {
+    let wasListening = isListening
     restartTask?.cancel()
     restartTask = nil
     task?.cancel()
     task = nil
     request?.endAudio()
     request = nil
-    if engine.isRunning {
-      engine.stop()
+    if let engine {
+      if engine.isRunning { engine.stop() }
+      if tapInstalled { engine.inputNode.removeTap(onBus: 0) }
     }
-    engine.inputNode.removeTap(onBus: 0)
+    tapInstalled = false
+    engine = nil
+    // Only a session this listener activated, never a running call's.
+    if releaseAudioSession && wasListening && !isConversationActive() {
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
     if let reason {
       status = .unavailable(reason)
     } else if case .unavailable = status {
