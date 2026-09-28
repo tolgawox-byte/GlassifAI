@@ -25,7 +25,7 @@ struct PendingActionCard: View {
           .foregroundStyle(.secondary)
           .lineLimit(4)
       }
-      if plan.kind.risk == .needsTap {
+      if plan.risk == .needsTap {
         Text("Tap to confirm. A spoken \"yes\" is not enough for this.")
           .font(.caption2)
           .foregroundStyle(.secondary)
@@ -91,6 +91,15 @@ struct PendingActionCard: View {
     case .shareText:
       ShareLink(item: plan.text ?? "") {
         Label("Share", systemImage: "square.and.arrow.up")
+      }
+      .buttonStyle(.borderedProminent)
+    case .agentTask:
+      Button("Send to agent") {
+        working = true
+        Task {
+          _ = await orchestrator.confirmPendingAction(byVoice: false)
+          working = false
+        }
       }
       .buttonStyle(.borderedProminent)
     }

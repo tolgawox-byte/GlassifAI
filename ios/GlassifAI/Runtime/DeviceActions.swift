@@ -21,6 +21,8 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
   case shareText = "share_text"
   case call
   case message
+  /// A request for the user's own OpenClaw agent (never chosen by the planner).
+  case agentTask = "agent_task"
   case none
 
   enum Risk: Equatable {
@@ -32,9 +34,14 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
   var risk: Risk {
     switch self {
     case .listReminders, .todayEvents, .upcomingEvents, .copyText, .none: .readOnly
-    case .createReminder, .createEvent, .saveNote: .save
+    case .createReminder, .createEvent, .saveNote, .agentTask: .save
     case .openMaps, .openURL, .shareText, .call, .message: .needsTap
     }
+  }
+
+  /// Kinds the action planner may choose.
+  static var plannable: [DeviceActionKind] {
+    allCases.filter { $0 != .agentTask }
   }
 
   var label: String {
@@ -51,6 +58,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .shareText: "Share"
     case .call: "Phone call"
     case .message: "Message"
+    case .agentTask: "Your agent (OpenClaw)"
     case .none: "No action"
     }
   }
@@ -66,6 +74,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .shareText: "square.and.arrow.up"
     case .call: "phone"
     case .message: "message"
+    case .agentTask: "server.rack"
     case .none: "questionmark.circle"
     }
   }
@@ -85,6 +94,13 @@ struct DeviceActionPlan: Equatable {
   var phone: String?
   /// The planner's short explanation (used for `none`).
   var reply: String = ""
+
+  /// Agent requests that sound destructive (deleting, deploying, payments,
+  /// email) need a tap, even though other agent requests accept a spoken yes.
+  var risk: DeviceActionKind.Risk {
+    if kind == .agentTask, ActionGuard.soundsDestructive(text ?? "") { return .needsTap }
+    return kind.risk
+  }
 
   /// One line for the confirmation card and the voice model.
   var summary: String {
@@ -108,6 +124,8 @@ struct DeviceActionPlan: Equatable {
       return "Call \(recipient ?? phone ?? "")" + (recipient != nil && phone != nil ? " (\(phone!))" : "")
     case .message:
       return "Message \(recipient ?? phone ?? "(choose recipient)"): \"\((text ?? "").prefix(80))\""
+    case .agentTask:
+      return "Ask your agent: \"\((text ?? "").prefix(120))\""
     case .listReminders, .todayEvents, .upcomingEvents, .none:
       return kind.label
     }
@@ -125,16 +143,28 @@ enum ActionGuard {
     "hatırlat", "anımsat", "not al", "not et", "notu", "takvim", "etkinlik", "toplantı", "randevu",
   ]
 
+  private static let repositoryAccess = "access to code repositories (not connected to this app)"
+
   private static let blocked: [(terms: [String], reason: String)] = [
     (["email", "e-mail", "e-posta", "eposta", "gmail", " mail "], "sending email"),
     ([" buy ", " purchase", "pay for", " payment", "transfer money", "wire money", "bank transfer",
       "satın al", "sipariş ver", "ödeme yap", "havale", "para gönder"], "purchases or payments"),
     ([" delete", " erase", " wipe", " sil ", "silmek", "temizle"], "deleting data"),
-    (["github", "gitlab", "repository", " repo "], "access to code repositories (not connected to this app)"),
-    (["deploy", "git push", "push code", " commit ", " merge ", "pull request", "production"],
+    (["github", "gitlab", "repository", " repo "], repositoryAccess),
+    (["deploy", "git push", "push code", " commit ", " merge ", "production"],
      "code or deployment changes"),
     (["post on", "tweet", "publish", "instagram'a", "twitter'a"], "public posting"),
   ]
+
+  /// For agent requests: whether the request sounds destructive or involves
+  /// money, email or posting (reading a repository does not count).
+  static func soundsDestructive(_ request: String) -> Bool {
+    let text = " " + request.lowercased(with: Locale(identifier: "tr_TR")) + " "
+    let english = " " + request.lowercased() + " "
+    return blocked
+      .filter { $0.reason != repositoryAccess }
+      .contains { entry in entry.terms.contains { text.contains($0) || english.contains($0) } }
+  }
 
   /// Why the request cannot be done here, or nil when it may be planned.
   static func blockedReason(for request: String) -> String? {
@@ -165,7 +195,7 @@ enum DeviceActionParser {
             !value.isEmpty else { return nil }
       return String(value.prefix(limit))
     }
-    guard let kind = DeviceActionKind(rawValue: text("action") ?? "none") else {
+    guard let kind = DeviceActionKind(rawValue: text("action") ?? "none"), kind != .agentTask else {
       return .failure(.invalid("That action is not supported."))
     }
     var plan = DeviceActionPlan(kind: kind)
@@ -220,6 +250,8 @@ enum DeviceActionParser {
       guard plan.phone != nil else { return .failure(.missing("a phone number (contacts are not searched)")) }
     case .message:
       guard plan.text != nil else { return .failure(.missing("the message text")) }
+    case .agentTask:
+      guard plan.text != nil else { return .failure(.missing("what to ask your agent")) }
     case .listReminders, .todayEvents, .upcomingEvents, .none:
       break
     }
@@ -320,6 +352,8 @@ final class DeviceActionExecutor {
       return plan.reply.isEmpty ? "No supported action was found for that request." : plan.reply
     case .openMaps, .openURL, .shareText, .call, .message:
       throw ExecutionError.failed("This action must be confirmed with a tap on the phone.")
+    case .agentTask:
+      throw ExecutionError.failed("Agent requests are sent by the assistant, not the device executor.")
     }
   }
 

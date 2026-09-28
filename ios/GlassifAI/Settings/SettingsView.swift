@@ -245,6 +245,11 @@ struct SettingsView: View {
           } label: {
             Label("AutoLoom Tasks & Notes", systemImage: "note.text")
           }
+          NavigationLink {
+            AgentGatewaySettingsView()
+          } label: {
+            Label("Agent gateway (OpenClaw, optional)", systemImage: "server.rack")
+          }
         }
 
         Section("Hands-free, memory & privacy") {

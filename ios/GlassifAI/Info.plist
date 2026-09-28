@@ -82,6 +82,13 @@
 	<string>AutoLoom Media Glasses uses the iPhone camera, only when you choose it, so the assistant can answer questions about what you see.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>AutoLoom Media Glasses uses the microphone for your live voice conversation with the assistant.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Only if you connect your own agent gateway (OpenClaw) on your home network or tailnet in Settings.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Only when you turn on "Listen for the assistant's name" and the app is open: on-device speech recognition listens for the name to start a conversation. Audio is not stored or sent.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>

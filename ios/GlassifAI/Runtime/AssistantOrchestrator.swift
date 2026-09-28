@@ -312,6 +312,9 @@ final class AssistantOrchestrator: ObservableObject {
       if kind == .report {
         return try await runReport(taskID: taskID, query: query)
       }
+      if kind == .agent {
+        return await runAgent(query: query)
+      }
       if let kind {
         return try await runExecutor(
           taskID: taskID, kind: kind, query: query, image: kind.usesCamera, detail: detail)
@@ -517,7 +520,7 @@ final class AssistantOrchestrator: ObservableObject {
   /// Runs a read-only action now, or holds the plan until the user confirms:
   /// saves by a spoken yes or a tap, everything that leaves the app by a tap.
   func stage(_ plan: DeviceActionPlan) async -> ActionStageResult {
-    switch plan.kind.risk {
+    switch plan.risk {
     case .readOnly:
       do {
         let text = try await DeviceActionExecutor.shared.run(plan)
@@ -548,10 +551,13 @@ final class AssistantOrchestrator: ObservableObject {
       pendingAction = nil
       return "There is no action waiting for confirmation."
     }
-    if pending.plan.kind.risk == .needsTap {
+    if byVoice && pending.plan.risk == .needsTap {
       return "For safety, this must be confirmed with a tap on the phone; a spoken yes is not enough."
     }
     pendingAction = nil
+    if pending.plan.kind == .agentTask {
+      return await sendToAgent(pending.plan.text ?? "")
+    }
     do {
       let text = try await DeviceActionExecutor.shared.run(pending.plan)
       lastActionResult = text
@@ -576,6 +582,45 @@ final class AssistantOrchestrator: ObservableObject {
   func completeTapAction(_ result: String) {
     pendingAction = nil
     lastActionResult = result
+  }
+
+  // MARK: Agent gateway (OpenClaw, optional)
+
+  /// Stable per-install session user, so the agent keeps its conversation.
+  private var agentSessionUser: String {
+    let key = "autoloom.agent.sessionUser"
+    if let value = UserDefaults.standard.string(forKey: key) { return value }
+    let value = "autoloom-\(UUID().uuidString.prefix(8).lowercased())"
+    UserDefaults.standard.set(value, forKey: key)
+    return value
+  }
+
+  /// Holds the request until the user confirms; nothing is sent before.
+  private func runAgent(query: String) async -> Outcome {
+    guard AgentGatewayConfig.isReady else {
+      return Outcome(
+        speakable: "No agent gateway is connected to this app, so that cannot be done here. The user can connect their own OpenClaw gateway in Settings, Agent gateway.",
+        kind: .agent)
+    }
+    var plan = DeviceActionPlan(kind: .agentTask)
+    plan.text = String(query.prefix(2_000))
+    let staged = await stage(plan)
+    return Outcome(speakable: staged.speakable, display: staged.display, kind: .agent, failed: staged.failed)
+  }
+
+  private func sendToAgent(_ prompt: String) async -> String {
+    do {
+      let reply = try await AgentGatewayClient().send(prompt: prompt, sessionUser: agentSessionUser)
+      lastActionResult = reply
+      typedQuestion = prompt
+      typedAnswer = reply
+      return "Your agent replied:\n" + UntrustedContent.wrap(reply, origin: "the user's OpenClaw agent") +
+        "\nSummarise the reply for the user briefly."
+    } catch {
+      let message = LogSanitizer.sanitize(error.localizedDescription)
+      lastActionResult = message
+      return message + " Tell the user."
+    }
   }
 
   // MARK: Reports

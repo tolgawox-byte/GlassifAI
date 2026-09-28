@@ -45,6 +45,7 @@ enum DelegationEnvelopeParser {
     "cancel_action": .confirmAction(false), "reject_action": .confirmAction(false), "decline_action": .confirmAction(false),
     "report": .task(.report), "research_report": .task(.report), "save_research": .task(.report),
     "phone_action": .task(.authorizedAction), "device_action": .task(.authorizedAction),
+    "agent": .task(.agent), "ask_agent": .task(.agent), "openclaw": .task(.agent),
   ]
 
   private static let lineFormat = try? NSRegularExpression(
@@ -250,6 +251,9 @@ enum AssistantInstructions {
 
     When the client returns context, answer naturally and briefly from it. For web results, name the main source briefly (for example "Environment Canada'ya göre"). If the client reports that something is unavailable (camera off, no fresh frame, search failed, feature not supported), say so honestly. Never guess what the camera shows, never describe an earlier image as the current view, never invent facts, prices, or sources, and never claim to have done something you did not do.
     """
+    if AgentGatewayConfig.isReady {
+      text += "\n\nThe user has connected their own agent (OpenClaw). When they explicitly ask their agent or computer to do something (\"ask my agent…\", \"check my GitHub repository\"), delegate TASK: agent | QUERY: <the request>. The client asks the user to confirm before anything is sent."
+    }
     if AssistantPreferences.respondsOnlyWhenAddressed {
       text += "\n\nAddressed-only mode is on: respond only when the user clearly addresses you as \(assistantName). If speech is not addressed to you (for example the user is talking to someone else), stay silent and do not delegate."
     }
@@ -328,7 +332,7 @@ enum AssistantInstructions {
 
       Research the request with web search and write a compact report to be saved as a note (it will not be read aloud in full). Plain text with short headed sections: Summary (2–3 sentences), Key facts (dated where time-sensitive), Details, Sources (site names). Base facts on the search results, prefer official and recent sources, and say what could not be verified.
       """
-    case .generalChat:
+    case .generalChat, .agent:
       text += "\nAnswer conversationally."
     case nil:
       text += "\nDecide what you need. Use web search for anything current or changeable. Call look_at_camera only when the answer depends on what the user is looking at right now. Otherwise answer directly."
@@ -467,7 +471,7 @@ enum AssistantTools {
   static var actionSchema: (name: String, schema: [String: Any]) {
     let text: [String: Any] = ["type": "string"]
     let fields = ["title", "notes", "when", "end", "location", "url", "text", "recipient", "phone", "reply"]
-    var properties: [String: Any] = ["action": ["type": "string", "enum": DeviceActionKind.allCases.map(\.rawValue)]]
+    var properties: [String: Any] = ["action": ["type": "string", "enum": DeviceActionKind.plannable.map(\.rawValue)]]
     for field in fields { properties[field] = text }
     return (
       name: "device_action",

@@ -341,6 +341,12 @@ struct DiagnosticsView: View {
         row("Last audio event", audioRoute.lastEvent)
         row("Route preference", AudioRoutePreference.current.label)
       }
+      Section("Actions and agent") {
+        row("iPhone actions", AssistantPreferences.actionsEnabled ? "on" : "off")
+        row("Waiting for confirmation", orchestrator.pendingAction?.plan.summary ?? "none")
+        row("Last action result", orchestrator.lastActionResult.map { LogSanitizer.sanitize($0, limit: 160) } ?? "—")
+        row("Agent gateway", agentGatewayStatus)
+      }
       Section("Web search") {
         row("Enabled", AssistantPreferences.webSearchEnabled ? "yes" : "no")
         row("Last status", orchestrator.lastWebStatus)
@@ -383,6 +389,13 @@ struct DiagnosticsView: View {
     ModelSelector.model(
       for: kind, available: models, needsHostedWebSearch: web, catalog: catalog, needsImages: images,
       excluded: ModelHealth.shared.failedThisRun) ?? "—"
+  }
+
+  /// Host only: the token and the full address stay out of diagnostics.
+  private var agentGatewayStatus: String {
+    guard AgentGatewayConfig.isEnabled else { return "off" }
+    let host = AgentGatewayConfig.baseURL?.host ?? "no valid address"
+    return AgentGatewayConfig.isReady ? "ready (\(host))" : "enabled, not ready (\(host), token \(AgentTokenStore.hasToken ? "saved" : "missing"))"
   }
 
   private var modelHealthSummary: String {
@@ -502,6 +515,7 @@ struct DiagnosticsView: View {
       "latency: processing \(ms(metrics.processingMedianMs))/\(ms(metrics.processingP95Ms)) capture→phone \(ms(metrics.transportMedianMs))/\(ms(metrics.transportP95Ms)) frame age \(metrics.lastFrameAgeMs.map(String.init) ?? "—") ms; preview \(metrics.previewMode)",
       "audio: mic \(audioRoute.inputSummary); speaker \(audioRoute.outputSummary); interrupted \(audioRoute.isInterrupted); last \(audioRoute.lastEvent)",
       "web: enabled \(AssistantPreferences.webSearchEnabled); \(orchestrator.lastWebStatus)",
+      "actions: \(AssistantPreferences.actionsEnabled ? "on" : "off"); pending \(orchestrator.pendingAction?.plan.kind.rawValue ?? "none"); agent gateway \(agentGatewayStatus)",
       "live vision: \(liveVision.status.label); notes \(liveVision.updateCount); stable skips \(liveVision.skippedStable); error \(liveVision.lastError ?? "none"); last stop \(liveVision.lastStopReason ?? "—"); thermal \(thermalLabel)",
     ]
     for record in ledger.records.suffix(6) {

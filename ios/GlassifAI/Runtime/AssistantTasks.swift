@@ -13,6 +13,8 @@ enum AssistantTaskKind: String, Codable, CaseIterable, Equatable {
   case authorizedAction = "AUTHORIZED_ACTION"
   /// Research with live web search, written up and saved as a note.
   case report = "REPORT"
+  /// A request for the user's own OpenClaw agent gateway.
+  case agent = "AGENT"
 
   var usesCamera: Bool { self == .vision || self == .visionPlusWeb }
   var usesWeb: Bool { self == .webSearch || self == .visionPlusWeb || self == .report }
@@ -27,6 +29,7 @@ enum AssistantTaskKind: String, Codable, CaseIterable, Equatable {
     case .localMemory: "Memory"
     case .authorizedAction: "Action"
     case .report: "Report"
+    case .agent: "Agent"
     }
   }
 }
