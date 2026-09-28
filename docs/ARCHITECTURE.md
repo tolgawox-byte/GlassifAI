@@ -124,6 +124,8 @@ Metrics: connect time, and the median time from the end of the user's turn to th
 - When a note is due, it picks the best recent frame, asks the vision model for a one- or two-sentence description (FAST image, low effort), and appends it as **silent commentary context**, which is never spoken.
 - It stops at the time limit (default 10 min), when the conversation ends, or on a privacy wipe.
 
+Why notes instead of streaming frames: OpenVision's live mode streams frames (1 fps to Gemini Live, or images to OpenAI's public Realtime API), because those APIs accept image input. The ChatGPT-account realtime protocol this app uses (Codex "frameless bidi", `vendor/codex/codex-rs/codex-api/src/endpoint/realtime_websocket`) accepts only audio and text items, with context append on a speakable or a silent commentary channel. A vision model therefore turns frames into short text notes on the silent channel, and detailed questions still get a full-quality frame through the vision path.
+
 ## Hands-free
 
 `VoiceStartCoordinator` is the single start path for the call button, Siri shortcuts, Mode B, and a future Hey Meta invocation. It is idempotent. Mode B (`WakePhraseListener`) runs only while armed, the app is active, and no conversation is running; it uses on-device recognition only.
