@@ -217,6 +217,10 @@ class StreamSessionViewModel: ObservableObject {
   /// skipped until the user picks a different one.
   private var fallbackFrom: GlassesVideoTransport?
   private var watchdogTask: Task<Void, Never>?
+  private var startWatchdogTask: Task<Void, Never>?
+  /// The last stream error was a stream failure (not glasses off, folded,
+  /// or missing permission), which is what an unsupported codec looks like.
+  private var lastErrorWasStreamFailure = false
   /// One app-requested still capture at a time; photos that do not answer a
   /// pending request (shutter button, late arrivals) never reach vision.
   let stillPhotos = StillPhotoCoordinator()
@@ -379,6 +383,12 @@ class StreamSessionViewModel: ObservableObject {
         // the call screen, never as alert dialogs. Sleeping/absent glasses are
         // a plain wait; everything else maps to a typed issue.
         switch error {
+        case .videoStreamingError, .internalError, .timeout:
+          self.lastErrorWasStreamFailure = true
+        default:
+          self.lastErrorWasStreamFailure = false
+        }
+        switch error {
         case .deviceNotConnected, .deviceNotFound:
           self.glassesIssue = nil
         case .hingesClosed:
@@ -490,7 +500,25 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   func startSession() async {
+    armStartWatchdog()
     await streamSession?.start()
+  }
+
+  /// If an HEVC stream has not started 12 s after a start request and the
+  /// SDK reported a stream failure (not glasses off, folded or permission),
+  /// fall back to raw once, so the camera works even if HEVC is refused.
+  private func armStartWatchdog() {
+    guard activeTransport == .hevc, fallbackFrom == nil else { return }
+    startWatchdogTask?.cancel()
+    lastErrorWasStreamFailure = false
+    let generation = sessionGeneration
+    startWatchdogTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: 12_000_000_000)
+      guard let self, !Task.isCancelled, self.sessionGeneration == generation,
+            self.activeTransport == .hevc, self.streamingStatus != .streaming,
+            self.lastErrorWasStreamFailure else { return }
+      await self.fallBackToRaw(reason: "HEVC stream did not start (\(self.lastStreamError ?? "stream error"))")
+    }
   }
 
   private func showError(_ message: String) {
@@ -533,6 +561,8 @@ class StreamSessionViewModel: ObservableObject {
       let wasStreaming = streamingStatus == .streaming
       streamingStatus = .streaming
       glassesIssue = nil
+      startWatchdogTask?.cancel()
+      lastErrorWasStreamFailure = false
       if !wasStreaming { armTransportWatchdog() }
     }
   }
