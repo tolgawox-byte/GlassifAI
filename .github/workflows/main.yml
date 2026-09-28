@@ -6,6 +6,7 @@ on:
     branches:
       - autoloom-glasses-next
       - autoloom-glasses-vNext
+      - autoloom-glasses-jarvis-v1
 
 concurrency:
   group: ipa-${{ github.ref }}

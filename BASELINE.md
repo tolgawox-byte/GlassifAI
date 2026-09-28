@@ -1,6 +1,26 @@
 # Baseline — last device-verified working build
 
-## Current baseline for `autoloom-glasses-vNext` (recorded 2026-09-27)
+## Baseline for `autoloom-glasses-jarvis-v1` (recorded 2026-09-28)
+
+| Item | Value |
+| --- | --- |
+| Previous branch | `autoloom-glasses-vNext`, HEAD `38c251d` (docs only on top of `3cb0437`) |
+| Build of that branch | CI run [36362397832](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36362397832), commit `3cb0437`: iOS 99/99, Rust 5/5, Debug + Release IPAs |
+| Rollback tag | `baseline-3cb0437-vnext` (annotated, on `3cb0437`) |
+| Older rollback | `baseline-44f089d-vision-working`: the last build confirmed on the phone before vNext (DAT 0.4.0) |
+| New development branch | `autoloom-glasses-jarvis-v1` (from `38c251d`). `main`, `autoloom-glasses-next` and `autoloom-glasses-vNext` are left untouched |
+
+What the owner reports from using the current builds (brief of 2026-09-28):
+- ChatGPT device-code sign-in, realtime voice, Ray-Ban audio routing, iPhone and Ray-Ban camera, Ray-Ban vision, web and reasoning routing, the model catalogue, diagnostics and CI builds all work.
+- **Bug:** choosing another voice in Settings often still gives the same voice.
+- **Weak spots:**
+  - the assistant can feel robotic
+  - it often says "move closer"
+  - the main screen looks like a developer console
+
+---
+
+## Earlier baseline for `autoloom-glasses-vNext` (recorded 2026-09-27)
 
 | Item | Value |
 | --- | --- |
