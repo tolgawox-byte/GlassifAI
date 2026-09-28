@@ -278,14 +278,14 @@ final class AutoLoomAssistantTests: XCTestCase {
     let defaults = UserDefaults.standard
     let voice = defaults.object(forKey: AssistantPreferences.voiceKey)
     let language = defaults.object(forKey: AssistantPreferences.languageKey)
-    defaults.set("marin", forKey: AssistantPreferences.voiceKey)
+    defaults.set("cove", forKey: AssistantPreferences.voiceKey)
     defaults.set("tr", forKey: AssistantPreferences.languageKey)
     defer {
       defaults.set(voice, forKey: AssistantPreferences.voiceKey)
       defaults.set(language, forKey: AssistantPreferences.languageKey)
     }
     AssistantIdentity.setName("Alfred")
-    XCTAssertEqual(AssistantPreferences.voice, "marin")
+    XCTAssertEqual(AssistantPreferences.voice, "cove")
     XCTAssertEqual(AssistantPreferences.language, "tr")
   }
 
