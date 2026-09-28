@@ -246,7 +246,7 @@ final class ModelHealth: ObservableObject {
   }
 
   /// A request failure that points at the model rather than the input.
-  static func looksLikeModelProblem(_ message: String) -> Bool {
+  nonisolated static func looksLikeModelProblem(_ message: String) -> Bool {
     let text = message.lowercased()
     return ["model", "not supported", "unsupported", "does not exist", "not found", "not available", "access"]
       .contains { text.contains($0) }

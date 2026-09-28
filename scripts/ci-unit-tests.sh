@@ -55,6 +55,12 @@ xcodebuild test \
 status=${PIPESTATUS[0]}
 set -e
 
+if [ "$status" -ne 0 ]; then
+  # Test-target compile errors, visible without the raw log.
+  grep -E ": error: " "$LOG" | sed "s|$ROOT/||g" | sort -u | head -n 40 \
+    | while IFS= read -r line; do echo "::error title=Test build::${line}"; done || true
+fi
+
 python3 - "$RESULT" "$status" <<'PY'
 import json
 import subprocess
