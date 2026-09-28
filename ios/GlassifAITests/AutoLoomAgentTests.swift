@@ -38,9 +38,9 @@ final class AutoLoomAgentTests: XCTestCase {
   func testAgentRequestsAreConfirmedAndDestructiveOnesNeedATap() {
     var plan = DeviceActionPlan(kind: .agentTask)
     plan.text = "check my GitHub repository for open pull requests"
-    XCTAssertEqual(plan.risk, .save, "a spoken yes may confirm a harmless agent request")
+    XCTAssertEqual(plan.risk, .confirm, "a spoken yes may confirm a harmless agent request")
     plan.text = "delete the old branches and deploy to production"
-    XCTAssertEqual(plan.risk, .needsTap, "destructive agent requests need a tap")
+    XCTAssertEqual(plan.risk, .strongConfirm, "destructive agent requests need a tap")
   }
 
   func testPlannerCannotChooseTheAgent() {

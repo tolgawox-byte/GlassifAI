@@ -191,7 +191,7 @@ final class AutoLoomCoreTests: XCTestCase {
   func testRealtimeInstructionsCarryBrandRoutingAndHonesty() {
     let text = AssistantInstructions.realtime(memory: ["Budget is 500 CAD"])
     XCTAssertTrue(text.contains("AutoLoom Media Glasses"))
-    XCTAssertTrue(text.contains("TASK: <vision|vision_read|web|vision_web|reasoning|memory|action|confirm_action|cancel_action|report|live_vision_start|live_vision_stop|cancel>"))
+    XCTAssertTrue(text.contains("TASK: <vision|vision_read|web|vision_web|reasoning|memory|visual_memory|action|confirm_action|cancel_action|report|live_vision_start|live_vision_stop|cancel>"))
     XCTAssertTrue(text.contains("not an official OpenAI"))
     XCTAssertTrue(text.contains("Budget is 500 CAD"))
     let executor = AssistantInstructions.executor(kind: .vision, detectedLanguage: "Turkish")
@@ -391,17 +391,16 @@ final class AutoLoomTaskTests: XCTestCase {
     orchestrator.endVoiceSession()
   }
 
-  func testLocalMemoryIsOptInAndDeletable() {
-    let memory = LocalMemoryStore.shared
-    let wasEnabled = memory.isEnabled
-    defer { memory.isEnabled = wasEnabled }
+  func testMemoryIsExplicitAndDeletable() {
+    let defaults = UserDefaults(suiteName: "autoloom-tests-\(UUID().uuidString)")!
+    let memory = MemoryStore(inMemory: true, defaults: defaults)
     memory.isEnabled = false
-    XCTAssertFalse(memory.add("secret", source: "test"))
+    XCTAssertNil(memory.remember("secret", source: "test"), "nothing is saved while memory is off")
     memory.isEnabled = true
-    XCTAssertTrue(memory.add("Budget is 500 CAD", source: "test"))
+    XCTAssertNotNil(memory.remember("Budget is 500 CAD", source: "test"))
     XCTAssertTrue(memory.promptItems.contains("Budget is 500 CAD"))
-    XCTAssertEqual(memory.forget(matching: "budget"), 1)
-    memory.deleteAll()
-    XCTAssertTrue(memory.items.isEmpty)
+    XCTAssertEqual(memory.search("budget").count, 1)
+    memory.deleteAllMemories()
+    XCTAssertTrue(memory.memories.isEmpty)
   }
 }

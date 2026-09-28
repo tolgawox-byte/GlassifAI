@@ -36,28 +36,45 @@ final class AutoLoomActionTests: XCTestCase {
     return String(data: data, encoding: .utf8)!
   }
 
-  func testReminderWithTimeZoneOffsetParses() throws {
-    let now = ISO8601DateFormatter().date(from: "2026-09-27T20:00:00-04:00")!
-    let result = DeviceActionParser.parse(
-      json(["action": "create_reminder", "title": "Buy milk", "when": "2026-09-28T07:00:00-04:00"]), now: now)
-    let plan = try result.get()
+  private func local(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+    Calendar.current.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+  }
+
+  func testReminderTimeComesFromTheUsersWords() throws {
+    let now = local(2026, 9, 27, 20, 0)
+    let plan = try DeviceActionParser.parse(
+      json(["action": "create_reminder", "title": "Buy milk", "when": "yarın saat 7'de"]), now: now).get()
     XCTAssertEqual(plan.kind, .createReminder)
     XCTAssertEqual(plan.title, "Buy milk")
-    XCTAssertEqual(plan.date, ISO8601DateFormatter().date(from: "2026-09-28T11:00:00Z"))
-    XCTAssertEqual(plan.kind.risk, .save)
+    XCTAssertEqual(plan.date, local(2026, 9, 28, 7, 0))
+    XCTAssertEqual(plan.alternativeDate, local(2026, 9, 28, 19, 0), "morning or evening is asked, not guessed")
+    XCTAssertNotNil(plan.ambiguityNote)
+    XCTAssertEqual(plan.kind.risk, .confirm)
+  }
+
+  func testModelTimestampsAreIgnored() throws {
+    let now = local(2026, 9, 27, 20, 0)
+    let plan = try DeviceActionParser.parse(
+      json(["action": "create_reminder", "title": "Call Ali", "when": "2026-12-01T09:00:00-04:00"]),
+      query: "20 dakika sonra Ali'yi aramamı hatırlat", now: now).get()
+    XCTAssertEqual(plan.date, now.addingTimeInterval(20 * 60), "the user's words decide, not a model timestamp")
+    XCTAssertNil(plan.alternativeDate)
   }
 
   func testInvalidPlansAreRejectedWithAReason() {
-    let now = ISO8601DateFormatter().date(from: "2026-09-27T20:00:00-04:00")!
+    let now = local(2026, 9, 27, 20, 0)
     XCTAssertEqual(
-      DeviceActionParser.parse(json(["action": "create_reminder", "title": "x", "when": "2026-09-01T07:00:00-04:00"]), now: now),
+      DeviceActionParser.parse(json(["action": "create_reminder", "title": "x", "when": "bugün 13:00"]), now: now),
       .failure(.invalid("That time is in the past.")))
+    XCTAssertEqual(
+      DeviceActionParser.parse(json(["action": "create_reminder", "title": "x", "when": "sometime soonish"]), now: now),
+      .failure(.invalid("The time \"sometime soonish\" could not be understood.")))
     XCTAssertEqual(
       DeviceActionParser.parse(json(["action": "create_event", "title": "Lunch"]), now: now),
       .failure(.missing("when the event is")))
     XCTAssertEqual(
       DeviceActionParser.parse(json([
-        "action": "create_event", "title": "Lunch", "when": "2026-09-28T12:00:00-04:00", "end": "2026-09-28T11:00:00-04:00",
+        "action": "create_event", "title": "Lunch", "when": "yarın 12:00", "end": "11:00",
       ]), now: now),
       .failure(.invalid("The event ends before it starts.")))
     if case .success = DeviceActionParser.parse(json(["action": "open_url", "url": "http://192.168.1.1/admin"]), now: now) {
@@ -75,46 +92,68 @@ final class AutoLoomActionTests: XCTestCase {
   }
 
   func testEventDefaultsToOneHourAndPhoneIsNormalised() throws {
-    let now = ISO8601DateFormatter().date(from: "2026-09-27T20:00:00-04:00")!
+    let now = local(2026, 9, 27, 20, 0)
     let event = try DeviceActionParser.parse(
-      json(["action": "create_event", "title": "Dentist", "when": "2026-09-29 09:30"]), now: now).get()
+      json(["action": "create_event", "title": "Dentist", "when": "salı 09:30"]), now: now).get()
+    XCTAssertEqual(event.date, local(2026, 9, 29, 9, 30))
     XCTAssertEqual(event.endDate?.timeIntervalSince(event.date!), 3_600)
     let call = try DeviceActionParser.parse(json(["action": "call", "phone": "+1 (613) 555-0100", "recipient": "Office"]), now: now).get()
     XCTAssertEqual(call.phone, "+16135550100")
-    XCTAssertEqual(call.kind.risk, .needsTap)
+    XCTAssertEqual(call.kind.risk, .strongConfirm)
   }
 
   func testRiskLevels() {
     for kind: DeviceActionKind in [.openMaps, .openURL, .shareText, .call, .message] {
-      XCTAssertEqual(kind.risk, .needsTap, kind.rawValue)
+      XCTAssertEqual(kind.risk, .strongConfirm, kind.rawValue)
     }
-    for kind: DeviceActionKind in [.createReminder, .createEvent, .saveNote] {
-      XCTAssertEqual(kind.risk, .save, kind.rawValue)
+    for kind: DeviceActionKind in [.createReminder, .createEvent, .forgetMemory] {
+      XCTAssertEqual(kind.risk, .confirm, kind.rawValue)
     }
-    for kind: DeviceActionKind in [.listReminders, .todayEvents, .upcomingEvents, .copyText] {
-      XCTAssertEqual(kind.risk, .readOnly, kind.rawValue)
+    for kind: DeviceActionKind in [.listReminders, .todayEvents, .upcomingEvents, .copyText, .saveNote,
+                                   .scheduleNotification, .findContact] {
+      XCTAssertEqual(kind.risk, .safe, kind.rawValue)
     }
+    XCTAssertFalse(DeviceActionKind.plannable.contains(.forgetMemory), "only the memory flow forgets")
   }
 
   // MARK: Confirmation
 
-  func testSavesWaitForConfirmationAndRunOnYes() async {
+  func testNotesAreSavedDirectly() async {
     let orchestrator = AssistantOrchestrator.shared
     orchestrator.cancelPendingAction()
+    let store = MemoryStore.shared
     var plan = DeviceActionPlan(kind: .saveNote)
     plan.title = "Test note \(UUID().uuidString.prefix(6))"
     plan.text = "Parking level P2, spot 14"
+    let before = store.notes.count
+    let staged = await orchestrator.stage(plan)
+    XCTAssertTrue(staged.speakable.contains("Saved as an AutoLoom note"), staged.speakable)
+    XCTAssertNil(orchestrator.pendingAction, "an explicit note needs no extra confirmation")
+    XCTAssertEqual(store.notes.count, before + 1)
+    if let note = store.notes.first(where: { $0.title == plan.title }) {
+      store.deleteNote(note)
+    }
+  }
+
+  func testForgettingAMemoryWaitsForAYes() async {
+    let orchestrator = AssistantOrchestrator.shared
+    orchestrator.cancelPendingAction()
+    let store = MemoryStore.shared
+    let wasEnabled = store.isEnabled
+    store.isEnabled = true
+    defer { store.isEnabled = wasEnabled }
+    guard let record = store.remember("Test locker code \(UUID().uuidString.prefix(6))", source: "test") else {
+      return XCTFail("memory could not be saved")
+    }
+    var plan = DeviceActionPlan(kind: .forgetMemory)
+    plan.memoryID = record.id
+    plan.text = record.text
     let staged = await orchestrator.stage(plan)
     XCTAssertTrue(staged.speakable.contains("Waiting for confirmation"))
-    XCTAssertEqual(orchestrator.pendingAction?.plan, plan)
-    let before = AutoLoomNotesStore.shared.notes.count
+    XCTAssertNotNil(store.memory(id: record.id), "nothing is forgotten before the yes")
     let reply = await orchestrator.confirmPendingAction(byVoice: true)
-    XCTAssertTrue(reply.contains("Saved as an AutoLoom note"), reply)
-    XCTAssertNil(orchestrator.pendingAction)
-    XCTAssertEqual(AutoLoomNotesStore.shared.notes.count, before + 1)
-    if let note = AutoLoomNotesStore.shared.notes.first(where: { $0.title == plan.title }) {
-      AutoLoomNotesStore.shared.delete(note.id)
-    }
+    XCTAssertTrue(reply.contains("Forgotten"), reply)
+    XCTAssertNil(store.memory(id: record.id))
   }
 
   func testCallsAndMessagesAreNeverConfirmedByVoice() async {
