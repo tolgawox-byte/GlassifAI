@@ -6,6 +6,7 @@ enum VoiceStartReason: String {
   case button = "Button"
   case siriShortcut = "Siri / Shortcuts"
   case metaInvocation = "Hey Meta"
+  case wakePhrase = "Wake phrase (app open)"
 }
 
 /// Single entry point for starting a voice conversation. Makes starting
@@ -102,6 +103,44 @@ struct StartConversationIntent: AppIntent {
   }
 }
 
+/// "Hey Siri, ask AutoLoom": opens the app and asks a typed question; the
+/// answer appears on screen with its sources.
+struct AskAutoLoomIntent: AppIntent {
+  static var title: LocalizedStringResource = "Ask AutoLoom"
+  static var description = IntentDescription("Opens AutoLoom Media Glasses and asks a question. The answer appears on screen.")
+  static var openAppWhenRun: Bool = true
+
+  @Parameter(title: "Question", requestValueDialog: "What would you like to ask?")
+  var question: String
+
+  @MainActor
+  func perform() async throws -> some IntentResult {
+    AssistantOrchestrator.shared.submitTyped(question)
+    return .result()
+  }
+}
+
+/// Starts a conversation (if needed) and turns Live Vision on.
+struct StartLiveVisionIntent: AppIntent {
+  static var title: LocalizedStringResource = "Start Live Vision"
+  static var description = IntentDescription("Starts a conversation in AutoLoom Media Glasses with Live Vision on.")
+  static var openAppWhenRun: Bool = true
+
+  @MainActor
+  func perform() async throws -> some IntentResult {
+    _ = await VoiceStartCoordinator.shared.request(.siriShortcut)
+    let controller = LiveVisionController.shared
+    for _ in 0..<40 where !controller.isActive {
+      if controller.isVoiceActive() {
+        _ = controller.start()
+        break
+      }
+      try? await Task.sleep(nanoseconds: 250_000_000)
+    }
+    return .result()
+  }
+}
+
 struct AutoLoomShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(
@@ -113,6 +152,22 @@ struct AutoLoomShortcuts: AppShortcutsProvider {
       ],
       shortTitle: "Start Conversation",
       systemImageName: "waveform")
+    AppShortcut(
+      intent: AskAutoLoomIntent(),
+      phrases: [
+        "Ask \(.applicationName)",
+        "Ask \(.applicationName) a question",
+      ],
+      shortTitle: "Ask",
+      systemImageName: "text.bubble")
+    AppShortcut(
+      intent: StartLiveVisionIntent(),
+      phrases: [
+        "Start live vision in \(.applicationName)",
+        "\(.applicationName) live vision",
+      ],
+      shortTitle: "Live Vision",
+      systemImageName: "eye")
   }
 }
 
@@ -122,8 +177,10 @@ enum HandsFreeCapabilities {
   static let metaInvocationAvailable = false
   static let metaInvocationPhrase = "Hey Meta, start <app name registered in the Meta Developer Center>"
   static let metaInvocationRequirement =
-    "Needs Meta Wearables DAT 1.0 (this build uses 0.4.0), glasses firmware V128 and Meta AI app V290 " +
+    "Needs Meta Wearables DAT 1.0 (this build uses \(GlassesSDKInfo.datVersion)), glasses firmware V128 and Meta AI app V290 " +
     "(rollout from 2026-09-30), and Voice Invocation approval in the Wearables Developer Center."
+  /// No system-wide custom wake word exists for third-party apps on iOS or
+  /// the Meta glasses; the app-armed mode only listens while the app is open.
   static let customWakeWordSupported = false
   static let siriPhrase = "Hey Siri, start AutoLoom"
 }

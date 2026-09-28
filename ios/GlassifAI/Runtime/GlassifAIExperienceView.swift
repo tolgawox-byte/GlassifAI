@@ -13,6 +13,7 @@ struct GlassifAIExperienceView: View {
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
   @ObservedObject private var audioRoute = AudioRouteMonitor.shared
   @ObservedObject private var liveVision = LiveVisionController.shared
+  @ObservedObject private var wake = WakePhraseListener.shared
   @State private var liveVisionNotice: String?
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.debugOverlayKey) private var showsDebugOverlay = false
@@ -48,6 +49,13 @@ struct GlassifAIExperienceView: View {
           liveVisionButton
         }
         if liveVision.isActive || liveVisionNotice != nil { liveVisionChip }
+        if wake.status == .listening && !voice.isActive {
+          Label(word("Say \u{201C}\(AssistantIdentity.name)\u{201D} to start", "Başlatmak için \u{201C}\(AssistantIdentity.name)\u{201D} deyin"), systemImage: "ear")
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial, in: Capsule())
+        }
         if showsDebugOverlay { debugOverlay }
         Spacer(minLength: 12)
         conversationPanel

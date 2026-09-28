@@ -17,6 +17,17 @@ final class AutoLoomVoiceTests: XCTestCase {
       "a later, separate failure may reconnect again")
   }
 
+  func testWakePhraseMatchesTheNameAsAWord() {
+    XCTAssertTrue(WakePhraseMatcher.contains(name: "Jarvis", in: "Hey Jarvis"))
+    XCTAssertTrue(WakePhraseMatcher.contains(name: "Jarvis", in: "jarvis, what am I looking at?"))
+    XCTAssertTrue(WakePhraseMatcher.contains(name: "Jarvis", in: "Jarvis şu an neye bakıyorum"))
+    XCTAssertTrue(WakePhraseMatcher.contains(name: "Çağla", in: "hey cagla"), "accents are ignored")
+    XCTAssertTrue(WakePhraseMatcher.contains(name: "Mr Loom", in: "okay mr loom start"))
+    XCTAssertFalse(WakePhraseMatcher.contains(name: "Jarvis", in: "the jarvisian era"), "whole words only")
+    XCTAssertFalse(WakePhraseMatcher.contains(name: "Nova", in: "casanova"))
+    XCTAssertFalse(WakePhraseMatcher.contains(name: "Al", in: "al"), "names shorter than 3 letters are ignored")
+  }
+
   @MainActor
   func testInterruptionWordsAreInTheVoiceInstructions() {
     let text = AssistantInstructions.realtime(memory: [], assistantName: "Jarvis")

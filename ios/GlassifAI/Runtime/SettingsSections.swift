@@ -165,6 +165,7 @@ struct PrivacySettingsView: View {
 /// system invocation (Meta, Apple) from the assistant's own name.
 struct HandsFreeView: View {
   @ObservedObject private var coordinator = VoiceStartCoordinator.shared
+  @ObservedObject private var wake = WakePhraseListener.shared
   @Environment(\.openURL) private var openURL
 
   var body: some View {
@@ -174,6 +175,14 @@ struct HandsFreeView: View {
         header: Text("Assistant name"),
         footer: Text("Controlled by AutoLoom (Settings → Assistant). Use it while a conversation is active: \"\(name), what am I looking at?\" It does not wake the glasses or the iPhone.")) {
         LabeledContent("Assistant", value: name)
+      }
+
+      Section(
+        header: Text("Listen for the name while the app is open (experimental)"),
+        footer: Text("Mode B. When on and the app is open on screen, on-device speech recognition listens for \"\(name)\" or \"Hey \(name)\" and then starts a conversation. It stops when the app leaves the screen, never runs in the background, and never sends audio anywhere while waiting; the orange microphone dot shows while it listens. Useful with the phone mounted and unlocked, for example in a car.")) {
+        Toggle("Listen for \"\(name)\"", isOn: $wake.isArmed)
+        LabeledContent("Status", value: wake.status.label)
+        LabeledContent("Starts by name", value: "\(wake.detections)")
       }
 
       Section(
@@ -198,7 +207,7 @@ struct HandsFreeView: View {
       Section("Background and locked phone") {
         LabeledContent("Start while the app is closed", value: "Via Siri; the iPhone must be unlocked")
         LabeledContent("Conversation already running", value: "Continues with the screen locked")
-        LabeledContent("Always-listening custom wake word", value: "Not supported by iOS — not implemented")
+        LabeledContent("Always-listening custom wake word", value: "Not supported by iOS — only while the app is open (above)")
       }
 
       Section("Recent invocations") {

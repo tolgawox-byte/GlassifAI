@@ -72,7 +72,10 @@ struct StreamSessionView: View {
       AssistantOrchestrator.shared.glassesStreamState = { stream.lastStreamState }
       let voiceSession = voice
       LiveVisionController.shared.isVoiceActive = { voiceSession.isActive }
+      WakePhraseListener.shared.isConversationActive = { voiceSession.isActive }
       VoiceStartCoordinator.shared.register(isActive: { voiceSession.isActive }) { _ in
+        // The conversation takes over the microphone.
+        WakePhraseListener.shared.stopListening(reason: nil)
         let source = CaptureSource(rawValue: UserDefaults.standard.string(forKey: CaptureSource.defaultsKey) ?? "")
           ?? .iPhoneCamera
         let route = AudioRoutePreference.current
@@ -95,7 +98,10 @@ struct StreamSessionView: View {
       Task { await switchCaptureSource() }
     }
     .onChange(of: voice.state) { _, _ in
-      Task { await updateGestureSession() }
+      Task {
+        await updateGestureSession()
+        await WakePhraseListener.shared.refresh()
+      }
     }
     .onChange(of: wearablesViewModel?.devices.first) { _, _ in
       Task { await updateGestureSession() }
