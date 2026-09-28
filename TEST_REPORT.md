@@ -10,7 +10,22 @@ Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actio
 ## Automated results
 
 <!-- AUTOMATED-RESULTS -->
-_Filled in from the CI run of the final commit._
+### Final build: run [36375889033](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36375889033), commit `26f3685`
+
+**BUILD PASS · iOS 126/126 UNIT PASS (0 skipped) · Rust 8/8 UNIT PASS.** Artifact `AutoLoomMediaGlasses-unsigned-IPAs` (55 MB, expires 2026-12-27) contains `AutoLoomMediaGlasses-Release-unsigned.ipa` (install this one) and `AutoLoomMediaGlasses-Debug-unsigned.ipa`.
+
+- iOS: the vNext suites (adapted to the new APIs) plus 27 more:
+  - `AutoLoomJarvisTests` 25
+  - `AutoLoomActionTests` net +2 (time from the user's words, model timestamps ignored, notes run directly, forgetting waits for a yes; replacing two older tests)
+- Rust: 8 (3 new: applied voice and model in the start result, requested voice applied, frameless voice list pinned to Codex).
+
+### Runs on `autoloom-glasses-jarvis-v1`
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [36375889033](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36375889033) | `26f3685` (final) | **BUILD PASS · iOS 126/126 · Rust 8/8** | Release IPA for the phone |
+| [36373200187](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36373200187) | `63b8cb3` | BUILD PASS · iOS 125/126 | `testCompressedRayBanFrameIsDecodedIntoFrameStore` failed once. That code is unchanged since vNext; the fix adds one retry with a fresh VideoToolbox session and a static test-host screen. The test passed in the final run |
+| [36371678490](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36371678490) | `bb8da67` | BUILD FAIL | `ParsedTime` memberwise argument order |
 
 ## What the automated tests cover (new in Jarvis v1)
 
