@@ -4,7 +4,7 @@ All notable changes are documented here. The project follows [Keep a Changelog](
 
 ## [AutoLoom Jarvis v1.1 — DAT 1.0 variant] — branch `autoloom-glasses-dat1`
 
-Jarvis v1.1 (below) moved to Meta Wearables DAT **1.0.0** as a separate build, `AutoLoomMediaGlasses-DAT1-*-unsigned.ipa`, for glasses with firmware V128 and Meta AI V290 (rollout from 2026-09-30). The 0.5.0 build stays the default. CI-built with the unit tests passing; the Mock Device Kit integration tests compile but are not run in CI. See `docs/DAT_1_MIGRATION.md`.
+Jarvis v1.1 and v1.1.1 (below) moved to Meta Wearables DAT **1.0.0** as a separate build, `AutoLoomMediaGlasses-DAT1-*-unsigned.ipa`, for glasses with firmware V128 and Meta AI V290 (rollout from 2026-09-30). The 0.5.0 build stays the default. CI-built with the unit tests passing; the Mock Device Kit integration tests compile but are not run in CI. See `docs/DAT_1_MIGRATION.md`.
 
 ### Changed
 - **Camera on the DAT 1.0 session API:** one `DeviceSession`, `addCamera(config:)`, the `stream` child for video (same pipeline, HEVC and raw fallback). iOS 17.2 minimum. `NSBonjourServices` and the Local Network description added, as Meta's 1.0 guide requires for Wi-Fi streaming.
@@ -15,6 +15,17 @@ Jarvis v1.1 (below) moved to Meta Wearables DAT **1.0.0** as a separate build, `
 - **Standalone full-resolution photo** (`Camera.photo`, Meta beta) for high-detail vision, with one startup retry, a transfer-aware wait and the best video frame as fallback.
 - **"Hey Meta, start AutoLoom"** listener (`VoiceInvocationsStream`); needs Meta's Voice Invocation approval.
 - Diagnostics: device session and photo state; Hey Meta listener status in Settings → Hands-free.
+## [AutoLoom Jarvis v1.1.1] — branch `autoloom-glasses-jarvis-v1`
+
+From the open-source review (brief §69, `docs/OPEN_SOURCE_RESEARCH.md`). Not device-verified.
+
+### Fixed
+- **Wake phrase restart loop.** Cancelling a recognition request also reports an end, and that report restarted the *new* request, so after the first 50 s recycle the listener could cancel and recreate requests without end. Only the current request's end restarts recognition now, and requests that end within a second back off 0.6–5 s (the glasses' Bluetooth microphone can end them at once).
+- **"No analytics" is now true.** Meta's DAT SDK collects analytics (and, on DAT 1.0, SDK crash reports) unless `Info.plist` opts out; the app now opts out of both.
+
+### Added
+- **Changes after camera, web or agent content need a yes.** A reminder, event, note, notification or copy that the planner model proposes in a turn that brought camera, web or agent content waits for a spoken yes or a tap. The local parser's commands, which come from the user's own words, are unchanged.
+- `docs/OPEN_SOURCE_RESEARCH.md`.
 
 ## [AutoLoom Jarvis v1.1] — branch `autoloom-glasses-jarvis-v1`
 

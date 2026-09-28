@@ -32,6 +32,7 @@ State D uses the DAT 0.5.0 `Device.linkState` / `addLinkStateListener` event, a 
 
 - `WakePhraseListener` runs `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`. If the iPhone cannot recognise on-device, the feature reports "unavailable": audio is never streamed to a server while waiting.
 - Recognition sessions are recycled every 50 s **without** restarting the microphone (`RecognitionFeed`), so an already running listener can continue in the background.
+- Only the current recognition request's end starts the next one. Cancelling a request also reports an end, and before v1.1.1 that report restarted the new request, which could loop without end. A request that ends within a second of starting (a Bluetooth microphone can end them at once, as OpenVision documents) is restarted after a growing pause, 0.6 s up to 5 s.
 - After a hands-free conversation ends in the background, the call keeps the audio session active and the listener tries to take the microphone back. If iOS refuses, the state becomes "paused" and nothing is faked.
 - `WakePhraseMatcher` folds case, accents and Turkish letters, matches whole words, and accepts split or joined compounds ("auto loom" = "AutoLoom"). A phrase that starts with "hey"/"ok" also matches without it.
 - On a match: `VoiceStartCoordinator.request(.wakePhrase)` (idempotent) → the conversation starts. Nothing is played or said when the phrase is heard: the user hears the chime and/or "Bağlandım, dinliyorum." only when the connection is **ready** (next section).

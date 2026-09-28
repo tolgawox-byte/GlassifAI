@@ -44,7 +44,7 @@ Denied permissions degrade gracefully: without the camera the assistant still ta
 | ChatGPT tokens | Only to OpenAI | auth.openai.com / chatgpt.com | iOS Keychain, `AfterFirstUnlockThisDeviceOnly` |
 | Diagnostics | Only if you copy and share the report yourself | — | In memory; sanitized |
 
-The app has no AutoLoom backend and no analytics, and it never uploads anything to AutoLoom, Supabase, Vercel, or any other service.
+The app has no AutoLoom backend and no analytics of its own, and it never uploads anything to AutoLoom, Supabase, Vercel, or any other service. Meta's DAT SDK collects analytics by default (and, from DAT 1.0, SDK crash reports); the app opts out of both in `Info.plist` (`MWDAT` → `Analytics` / `CrashReporting` → `OptOut` = YES), as the SDK's README describes.
 
 ## Security controls
 

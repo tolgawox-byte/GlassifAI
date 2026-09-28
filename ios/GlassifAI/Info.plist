@@ -62,6 +62,17 @@
 		<!-- Without Developer Mode, this key will need to be set with your Apple Developer Team ID - Set this in Xcode under Signing & Capabilities -->
 		<key>TeamID</key>
 		<string>$(DEVELOPMENT_TEAM)</string>
+		<!-- The DAT SDK's analytics and SDK crash capture are on unless opted out (SDK README). -->
+		<key>Analytics</key>
+		<dict>
+			<key>OptOut</key>
+			<true/>
+		</dict>
+		<key>CrashReporting</key>
+		<dict>
+			<key>OptOut</key>
+			<true/>
+		</dict>
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>

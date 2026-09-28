@@ -52,6 +52,14 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     }
   }
 
+  /// Changes something on the phone; the other SAFE kinds only read.
+  var writes: Bool {
+    switch self {
+    case .createReminder, .createEvent, .saveNote, .scheduleNotification, .copyText: true
+    default: false
+    }
+  }
+
   /// Kinds the action planner may choose.
   static var plannable: [DeviceActionKind] {
     allCases.filter { $0 != .agentTask && $0 != .forgetMemory }
@@ -124,11 +132,18 @@ struct DeviceActionPlan: Equatable {
   var memoryID: UUID?
   /// The planner's short explanation (used for `none`).
   var reply: String = ""
+  /// Planned by the model in a turn that also brought camera, web or agent
+  /// content (`AssistantOrchestrator.runAction`).
+  var afterUntrustedContent = false
 
   /// Agent requests that sound destructive (deleting, deploying, payments,
   /// email) need a tap, even though other agent requests accept a spoken yes.
+  /// A change planned right after camera, web or agent content may carry
+  /// instructions from that content, so it waits for the user's yes;
+  /// outbound actions need a tap anyway.
   var risk: DeviceActionKind.Risk {
     if kind == .agentTask, ActionGuard.soundsDestructive(text ?? "") { return .strongConfirm }
+    if afterUntrustedContent, kind.writes, kind.risk == .safe { return .confirm }
     return kind.risk
   }
 

@@ -21,6 +21,8 @@ voice model: TASK: action | QUERY: …   (commands the parser does not recognise
 
 The model plans at most; deterministic code validates and executes. Text from web pages, images, OCR or signs never becomes an action, recipient, number or link — only the user's own words reach the bridge.
 
+This is enforced in code as well as in the prompts: when camera, web or agent content has entered the conversation in the current user turn (vision, vision + web, visual memory, web search, report, agent), a change the planner model proposes in that same turn (reminder, event, note, notification, copy) is raised from SAFE to CONFIRM and waits for a spoken yes or a tap. Reading actions stay SAFE, and outbound actions need a tap anyway. Commands the local parser reads from the user's own words are not affected. Test: `AutoLoomActionTests.testChangesPlannedAfterUntrustedContentWaitForAYes`.
+
 ## Registry
 
 | Tool | Actions | Risk | Permission |

@@ -173,6 +173,12 @@ final class WakePhraseListener: ObservableObject {
   private let feed = RecognitionFeed()
   private var task: SFSpeechRecognitionTask?
   private var restartTask: Task<Void, Never>?
+  /// Bumped for every recognition request, so a callback from an earlier
+  /// (cancelled or finished) request never restarts the current one.
+  private var recognitionGeneration = 0
+  private var recognitionStartedAt = Date.distantPast
+  /// Requests in a row that ended within a second; restarts back off.
+  private var quickEnds = 0
   private var observers: [NSObjectProtocol] = []
 
   private init() {
@@ -315,6 +321,9 @@ final class WakePhraseListener: ObservableObject {
   /// which lets it continue in the background.
   private func beginRecognition() {
     guard let recognizer, tapInstalled else { return }
+    recognitionGeneration += 1
+    let generation = recognitionGeneration
+    recognitionStartedAt = Date()
     task?.cancel()
     let request = SFSpeechAudioBufferRecognitionRequest()
     request.requiresOnDeviceRecognition = true
@@ -325,7 +334,7 @@ final class WakePhraseListener: ObservableObject {
     task = recognizer.recognitionTask(with: request) { [weak self] result, error in
       let text = result?.bestTranscription.formattedString ?? ""
       let finished = error != nil || (result?.isFinal ?? false)
-      Task { @MainActor in self?.handle(text: text, finished: finished) }
+      Task { @MainActor in self?.handle(text: text, finished: finished, generation: generation) }
     }
     restartTask?.cancel()
     restartTask = Task { @MainActor [weak self] in
@@ -346,8 +355,9 @@ final class WakePhraseListener: ObservableObject {
     beginRecognition()
   }
 
-  private func handle(text: String, finished: Bool) {
+  private func handle(text: String, finished: Bool, generation: Int) {
     guard task != nil else { return }
+    // A phrase counts from any request, including the one just replaced.
     if WakePhraseMatcher.matches(phrase: WakePhraseSettings.phrase, in: text) {
       detections += 1
       stopListening(reason: nil)
@@ -355,8 +365,34 @@ final class WakePhraseListener: ObservableObject {
       Task { await VoiceStartCoordinator.shared.request(.wakePhrase) }
       return
     }
-    if finished {
+    // Only the current request's end restarts recognition: cancelling the
+    // previous request also reports an end, and restarting on it would
+    // cancel the current one in an endless loop.
+    guard finished, generation == recognitionGeneration else { return }
+    scheduleRecycle()
+  }
+
+  /// Restarts recognition after the current request ended. A request that
+  /// ended within a second of starting (a Bluetooth microphone can end them
+  /// at once) is restarted after a growing pause, 0.6 s up to 5 s, so the
+  /// app never spins.
+  private func scheduleRecycle() {
+    if Date().timeIntervalSince(recognitionStartedAt) < 1 {
+      quickEnds += 1
+    } else {
+      quickEnds = 0
+    }
+    guard quickEnds > 0 else {
       recycleRecognition()
+      return
+    }
+    let delay = min(5, 0.6 * pow(2.0, Double(quickEnds - 1)))
+    let generation = recognitionGeneration
+    restartTask?.cancel()
+    restartTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+      guard !Task.isCancelled, let self, self.recognitionGeneration == generation else { return }
+      self.recycleRecognition()
     }
   }
 
@@ -364,6 +400,7 @@ final class WakePhraseListener: ObservableObject {
     let wasListening = isListening
     restartTask?.cancel()
     restartTask = nil
+    quickEnds = 0
     task?.cancel()
     task = nil
     feed.finish()

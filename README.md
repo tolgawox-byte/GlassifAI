@@ -126,7 +126,7 @@ The repository intentionally excludes the original VisionClaw gateway, Android e
 - Tokens and camera images are never written to GlassifAI logs.
 - Visual frames are bounded JPEGs held in memory and sent only for visual questions.
 - Disconnecting removes the local ChatGPT session.
-- There is no TLS bypass, credential pooling, analytics SDK, or GlassifAI-controlled backend.
+- There is no TLS bypass, credential pooling, or GlassifAI-controlled backend. The Meta DAT SDK's built-in analytics and SDK crash capture are on by default; this app opts out of both in `Info.plist` (`MWDAT` → `Analytics` / `CrashReporting` → `OptOut`).
 
 ## Important compatibility note
 
