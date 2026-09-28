@@ -52,7 +52,7 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | "Hey Meta, start AutoLoom" | **UNAVAILABLE** | Needs DAT 1.0, firmware V128, Meta AI V290 and Voice Invocation approval in the Wearables Developer Center |
 | A system-wide custom wake word | **UNAVAILABLE** | Not offered to third-party apps |
 | Routines: "İşe başlıyorum" (today's tasks + calendar + arms Hands-Free Ready), "günün özeti" | **EXPERIMENTAL** | Reads only phone data; weather/news not included |
-| Daily briefing on the first conversation of the day | **UNAVAILABLE** in this build | Available on request ("günün özeti"); no automatic briefing |
+| Daily briefing on the first conversation of the day | **EXPERIMENTAL** (off by default) | Settings → Name & conversation → Daily briefing: once a day, after the ready greeting, from the calendar, reminders and AutoLoom tasks on this iPhone; also on request ("günün özeti") |
 
 ## Memory, notes and tasks
 
@@ -96,7 +96,7 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Camera diagnostics screen | **EXPERIMENTAL** | All technical camera numbers live here; none on the Assistant screen |
 | High-detail retry before "move closer" | **EXPERIMENTAL** | Best frame, OCR, zoomed crop, upscaling |
 | Translation of what is in view ("bunu Türkçeye çevir") | **EXPERIMENTAL** | High-detail read + translation |
-| Ray-Ban full-resolution photo (`Camera.photo`) | **UNAVAILABLE** in this build | DAT 1.0 (beta API) + firmware V128. Plan and variant: `docs/DAT_1_MIGRATION.md` |
+| Ray-Ban full-resolution photo (`Camera.photo`) | **UNAVAILABLE** in this build | DAT 1.0 (beta API) + firmware V128. Built in the DAT 1.0 variant (`autoloom-glasses-dat1`): `docs/DAT_1_MIGRATION.md` |
 | Face recognition | **UNAVAILABLE** | Not built |
 
 ## Interface

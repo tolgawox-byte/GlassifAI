@@ -1,6 +1,6 @@
 # Meta Wearables DAT 1.0 — migration plan
 
-**Status in Jarvis v1: not migrated.** The app stays on DAT **0.5.0**, the version the vNext camera work was built and CI-tested against. This document is the plan for a separate, device-tested migration.
+**Status on this branch: not migrated.** This build stays on DAT **0.5.0**, the version the vNext camera work was built and CI-tested against. The migration below is now built as a separate variant on branch **`autoloom-glasses-dat1`** (IPA `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa`); that branch's copy of this document describes what it does and lists its device tests. Nothing in it has been tested on glasses.
 
 ## Why not in this build
 

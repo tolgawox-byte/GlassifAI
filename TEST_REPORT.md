@@ -12,6 +12,7 @@ Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actio
 <!-- AUTOMATED-RESULTS-V11 -->
 | Run | Commit | Result | Notes |
 |---|---|---|---|
+| [36387415366](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36387415366) | `1d4651d` | **BUILD PASS · iOS 145/145 · Rust 8/8** | **Final run for v1.1 — install this Release IPA.** Daily briefing, possessive reminder phrasings, brief scenarios; docs |
 | [36385963557](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36385963557) | `98e5feb` | **BUILD PASS · iOS 143/143 · Rust 8/8** | Voice actions, memory, tasks, connection feedback, Jarvis Style; Debug + Release IPAs |
 | [36382827852](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36382827852) | `a720297` | **BUILD PASS · iOS 126/126 · Rust 8/8** | Camera background fix (lifecycle states, decoder, `bluetooth-central`) |
 
@@ -37,8 +38,8 @@ New iOS tests in v1.1 (`AutoLoomVoiceActionTests`, plus updated risk and greetin
 ## Physical tests for Jarvis v1.1 (iPhone + Ray-Ban Meta Gen 1)
 
 **Before you start**
-1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run below (`docs/WINDOWS_INSTALL.md`).
-2. Settings → Developer → Diagnostics: **Commit** matches the run, **DAT SDK** = 0.5.0.
+1. Install **AutoLoomMediaGlasses-Release-unsigned.ipa** from the final run, [36387415366](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36387415366) (`docs/WINDOWS_INSTALL.md`).
+2. Settings → Developer → Diagnostics: **Commit** = `1d4651d0fd33`, **DAT SDK** = 0.5.0. (The DAT 1.0 variant has its own tests: `docs/DAT_1_MIGRATION.md`.)
 3. Settings → Name & conversation: name **Jarvis**. Settings → Wake phrase & hands-free: phrase **Hey Jarvis**.
 4. After a failed test: Developer → Action & task trace → **Copy sanitized task trace** (it now includes the voice actions), and keep the text. For camera tests also copy the Camera diagnostics transitions.
 
