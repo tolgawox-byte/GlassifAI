@@ -281,6 +281,17 @@ struct SettingsView: View {
         Section(
           header: Text("About"),
           footer: Text(AutoLoomBrand.independenceNotice)) {
+          HStack(spacing: 14) {
+            GlassifAIMark(size: 52)
+              .padding(10)
+              .background(AutoLoomTheme.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+              Text(AutoLoomBrand.appName).font(.headline)
+              Text("by \(AutoLoomBrand.company)").font(.subheadline).foregroundStyle(.secondary)
+            }
+          }
+          .padding(.vertical, 4)
+          .accessibilityElement(children: .combine)
           LabeledContent("Version", value: "\(AppInfo.version) (\(AppInfo.build))")
           LabeledContent("Build", value: AppInfo.commit)
           Label("Live voice through your ChatGPT account", systemImage: "waveform")

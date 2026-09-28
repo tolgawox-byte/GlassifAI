@@ -24,9 +24,9 @@ enum AutoLoomTheme {
     endPoint: .bottom)
 
   static let markGradient = LinearGradient(
-    colors: [silver, electricBlue],
-    startPoint: .leading,
-    endPoint: .trailing)
+    colors: [.white, silver],
+    startPoint: .top,
+    endPoint: .bottom)
 }
 
 /// Kept for existing call sites; now maps to the AutoLoom palette.
@@ -49,15 +49,20 @@ struct GlassifAIBackdrop: View {
   }
 }
 
-/// The AutoLoom "A" symbol, derived from the brand logo (asset `BrandMark`).
+/// The AutoLoom Media "AL" monogram (asset `BrandMark`, derived from the
+/// source logo `assets/brand/LOGO 2.png` by `scripts/make-brand-assets.py`).
 struct AutoLoomMark: View {
   let size: CGFloat
+  /// White by default; pass a gradient for accents.
+  var style: AnyShapeStyle = AnyShapeStyle(Color.white)
 
   var body: some View {
     Image("BrandMark")
       .resizable()
+      .renderingMode(.template)
       .scaledToFit()
-      .frame(width: size, height: size * 0.56)
+      .foregroundStyle(style)
+      .frame(width: size, height: size * 0.576)
       .accessibilityHidden(true)
   }
 }
@@ -67,7 +72,8 @@ struct GlassifAIMark: View {
   let size: CGFloat
 
   var body: some View {
-    AutoLoomMark(size: size)
+    AutoLoomMark(size: size, style: AnyShapeStyle(AutoLoomTheme.markGradient))
+      .shadow(color: AutoLoomTheme.electricBlue.opacity(0.45), radius: size * 0.12, y: size * 0.04)
   }
 }
 
