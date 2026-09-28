@@ -53,24 +53,36 @@ final class VideoDecoder {
       try createDecompressionSession(formatDescription: formatDescription)
     }
 
-    guard let session = decompressionSession else {
+    guard var session = decompressionSession else {
       throw DecoderError.invalidFormat
     }
 
-    var flagOut = VTDecodeInfoFlags(rawValue: 0)
-    let result = VTDecompressionSessionDecodeFrame(
-      session,
-      sampleBuffer: sampleBuffer,
-      flags: [._1xRealTimePlayback],
-      frameRefcon: nil,
-      infoFlagsOut: &flagOut
-    )
+    var result = Self.decodeFrame(sampleBuffer, with: session)
+    if result == kVTInvalidSessionErr || result == kVTVideoDecoderMalfunctionErr {
+      // A session can become unusable (for example after the app returns
+      // from the background); a fresh session gets one more try.
+      try recreateDecompressionSession(formatDescription: formatDescription)
+      guard let fresh = decompressionSession else { throw DecoderError.decodingFailed(result) }
+      session = fresh
+      result = Self.decodeFrame(sampleBuffer, with: session)
+    }
 
     guard result == noErr else {
       throw DecoderError.decodingFailed(result)
     }
 
     VTDecompressionSessionWaitForAsynchronousFrames(session)
+  }
+
+  private static func decodeFrame(_ sampleBuffer: CMSampleBuffer, with session: VTDecompressionSession) -> OSStatus {
+    var flagOut = VTDecodeInfoFlags(rawValue: 0)
+    return VTDecompressionSessionDecodeFrame(
+      session,
+      sampleBuffer: sampleBuffer,
+      flags: [._1xRealTimePlayback],
+      frameRefcon: nil,
+      infoFlagsOut: &flagOut
+    )
   }
 
   func invalidateSession() {

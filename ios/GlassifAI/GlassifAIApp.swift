@@ -40,10 +40,21 @@ struct GlassifAIApp: App {
 
   var body: some Scene {
     WindowGroup {
-      VisionRootView(wearables: wearables)
-        .preferredColorScheme(.dark)
+      if AppRuntime.isUnitTestHost {
+        // Unit tests only use the app as their host: keep the screen static
+        // (no onboarding animation, no sign-in restore) so tests run on a
+        // quiet simulator.
+        Color.black
+      } else {
+        VisionRootView(wearables: wearables)
+          .preferredColorScheme(.dark)
+      }
     }
   }
+}
+
+enum AppRuntime {
+  static let isUnitTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 }
 
 private enum GlassifAIPreviewMode {
