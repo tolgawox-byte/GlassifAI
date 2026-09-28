@@ -107,7 +107,9 @@ jobs:
           name: AutoLoomMediaGlasses-DAT1-unsigned-IPAs
           path: AutoLoomMediaGlasses-DAT1-*-unsigned.ipa
 
+      # A hung simulator must not hold the runner for six hours.
       - name: Unit tests (iOS Simulator)
+        timeout-minutes: 45
         run: |
           chmod +x ./scripts/ci-unit-tests.sh
           ./scripts/ci-unit-tests.sh

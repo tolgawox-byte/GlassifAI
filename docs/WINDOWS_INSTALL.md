@@ -12,6 +12,8 @@ There is no Xcode on Windows. GitHub Actions builds everything: the Rust bridge,
    - `AutoLoomMediaGlasses-Release-unsigned.ipa`: **install this one**. It is optimized, so the camera pipeline, OCR, and UI run faster.
    - `AutoLoomMediaGlasses-Debug-unsigned.ipa`: the same code, unoptimized. Use it only if the Release build misbehaves.
 
+**DAT 1.0 variant:** the `autoloom-glasses-dat1` branch uploads **AutoLoomMediaGlasses-DAT1-unsigned-IPAs** with `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa` and `AutoLoomMediaGlasses-DAT1-Debug-unsigned.ipa`. Install it only on glasses with firmware V128 and Meta AI V290 (`docs/DAT_1_MIGRATION.md`). Both builds share the bundle id, so installing one replaces the other.
+
 If a build fails, the run page lists compiler errors and failed tests as annotations. You don't need to open the raw log.
 
 ## 2. Install (sideload)

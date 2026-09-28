@@ -145,6 +145,14 @@ struct StreamSessionView: View {
           wearables: wearables, deviceId: wearablesViewModel?.devices.first ?? wearables.devices.first)
       }
     }
+    .onChange(of: viewModel.hasActiveDevice) { _, available in
+      // DAT 1.0 ends the session when the glasses go away (folded, off, out
+      // of range) and does not reconnect it; a new one starts when they are
+      // back.
+      guard available, captureSource == .glasses, !viewModel.isStreaming else { return }
+      glassesAutoStarted = false
+      Task { await activateCaptureSource() }
+    }
     .onChange(of: wearablesViewModel?.glassesWorn) { _, worn in
       // DAT 1.0: glasses put on arm hands-free listening; taken off, it rests.
       WakePhraseListener.shared.glassesWorn = worn

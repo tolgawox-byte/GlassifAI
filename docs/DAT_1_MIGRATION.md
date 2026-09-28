@@ -23,6 +23,7 @@ Both builds use the bundle id `com.marcoiannello.GlassifAI`, so only one can be 
 |---|---|---|
 | Camera | `StreamSession` | One `DeviceSession` per glasses (`Wearables.createSession(deviceSelector:)`, `start()`), `session.addCamera(config:)` → `Camera` with `stream` and `photo` children. Same frame pipeline, HEVC transport, raw fallback and lock-screen handling |
 | High-detail vision ("oku", labels, VINs) | Sharpest recent video frame (720×1280 at most) | A **standalone photo** `capturePhoto(resolution: .full, quality: .high)` — Meta: native sensor, 4032×3024 — then downscaled to the 2048 px model budget; the video frame is the fallback |
+| Glasses folded, off or out of range | The stream waits for the glasses and resumes | DAT 1.0 stops the session and does not reconnect it (Meta: "inactive and not reconnecting"). The app starts a new session when the glasses are available again, when the app comes back on screen, or when a conversation starts |
 | Temple gestures | A second session's states | The camera session's `DeviceSessionState` (`started`/`paused` toggles mute; `stopped` ends the call). The app's own stop (switching to the iPhone camera) is not read as the wearer ending the call |
 | Wake-phrase arming "only while the glasses are …" | Connected (`LinkState`) | **Worn**: `Device.addDeviceStateListener` → `donState == .donned` and hinges not closed; falls back to the link state while unknown |
 | "Hey Meta, start AutoLoom" | Not available | `VoiceInvocationsStream` listener: answers each `LaunchApp` with `sendSuccess`, then starts a conversation through `VoiceStartCoordinator` (the same path as the button and the wake phrase). Only works after Meta approves Voice Invocation for this app |
@@ -61,7 +62,7 @@ Install `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa` from the CI run in `TES
 | D5 | Same as D4 with the glasses' shutter button pressed during the capture | The answer is about the requested photo; no crash | |
 | D6 | Lock screen tests L1–L5 (`TEST_REPORT.md`) | As on the 0.5.0 build; note whether streaming continues over Wi-Fi when locked | |
 | D7 | During a conversation: temple tap, tap again; then switch Settings → Camera to iPhone and back | Mute toggles; switching the camera does **not** end the conversation | |
-| D8 | During a conversation, fold the glasses | The conversation ends | |
+| D8 | During a conversation, fold the glasses; then unfold them without touching the phone | The conversation ends; after unfolding, the preview comes back by itself | |
 | D9 | Wake phrase on, "Only while the glasses are worn" on. Take the glasses off, then put them on | Settings → Hands-free status: "Waiting for the glasses to be worn" off the head; listening again when worn | |
 | D10 | After Meta approves Voice Invocation: "Hey Meta, start AutoLoom" | One conversation starts; Settings → Hands-free shows "Launches received" +1 and Recent starts "Hey Meta" | |
 | D11 | Glasses on older firmware (if available) | The app says the glasses need an update, or the camera stays unavailable with a clear message; no crash. Reinstall the 0.5.0 IPA | |

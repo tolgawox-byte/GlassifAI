@@ -239,6 +239,9 @@ class StreamSessionViewModel: ObservableObject {
   private var photoStartRequested = false
   /// A standalone photo is being taken: the stream is set aside on purpose.
   private var isTakingStandalonePhoto = false
+  /// A start is in progress; a second caller returns at once instead of
+  /// asking for permission or creating a session again.
+  private var isStartingSession = false
   /// Photo-child startups tried on this session. Meta: startup is the most
   /// common failure and the next attempt usually succeeds, so it is retried
   /// once on a fresh camera.
@@ -341,6 +344,11 @@ class StreamSessionViewModel: ObservableObject {
   @Published private(set) var lastStreamError: String?
 
   func handleStartStreaming() async {
+    // One start at a time: a second caller (the glasses coming back while the
+    // launch start still runs) must not ask for permission or a session again.
+    guard !isStartingSession else { return }
+    isStartingSession = true
+    defer { isStartingSession = false }
     glassesIssue = nil
     guard let wearables else {
       glassesIssue = .sdkUnavailable
@@ -396,10 +404,12 @@ class StreamSessionViewModel: ObservableObject {
         return
       }
     }
-    // `addCamera` returns nil until the session is started.
-    guard await waitUntil(timeout: 20, { session.state == .started }) else {
+    // `addCamera` returns nil until the session is started. A session that
+    // stops meanwhile (glasses folded, the app switched cameras) ends the wait.
+    _ = await waitUntil(timeout: 20) { session.state == .started || session.state == .stopped }
+    guard session.state == .started else {
       NSLog("[Stream] device session did not start (state %@)", String(describing: session.state))
-      glassesIssue = .reconnecting
+      if session.state != .stopped { glassesIssue = .reconnecting }
       if camera == nil { streamingStatus = .stopped }
       return
     }

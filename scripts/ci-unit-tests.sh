@@ -80,20 +80,35 @@ def xcresult(kind):
 
 
 summary = xcresult("summary") or {}
+run_time = ""
+try:
+    run_time = f", test run {float(summary['finishTime']) - float(summary['startTime']):.0f}s"
+except (KeyError, TypeError, ValueError):
+    pass
 print(
     "::notice title=iOS unit tests::"
     f"result={summary.get('result')} total={summary.get('totalTestCount')} "
     f"passed={summary.get('passedTests')} failed={summary.get('failedTests')} "
-    f"skipped={summary.get('skippedTests')} (xcodebuild exit {status})")
+    f"skipped={summary.get('skippedTests')} (xcodebuild exit {status}{run_time})")
 
 cases = []
+
+
+def seconds(node):
+    value = node.get("durationInSeconds")
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(node.get("duration", "")).replace(",", ".").rstrip("s").strip())
+    except ValueError:
+        return 0.0
 
 
 def walk(node, suite):
     kind = node.get("nodeType")
     name = node.get("name", "")
     if kind == "Test Case":
-        cases.append((suite, name, node.get("result", "?")))
+        cases.append((suite, name, node.get("result", "?"), seconds(node)))
         return
     next_suite = name if kind == "Test Suite" else suite
     for child in node.get("children", []) or []:
@@ -104,8 +119,11 @@ tests = xcresult("tests") or {}
 for node in tests.get("testNodes", []):
     walk(node, "")
 
-passed = [f"{suite}.{name}" for suite, name, result in cases if result == "Passed"]
-failed = [f"{suite}.{name}" for suite, name, result in cases if result not in ("Passed", "Skipped")]
+passed = [f"{suite}.{name}" for suite, name, result, _ in cases if result == "Passed"]
+failed = [f"{suite}.{name}" for suite, name, result, _ in cases if result not in ("Passed", "Skipped")]
+slowest = sorted(cases, key=lambda case: case[3], reverse=True)[:5]
+if slowest and slowest[0][3] > 0:
+    print("::notice title=Slowest iOS tests::" + "; ".join(f"{suite}.{name} {took:.1f}s" for suite, name, _, took in slowest))
 if passed:
     print("::notice title=Passed iOS tests (" + str(len(passed)) + ")::" + "; ".join(passed))
 if failed:
