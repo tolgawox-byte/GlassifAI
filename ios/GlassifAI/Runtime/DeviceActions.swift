@@ -537,8 +537,10 @@ final class DeviceActionExecutor {
       guard let id = plan.memoryID, let record = MemoryStore.shared.memory(id: id) else {
         throw ExecutionError.failed("That memory no longer exists.")
       }
+      // Read before deleting: a deleted SwiftData object must not be touched.
+      let forgotten = String(record.text.prefix(80))
       MemoryStore.shared.delete(record)
-      return "Forgotten: \(record.text.prefix(80))"
+      return "Forgotten: \(forgotten)"
     case .none:
       return plan.reply.isEmpty ? "No supported action was found for that request." : plan.reply
     case .openMaps, .openURL, .shareText, .call, .message:

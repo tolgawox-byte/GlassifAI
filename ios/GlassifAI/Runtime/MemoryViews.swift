@@ -250,6 +250,17 @@ struct MemoryDetailView: View {
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
+    // A deleted SwiftData object must not be read (for example after
+    // "Delete all" in the privacy center while this screen stays open).
+    if store.memories.contains(where: { $0 === record }) {
+      detail
+    } else {
+      Text(L.t("This memory was deleted.", "Bu anı silindi."))
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  private var detail: some View {
     List {
       if let data = record.thumbnail, let image = UIImage(data: data) {
         Image(uiImage: image)
@@ -295,8 +306,14 @@ struct MemoryDetailView: View {
     }
     .confirmationDialog(L.t("Forget this memory?", "Bu anı unutulsun mu?"), isPresented: $confirmForget, titleVisibility: .visible) {
       Button(L.t("Forget", "Unut"), role: .destructive) {
-        store.delete(record)
+        // Leave the screen first; it must not render a deleted object.
         dismiss()
+        let store = store
+        let record = record
+        Task { @MainActor in
+          try? await Task.sleep(nanoseconds: 400_000_000)
+          store.delete(record)
+        }
       }
     }
   }
@@ -371,6 +388,16 @@ struct NoteDetailView: View {
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
+    // A deleted SwiftData object must not be read.
+    if store.notes.contains(where: { $0 === note }) {
+      detail
+    } else {
+      Text(L.t("This note was deleted.", "Bu not silindi."))
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  private var detail: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 14) {
         Text(note.content)
@@ -424,8 +451,14 @@ struct NoteDetailView: View {
     }
     .confirmationDialog(L.t("Delete this note?", "Bu not silinsin mi?"), isPresented: $confirmDelete, titleVisibility: .visible) {
       Button(L.t("Delete", "Sil"), role: .destructive) {
-        store.deleteNote(note)
+        // Leave the screen first; it must not render a deleted object.
         dismiss()
+        let store = store
+        let note = note
+        Task { @MainActor in
+          try? await Task.sleep(nanoseconds: 400_000_000)
+          store.deleteNote(note)
+        }
       }
     }
   }

@@ -473,10 +473,9 @@ final class MemoryStore: ObservableObject {
 
   func update(_ record: MemoryRecord, title: String, text: String, kind: MemoryKind, category: MemoryCategory) {
     let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !cleaned.isEmpty else {
-      delete(record)
-      return
-    }
+    // Empty text is ignored (the editor disables Save); deleting here could
+    // leave an open detail screen showing a deleted object.
+    guard !cleaned.isEmpty else { return }
     record.text = String(cleaned.prefix(1_000))
     let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     record.title = String((cleanedTitle.isEmpty ? Self.defaultTitle(for: cleaned) : cleanedTitle).prefix(80))
