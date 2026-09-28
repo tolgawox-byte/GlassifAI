@@ -15,8 +15,11 @@ enum AssistantTaskKind: String, Codable, CaseIterable, Equatable {
   case report = "REPORT"
   /// A request for the user's own OpenClaw agent gateway.
   case agent = "AGENT"
+  /// "Remember what I'm looking at": a description of the current view is
+  /// saved as a visual memory (opt-in).
+  case visualMemory = "VISUAL_MEMORY"
 
-  var usesCamera: Bool { self == .vision || self == .visionPlusWeb }
+  var usesCamera: Bool { self == .vision || self == .visionPlusWeb || self == .visualMemory }
   var usesWeb: Bool { self == .webSearch || self == .visionPlusWeb || self == .report }
 
   var displayName: String {
@@ -30,6 +33,7 @@ enum AssistantTaskKind: String, Codable, CaseIterable, Equatable {
     case .authorizedAction: "Action"
     case .report: "Report"
     case .agent: "Agent"
+    case .visualMemory: "Visual memory"
     }
   }
 }
@@ -175,6 +179,8 @@ struct AssistantTaskRecord: Identifiable, Equatable {
   /// Vision profile chosen for this task (FAST / BALANCED / HIGH_DETAIL).
   var visionProfile: VisionDetail?
   var sourceCount = 0
+  /// Decisions worth tracing (high-detail retry, contact lookup, fallbacks).
+  var notes: [String] = []
 
   var cancelled: Bool {
     if case .cancelled = phase { return true }

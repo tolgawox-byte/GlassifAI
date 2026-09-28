@@ -136,7 +136,7 @@ enum ModelRole: String, CaseIterable, Identifiable {
   static func role(for kind: AssistantTaskKind?, needsHostedWebSearch: Bool) -> ModelRole {
     if needsHostedWebSearch { return .web }
     switch kind {
-    case .vision, .visionPlusWeb: return .vision
+    case .vision, .visionPlusWeb, .visualMemory: return .vision
     case .deepReasoning: return .reasoning
     case .webSearch: return .web
     default: return .general
