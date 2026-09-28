@@ -29,12 +29,17 @@ class WearablesViewModel: ObservableObject {
   @Published var showGettingStartedSheet: Bool = false
   @Published var showError: Bool = false
   @Published var errorMessage: String = ""
+  /// Whether the glasses report a connected link to this iPhone (DAT
+  /// `LinkState`); nil until a device is known. Used to arm hands-free
+  /// listening only from real SDK events.
+  @Published var glassesLinkConnected: Bool?
 
   private var registrationTask: Task<Void, Never>?
   private var deviceStreamTask: Task<Void, Never>?
   private var setupDeviceStreamTask: Task<Void, Never>?
   private let wearables: WearablesInterface
   private var compatibilityListenerTokens: [DeviceIdentifier: AnyListenerToken] = [:]
+  private var linkStateListenerTokens: [DeviceIdentifier: AnyListenerToken] = [:]
 
   init(wearables: WearablesInterface) {
     self.wearables = wearables
@@ -85,6 +90,8 @@ class WearablesViewModel: ObservableObject {
     // Remove listeners for devices that are no longer present
     let deviceSet = Set(devices)
     compatibilityListenerTokens = compatibilityListenerTokens.filter { deviceSet.contains($0.key) }
+    linkStateListenerTokens = linkStateListenerTokens.filter { deviceSet.contains($0.key) }
+    if devices.isEmpty { glassesLinkConnected = nil }
 
     // Add listeners for new devices
     for deviceId in devices {
@@ -102,6 +109,19 @@ class WearablesViewModel: ObservableObject {
         }
       }
       compatibilityListenerTokens[deviceId] = token
+
+      if linkStateListenerTokens[deviceId] == nil {
+        if deviceId == devices.first {
+          glassesLinkConnected = device.linkState == .connected
+        }
+        let isPrimary = deviceId == devices.first
+        linkStateListenerTokens[deviceId] = device.addLinkStateListener { [weak self] state in
+          guard isPrimary else { return }
+          Task { @MainActor in
+            self?.glassesLinkConnected = state == .connected
+          }
+        }
+      }
     }
   }
 
