@@ -61,7 +61,7 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 
 | Capability | Status | Notes |
 |---|---|---|
-| Deterministic time parsing (Turkish and English) | **EXPERIMENTAL** | 40+ unit-tested phrases. The model copies the user's words; model timestamps are ignored; morning/evening is asked when both fit |
+| Deterministic time parsing (Turkish and English) | **EXPERIMENTAL** | About 40 unit-tested phrases, including words that must not be read as times. The model copies the user's words; model timestamps are ignored; morning/evening is asked when both fit |
 | Reminders (create, list) | **PHYSICAL TEST REQUIRED** | EventKit; CONFIRM; success only after iOS saves it |
 | Calendar (today, upcoming, create) | **PHYSICAL TEST REQUIRED** | CONFIRM for creating |
 | Tasks tab (Today / Upcoming / Completed, create, complete, delete with confirmation, reschedule) | **PHYSICAL TEST REQUIRED** | On Apple Reminders |
