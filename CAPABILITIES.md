@@ -81,6 +81,7 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Local notifications | **PHYSICAL TEST REQUIRED** | SAFE |
 | Contacts lookup, maps, links, share, call, message | **EXPERIMENTAL** / **PHYSICAL TEST REQUIRED** | Unchanged; calls/messages/sharing need a tap |
 | Email, purchases, payments, deleting data, posting | **UNAVAILABLE** | Refused locally |
+| Camera, web or agent text never triggers a change (brief §70–71) | **EXPERIMENTAL** (v1.1.1) | Enforced in code: a change the planner proposes in a turn that brought camera, web or agent content waits for a spoken yes or a tap; see `docs/NATIVE_TOOLS.md` |
 | App Intents: Start Conversation, Ask AutoLoom, Create AutoLoom Note, Start Live Vision | **EXPERIMENTAL** | "Ask AutoLoom" now also runs commands ("not al: …") |
 | OpenClaw agent gateway | **EXPERIMENTAL** (optional) | Off by default |
 
@@ -117,3 +118,4 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Model discovery and task routing | **EXPERIMENTAL** | Unchanged |
 | Battery | **PHYSICAL TEST REQUIRED** | The glasses stream no longer pauses in the background (needed for locked-screen vision), so it uses more battery while the glasses stream; Live Vision and Hands-Free Ready stay time-limited |
 | Offline mode | **UNAVAILABLE** | Not built |
+| Meta DAT SDK analytics and SDK crash capture | **OFF** (v1.1.1) | Opted out in `Info.plist`; both are on by default in the SDK |

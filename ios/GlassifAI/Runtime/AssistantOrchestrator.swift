@@ -111,6 +111,9 @@ final class AssistantOrchestrator: ObservableObject {
 
   private(set) var sessionID: UUID?
   private(set) var turnID = 0
+  /// The user turn in which camera, web or agent content last entered the
+  /// conversation.
+  private var untrustedTurnID: Int?
   private var running: [UUID: Task<Void, Never>] = [:]
   private var handledHandoffs = Set<String>()
   private var awaitingSpeech: UUID?
@@ -393,6 +396,14 @@ final class AssistantOrchestrator: ObservableObject {
   }
 
   private func execute(taskID: UUID, envelope: DelegationEnvelope?, rawText: String) async -> Outcome {
+    let outcome = await executeTask(taskID: taskID, envelope: envelope, rawText: rawText)
+    if let kind = ledger.record(taskID)?.kind ?? outcome.kind, kind.bringsUntrustedContent {
+      untrustedTurnID = turnID
+    }
+    return outcome
+  }
+
+  private func executeTask(taskID: UUID, envelope: DelegationEnvelope?, rawText: String) async -> Outcome {
     let camera = captureSource()
     var kind: AssistantTaskKind?
     var query = rawText
@@ -693,6 +704,12 @@ final class AssistantOrchestrator: ObservableObject {
           if plan.kind == .call { return Outcome(speakable: text, kind: .authorizedAction) }
         }
       }
+      if untrustedTurnID == turnID {
+        // Text from the camera, the web or an agent never triggers a change
+        // by itself (brief: prompt injection), whatever the model decided.
+        plan.afterUntrustedContent = true
+        ledger.update(taskID) { $0.notes.append("needs a yes: camera, web or agent content in this turn") }
+      }
       staged = await stage(plan)
     }
     return Outcome(speakable: staged.speakable, display: staged.display, kind: .authorizedAction, failed: staged.failed)
@@ -754,8 +771,11 @@ final class AssistantOrchestrator: ObservableObject {
       }
     case .confirm:
       pendingAction = PendingDeviceAction(plan: plan)
+      let reason = plan.afterUntrustedContent
+        ? "It was planned right after content from the camera, the web or an agent, so it needs the user's yes. "
+        : ""
       return ActionStageResult(
-        speakable: "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to confirm. If they say yes, delegate TASK: confirm_action; if no, TASK: cancel_action. They can also tap Confirm or Cancel on the phone. Nothing is saved yet.",
+        speakable: reason + "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to confirm. If they say yes, delegate TASK: confirm_action; if no, TASK: cancel_action. They can also tap Confirm or Cancel on the phone. Nothing is saved yet.",
         display: plan.summary, failed: nil)
     case .strongConfirm:
       pendingAction = PendingDeviceAction(plan: plan)

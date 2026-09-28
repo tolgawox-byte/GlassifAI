@@ -2,6 +2,18 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1.1.1] — branch `autoloom-glasses-jarvis-v1`
+
+From the open-source review (brief §69, `docs/OPEN_SOURCE_RESEARCH.md`). Not device-verified.
+
+### Fixed
+- **Wake phrase restart loop.** Cancelling a recognition request also reports an end, and that report restarted the *new* request, so after the first 50 s recycle the listener could cancel and recreate requests without end. Only the current request's end restarts recognition now, and requests that end within a second back off 0.6–5 s (the glasses' Bluetooth microphone can end them at once).
+- **"No analytics" is now true.** Meta's DAT SDK collects analytics (and, on DAT 1.0, SDK crash reports) unless `Info.plist` opts out; the app now opts out of both.
+
+### Added
+- **Changes after camera, web or agent content need a yes.** A reminder, event, note, notification or copy that the planner model proposes in a turn that brought camera, web or agent content waits for a spoken yes or a tap. The local parser's commands, which come from the user's own words, are unchanged.
+- `docs/OPEN_SOURCE_RESEARCH.md`.
+
 ## [AutoLoom Jarvis v1.1] — branch `autoloom-glasses-jarvis-v1`
 
 Baseline: `26f3685` (tag `baseline-26f3685-jarvis-v1`, CI run 36375889033). Nothing below is device-verified yet; see `TEST_REPORT.md`.

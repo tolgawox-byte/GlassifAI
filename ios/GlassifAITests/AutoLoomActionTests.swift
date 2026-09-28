@@ -116,6 +116,31 @@ final class AutoLoomActionTests: XCTestCase {
     XCTAssertFalse(DeviceActionKind.plannable.contains(.forgetMemory), "only the memory flow forgets")
   }
 
+  /// Brief §70–71: camera, web or agent text never triggers a change by
+  /// itself. A change the model planned in such a turn waits for a yes.
+  func testChangesPlannedAfterUntrustedContentWaitForAYes() {
+    for kind: DeviceActionKind in [.createReminder, .createEvent, .saveNote, .scheduleNotification, .copyText] {
+      var plan = DeviceActionPlan(kind: kind)
+      XCTAssertEqual(plan.risk, .safe, kind.rawValue)
+      plan.afterUntrustedContent = true
+      XCTAssertEqual(plan.risk, .confirm, kind.rawValue)
+    }
+    for kind: DeviceActionKind in [.listReminders, .todayEvents, .upcomingEvents, .findContact] {
+      var plan = DeviceActionPlan(kind: kind)
+      plan.afterUntrustedContent = true
+      XCTAssertEqual(plan.risk, .safe, "reading changes nothing: \(kind.rawValue)")
+    }
+    var call = DeviceActionPlan(kind: .call)
+    call.afterUntrustedContent = true
+    XCTAssertEqual(call.risk, .strongConfirm, "outbound actions still need a tap")
+    for kind: AssistantTaskKind in [.vision, .visionPlusWeb, .visualMemory, .webSearch, .report, .agent] {
+      XCTAssertTrue(kind.bringsUntrustedContent, kind.rawValue)
+    }
+    for kind: AssistantTaskKind in [.generalChat, .deepReasoning, .localMemory, .authorizedAction] {
+      XCTAssertFalse(kind.bringsUntrustedContent, kind.rawValue)
+    }
+  }
+
   // MARK: Confirmation
 
   func testNotesAreSavedDirectly() async {

@@ -21,6 +21,9 @@ enum AssistantTaskKind: String, Codable, CaseIterable, Equatable {
 
   var usesCamera: Bool { self == .vision || self == .visionPlusWeb || self == .visualMemory }
   var usesWeb: Bool { self == .webSearch || self == .visionPlusWeb || self == .report }
+  /// Brings content the user did not say into the conversation: camera
+  /// images and OCR, web results, replies from the user's agent.
+  var bringsUntrustedContent: Bool { usesCamera || usesWeb || self == .agent }
 
   var displayName: String {
     switch self {
