@@ -56,7 +56,7 @@ private struct ChatGPTAccountSection: View {
   }
 }
 
-/// The Settings tab: ASSISTANT, AI, VISION, MEMORY, TOOLS, PRIVACY,
+/// The Settings tab: ASSISTANT, VOICE, AI, VISION, MEMORY, TOOLS, PRIVACY,
 /// DEVELOPER, ABOUT.
 struct SettingsView: View {
   var voice: GlassifAIRealtimeSession?
@@ -90,6 +90,15 @@ struct SettingsView: View {
           NavigationLink { AssistantSettingsView() } label: {
             row(L.t("Name & conversation", "İsim ve konuşma"), "person.wave.2", value: AssistantIdentity.name)
           }
+          NavigationLink { HandsFreeSettingsView() } label: {
+            row(L.t("Wake phrase & hands-free", "Uyandırma ve eller serbest"), "ear", value: wake.isArmed ? L.t("On", "Açık") : L.t("Off", "Kapalı"))
+          }
+          NavigationLink { AudioSettingsView() } label: {
+            row(L.t("Audio", "Ses çıkışı"), "speaker.wave.2", value: AudioRoutePreference.current.label)
+          }
+        }
+
+        Section(L.t("Voice", "Ses")) {
           NavigationLink {
             if let voice {
               VoiceSettingsView(voice: voice)
@@ -99,11 +108,14 @@ struct SettingsView: View {
           } label: {
             row(L.t("Voice", "Ses"), "waveform", value: voiceSummary)
           }
-          NavigationLink { HandsFreeSettingsView() } label: {
-            row(L.t("Wake phrase & hands-free", "Uyandırma ve eller serbest"), "ear", value: wake.isArmed ? L.t("On", "Açık") : L.t("Off", "Kapalı"))
-          }
-          NavigationLink { AudioSettingsView() } label: {
-            row(L.t("Audio", "Ses çıkışı"), "speaker.wave.2", value: AudioRoutePreference.current.label)
+          NavigationLink {
+            if let voice {
+              VoiceSettingsView(voice: voice)
+            } else {
+              Text(L.t("Voice settings are available on the main screen.", "Ses ayarları ana ekrandan kullanılabilir."))
+            }
+          } label: {
+            row(L.t("Connection feedback", "Bağlantı bildirimi"), "bell.and.waves.left.and.right", value: ConnectionFeedback.current.label)
           }
         }
 
@@ -113,7 +125,7 @@ struct SettingsView: View {
           }
           if chatGPT.isAuthenticated {
             NavigationLink { ModelSettingsView() } label: {
-              row(L.t("Models", "Modeller"), "cpu", value: modelOverride.isEmpty ? L.t("Automatic", "Otomatik") : modelOverride)
+              row(L.t("Intelligence", "Zekâ"), "cpu", value: modelOverride.isEmpty ? L.t("Automatic", "Otomatik") : modelOverride)
             }
           }
           NavigationLink { WebSettingsView() } label: {
@@ -151,6 +163,11 @@ struct SettingsView: View {
           }
           NavigationLink { TaskTraceView(voice: voice) } label: {
             row(L.t("Action & task trace", "İşlem ve görev izi"), "list.bullet.rectangle", value: nil)
+          }
+          if let voice {
+            NavigationLink { VoiceDiagnosticsView(voice: voice) } label: {
+              row(L.t("Voice diagnostics", "Ses tanılaması"), "waveform.badge.magnifyingglass", value: nil)
+            }
           }
           NavigationLink { CameraDiagnosticsView(glassesStream: glassesStream) } label: {
             row(L.t("Camera diagnostics", "Kamera tanılaması"), "gauge.with.dots.needle.33percent", value: nil)

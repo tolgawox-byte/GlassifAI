@@ -112,7 +112,8 @@ enum ConversationTimeout: Int, CaseIterable, Identifiable {
   }
 }
 
-/// The words spoken when a hands-free start opens the conversation.
+/// The words said when a new conversation is ready ("Bağlandım,
+/// dinliyorum."). Said only once the connection really works.
 enum GreetingStyle: String, CaseIterable, Identifiable {
   case minimal
   case normal
@@ -139,49 +140,12 @@ enum GreetingStyle: String, CaseIterable, Identifiable {
 
   func text(turkish: Bool, custom: String) -> String? {
     switch self {
-    case .minimal: return turkish ? "Evet?" : "Yes?"
-    case .normal: return turkish ? "Dinliyorum." : "I'm listening."
-    case .jarvis: return turkish ? "Buyurun efendim." : "At your service."
+    case .minimal: return turkish ? "Bağlandım." : "Connected."
+    case .normal: return turkish ? "Bağlandım, dinliyorum." : "Connected, I'm listening."
+    case .jarvis: return turkish ? "Bağlantı hazır. Sizi dinliyorum." : "Connection ready. I'm listening."
     case .custom:
       let cleaned = custom.trimmingCharacters(in: .whitespacesAndNewlines)
       return cleaned.isEmpty ? nil : String(cleaned.prefix(120))
     }
-  }
-}
-
-/// What the user hears when a hands-free start opens the conversation.
-enum ActivationFeedback: String, CaseIterable, Identifiable {
-  case off
-  case subtle
-  case voiceOnly
-
-  static let defaultsKey = "autoloom.activation.feedback"
-
-  var id: String { rawValue }
-
-  static var current: ActivationFeedback {
-    ActivationFeedback(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .subtle
-  }
-
-  var label: String {
-    switch self {
-    case .off: L.t("Off", "Kapalı")
-    case .subtle: L.t("Subtle chime", "Hafif ses")
-    case .voiceOnly: L.t("Spoken greeting", "Sesli karşılama")
-    }
-  }
-
-  /// The greeting to speak for a start, if any. Button starts stay quiet:
-  /// the user is looking at the screen.
-  static func greeting(for reason: VoiceStartReason, turkish: Bool) -> String? {
-    guard reason != .button, current == .voiceOnly else { return nil }
-    return GreetingStyle.current.text(
-      turkish: turkish, custom: UserDefaults.standard.string(forKey: GreetingStyle.customTextKey) ?? "")
-  }
-
-  /// A short system sound for hands-free starts.
-  static func playChimeIfNeeded(for reason: VoiceStartReason) {
-    guard reason != .button, current == .subtle else { return }
-    AudioServicesPlaySystemSound(1113)
   }
 }

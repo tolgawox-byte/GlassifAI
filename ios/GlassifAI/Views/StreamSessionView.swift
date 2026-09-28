@@ -91,11 +91,12 @@ struct StreamSessionView: View {
         let source = CaptureSource(rawValue: UserDefaults.standard.string(forKey: CaptureSource.defaultsKey) ?? "")
           ?? .iPhoneCamera
         let route = AudioRoutePreference.current
-        ActivationFeedback.playChimeIfNeeded(for: reason)
+        // The chime and "Bağlandım, dinliyorum." come only when the
+        // connection is really ready, never when the wake phrase is heard.
         await voiceSession.start(
           prefersBluetoothHFP: route.prefersGlassesAudio(for: source),
           forcesBuiltInAudio: route == .iPhone,
-          greeting: ActivationFeedback.greeting(for: reason, turkish: L.isTurkish))
+          reason: reason)
         // A hands-free start in the background: bring the glasses camera
         // back for visual questions (it pauses in the background when idle).
         if source == .glasses, !stream.isStreaming, voiceSession.isActive {
@@ -111,6 +112,7 @@ struct StreamSessionView: View {
         wearablesViewModel?.hasMockDevice == true
       AudioRouteMonitor.shared.start()
       VoiceCatalog.migrateStoredSelection()
+      ConnectionFeedback.migrateStoredValue()
       await activateCaptureSource()
       await updateGestureSession()
       await WakePhraseListener.shared.refresh()
@@ -128,9 +130,12 @@ struct StreamSessionView: View {
     .onChange(of: wearablesViewModel?.devices.first) { _, _ in
       Task { await updateGestureSession() }
     }
-    .onChange(of: wearablesViewModel?.glassesLinkConnected) { _, connected in
+    .onChange(of: wearablesViewModel?.glassesLinkConnected) { previous, connected in
       // A real SDK event: the glasses' link to the phone came up or dropped.
       WakePhraseListener.shared.glassesConnected = connected
+      if previous == true, connected == false, voice.isActive, captureSource == .glasses {
+        voice.announceGlassesDisconnected()
+      }
     }
     .onChange(of: scenePhase) { _, phase in
       // The glasses stream is never stopped because the app left the

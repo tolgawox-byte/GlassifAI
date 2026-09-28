@@ -84,14 +84,72 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   private var lastActivityAt = Date()
   private var idleMonitorTask: Task<Void, Never>?
 
-  /// - Parameter greeting: said by the assistant right after connecting
-  ///   (hands-free starts and voice previews).
-  func start(prefersBluetoothHFP: Bool = false, forcesBuiltInAudio: Bool = false, greeting: String? = nil) async {
+  /// Where the current start is, and every step of the last start
+  /// (Settings → Developer → Voice diagnostics).
+  @Published private(set) var connectionPhase: ConnectionPhase = .idle
+  @Published private(set) var connectionSteps: [ConnectionStep] = []
+  /// The audio route when the conversation became ready.
+  @Published private(set) var readyRoute: String?
+  /// Settings are being applied by a restart (no new greeting).
+  private var isRestarting = false
+
+  /// A user turn the app handles itself (a note, a reminder, a memory…).
+  /// The voice model's own reply to that turn stays muted; the app's result
+  /// is spoken instead — through the model's delegation for the same turn
+  /// when it made one, otherwise as speakable context. One request, one
+  /// answer.
+  private struct TurnInterception {
+    let turn: Int
+    var result: String?
+    var handoffID: String?
+    /// The model finished (or never started) its own reply to the turn.
+    var modelReplyDone = false
+    var delivered = false
+    /// Unmute when the muted reply's turn ends.
+    var releaseAfterTurn = false
+    /// A new user turn began; later delegations are not this turn's.
+    var acceptsDelegations = true
+  }
+
+  private var interception: TurnInterception?
+  private var interceptionTimer: Task<Void, Never>?
+  /// The assistant's audio is held for an interception; the usual turn
+  /// events do not release it.
+  private var holdsAssistantAudio = false
+  /// Held early because the partial transcript already began with a command.
+  private var preHeldForCommand = false
+  /// Delegations that arrived before the user's final transcript.
+  private var deferredDelegations: [(handoffID: String, request: String)] = []
+  private var deferredFlushTask: Task<Void, Never>?
+  private var answeredHandoffs = Set<String>()
+  /// Counts final user turns; a late delegation for an intercepted turn is
+  /// answered without running the request twice.
+  private var userTurnSerial = 0
+  private var lastInterceptedTurn: Int?
+  /// The last delegation the voice model made (to spot one that arrived
+  /// before the final transcript of the same request).
+  private var recentDelegation: (at: Date, request: String)?
+
+  /// - Parameters:
+  ///   - greeting: a line said right after connecting (voice previews).
+  ///   - reason: how a new conversation was started; it decides the ready
+  ///     announcement. nil for reconnects, restarts and previews.
+  func start(
+    prefersBluetoothHFP: Bool = false,
+    forcesBuiltInAudio: Bool = false,
+    greeting: String? = nil,
+    reason: VoiceStartReason? = nil
+  ) async {
     guard !isActive else { return }
     // Every start path frees the wake phrase listener's microphone first.
     WakePhraseListener.shared.stopListening(reason: nil)
+    let freshConversation = !isReconnecting && !isRestarting && !isPreviewSession
     state = .connecting
     connectStartedAt = CACurrentMediaTime()
+    connectionSteps = []
+    readyRoute = nil
+    markPhase(reason == .wakePhrase || reason == .metaInvocation ? .wakeDetected : .preparingAudio,
+              detail: reason?.rawValue ?? (isReconnecting ? "reconnect" : isPreviewSession ? "voice preview" : "restart"))
     callAudio = (prefersBluetoothHFP, forcesBuiltInAudio)
     userTranscript = ""
     // A voice preview only speaks; it never listens.
@@ -107,13 +165,16 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     assistantTurnOpen = false
     lastRealtimeError = nil
     isAssistantAudioSuppressed = false
+    resetInterception()
     _ = orchestrator.beginVoiceSession()
+    if freshConversation { orchestrator.beginConversation() }
     AudioRouteMonitor.shared.onMediaServicesReset = { [weak self] in
       Task { @MainActor in await self?.handleMediaServicesReset() }
     }
 
     do {
       self.forcesBuiltInAudio = forcesBuiltInAudio
+      markPhase(.preparingAudio)
       try configureAudioSession(prefersBluetoothHFP: prefersBluetoothHFP)
       let configuration = LKRTCConfiguration()
       configuration.sdpSemantics = .unifiedPlan
@@ -161,6 +222,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       channel.delegate = self
       dataChannel = channel
 
+      markPhase(.connectingRealtime)
       let offer = try await createOffer(peer: peer, constraints: constraints)
       try await setLocalDescription(offer, peer: peer)
       for _ in 0..<25 where peer.iceGatheringState != .complete {
@@ -171,36 +233,125 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       let answer = LKRTCSessionDescription(type: .answer, sdp: answerSDP)
       try await setRemoteDescription(answer, peer: peer)
 
+      markPhase(.waitingForDataChannel, detail: "session accepted")
       for _ in 0..<100 where channel.readyState != .open {
         try? await Task.sleep(nanoseconds: 100_000_000)
       }
       guard channel.readyState == .open else { throw RealtimeError.connectionTimedOut }
+      markPhase(.routingAudio, detail: "data channel open")
+      let route = await waitForAudioRoute(prefersGlasses: prefersBluetoothHFP && !forcesBuiltInAudio)
+      readyRoute = route
       state = .listening
       if let connectStartedAt {
         lastConnectMs = Int(((CACurrentMediaTime() - connectStartedAt) * 1_000).rounded())
         startReport?.connectMs = lastConnectMs
       }
+      markPhase(.ready, detail: route)
       startSidebandEventLoop()
       noteActivity()
       startIdleMonitor()
+      orchestrator.speakInConversation = { [weak self] text in
+        self?.sayAppMessage(text) ?? false
+      }
       if let greeting {
-        // The speakable channel makes the voice model say it (Codex uses the
-        // same channel for standalone speech).
-        _ = EmbeddedCodexBridge.appendContext(greeting, speakable: true)
+        _ = sayExactly(greeting)
+      } else if freshConversation, let reason {
+        announceReady(for: reason)
+      } else if isReconnecting, ConnectionFeedback.current.playsChime {
+        // A reconnect is not a new conversation: at most a subtle chime.
+        ChimePlayer.shared.play(.reconnected)
       }
     } catch {
       await tearDown()
       let message = LogSanitizer.sanitize(error.localizedDescription)
       lastRealtimeError = message
       state = .failed(message)
+      markPhase(.failed, detail: LogSanitizer.sanitize(message, limit: 120))
+      if isReconnecting { orchestrator.finishConversation() }
+      if !isPreviewSession, reason != nil || isReconnecting {
+        announceFailure(ConnectionFeedback.failureText(turkish: L.isTurkish))
+      }
     }
   }
 
+  // MARK: Connection feedback
+
+  private func markPhase(_ phase: ConnectionPhase, detail: String? = nil) {
+    connectionPhase = phase
+    let elapsed = connectStartedAt.map { Int(((CACurrentMediaTime() - $0) * 1_000).rounded()) } ?? 0
+    connectionSteps.append(ConnectionStep(phase: phase, atMs: elapsed, detail: detail))
+    NSLog("[AutoLoom] connection %@ at %d ms%@", phase.rawValue, elapsed, detail.map { " (\($0))" } ?? "")
+  }
+
+  /// Waits briefly for the microphone route, and for the glasses' hands-free
+  /// route when they are preferred. Returns a short description.
+  private func waitForAudioRoute(prefersGlasses: Bool) async -> String {
+    let session = AVAudioSession.sharedInstance()
+    for _ in 0..<15 {
+      let route = session.currentRoute
+      let glasses = route.inputs.contains { $0.portType == .bluetoothHFP }
+        || route.outputs.contains { $0.portType == .bluetoothHFP }
+      if !route.inputs.isEmpty && (!prefersGlasses || glasses) {
+        return glasses ? "Bluetooth HFP" : route.outputs.first?.portType.rawValue ?? "audio"
+      }
+      try? await Task.sleep(nanoseconds: 100_000_000)
+    }
+    let output = session.currentRoute.outputs.first?.portType.rawValue ?? "none"
+    return prefersGlasses ? "glasses route not selected; using \(output)" : output
+  }
+
+  /// A new conversation is ready: chime and/or the chosen phrase, once.
+  private func announceReady(for reason: VoiceStartReason) {
+    let feedback = ConnectionFeedback.current
+    if feedback.playsChime { ChimePlayer.shared.play(.ready) }
+    if let phrase = ConnectionFeedback.readyPhrase(for: reason, turkish: L.isTurkish) {
+      // Said by the voice model itself: hearing it proves the whole path
+      // (ChatGPT, WebRTC, audio route) works.
+      _ = sayExactly(phrase)
+    }
+  }
+
+  /// A start failed or the call could not be restored: a low tone and a
+  /// short sentence from the on-device voice, never silence.
+  private func announceFailure(_ text: String) {
+    guard ConnectionFeedback.current != .off else { return }
+    ChimePlayer.shared.play(.failed)
+    Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 450_000_000)
+      LocalAnnouncer.shared.say(text, turkish: L.isTurkish)
+    }
+  }
+
+  /// The glasses' link dropped during a conversation.
+  func announceGlassesDisconnected() {
+    let text = ConnectionFeedback.glassesLostText(turkish: L.isTurkish)
+    if isConnected, sayExactly(text) { return }
+    LocalAnnouncer.shared.say(text, turkish: L.isTurkish)
+  }
+
+  /// Speakable context arrives as a user-role item, so a line the model
+  /// must say is phrased as an instruction from the app.
+  @discardableResult
+  private func sayExactly(_ line: String) -> Bool {
+    sayAppMessage("Say exactly these words and nothing else: \"\(line)\"")
+  }
+
+  /// Sends a message from the app (not the user) that the model answers
+  /// aloud, for example the result of a command the app handled.
+  @discardableResult
+  private func sayAppMessage(_ text: String) -> Bool {
+    guard isConnected else { return false }
+    return EmbeddedCodexBridge.appendContext("[App message, not the user speaking] " + text, speakable: true)
+  }
+
   func stop() async {
+    let endsConversation = !isPreviewSession && (isActive || callAudio != nil)
     callAudio = nil
     sendEvent(["type": "session.close"])
     await tearDown()
     state = .disconnected
+    connectionPhase = .idle
+    if endsConversation { orchestrator.finishConversation() }
     // In the background the screen's state observers may not run, so the
     // wake phrase listener is asked to take the microphone back. The short
     // delay lets an immediate restart (camera switch) claim it first.
@@ -242,6 +393,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     lastRealtimeError = LogSanitizer.sanitize(reason, limit: 160)
     guard let audio, reconnectPolicy.allowsReconnect(now: Date()) else {
       state = .failed(userMessage)
+      markPhase(.failed, detail: "reconnect budget used")
+      orchestrator.finishConversation()
+      announceFailure(ConnectionFeedback.failureText(turkish: L.isTurkish))
       return
     }
     reconnectPolicy.record(Date())
@@ -280,6 +434,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   /// resumes from the conversation summary.
   func restartToApplySettings() async {
     guard isConnected, !isPreviewSession, let audio = callAudio else { return }
+    isRestarting = true
+    defer { isRestarting = false }
     await tearDown()
     state = .disconnected
     await start(prefersBluetoothHFP: audio.prefersBluetoothHFP, forcesBuiltInAudio: audio.forcesBuiltInAudio)
@@ -320,8 +476,17 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     let tokens = try await ChatGPTAuthSession.shared.freshTokens()
     let requestedVoice = voiceOverride ?? AssistantPreferences.voice
     let resume = isPreviewSession ? nil : orchestrator.context.resumeSummary()
+    // Session resume: the profile, a few relevant memories and the last
+    // conversation's summary; never a raw transcript.
+    let store = MemoryStore.shared
+    let recent = isPreviewSession ? nil : store.recentConversationSummary().map {
+      "\($0.createdAt.formatted(date: .abbreviated, time: .shortened)): \($0.text)"
+    }
     let instructions = AssistantInstructions.realtime(
-      memory: isPreviewSession ? [] : MemoryStore.shared.promptItems)
+      memory: isPreviewSession ? [] : store.promptItems,
+      profileName: isPreviewSession || !store.isEnabled ? nil : store.profile.preferredName,
+      recentConversation: recent,
+      smartMemory: store.isEnabled && store.smartMemoryEnabled)
     var report = RealtimeStartReport(requestedVoice: requestedVoice, requestedModel: ModelSelector.realtimeModel)
     report.isPreview = isPreviewSession
     var lastError: String?
@@ -404,8 +569,63 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       guard entry["type"] as? String == "input_text" else { return nil }
       return entry["text"] as? String
     }.joined()
+    guard !answeredHandoffs.contains(handoffId) else { return }
+    if userTurnOpen {
+      // The user's words are not final yet; the app may be about to handle
+      // this request itself, so decide right after the final transcript.
+      if !deferredDelegations.contains(where: { $0.handoffID == handoffId }) {
+        deferredDelegations.append((handoffId, request))
+      }
+      deferredFlushTask?.cancel()
+      deferredFlushTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        guard !Task.isCancelled else { return }
+        self?.flushDeferredDelegations()
+      }
+      return
+    }
+    routeDelegation(handoffId: handoffId, request: request)
+  }
+
+  private func flushDeferredDelegations() {
+    deferredFlushTask?.cancel()
+    deferredFlushTask = nil
+    let pending = deferredDelegations
+    deferredDelegations = []
+    for delegation in pending {
+      routeDelegation(handoffId: delegation.handoffID, request: delegation.request)
+    }
+  }
+
+  private func routeDelegation(handoffId: String, request: String) {
+    guard !answeredHandoffs.contains(handoffId) else { return }
+    if var current = interception, current.acceptsDelegations {
+      answeredHandoffs.insert(handoffId)
+      if current.handoffID == nil, !current.delivered {
+        // The model delegated the request the app is already doing: its
+        // result will answer this delegation instead of running it twice.
+        current.handoffID = handoffId
+        interception = current
+        noteActivity()
+        NSLog("[AutoLoom] delegation matched to the command the app is handling")
+        deliverInterceptionIfReady()
+      } else {
+        _ = EmbeddedCodexBridge.completeDelegation(
+          handoffId: handoffId,
+          text: "The app is already handling this request and tells the user the result. Say nothing more about it.")
+      }
+      return
+    }
+    if let turn = lastInterceptedTurn, turn == userTurnSerial {
+      answeredHandoffs.insert(handoffId)
+      _ = EmbeddedCodexBridge.completeDelegation(
+        handoffId: handoffId,
+        text: "The app already did this and told the user. Say nothing more about it.")
+      return
+    }
     releaseAssistantAudio()
     noteActivity()
+    recentDelegation = (Date(), request)
     orchestrator.handleDelegation(handoffID: handoffId, text: request) { [weak self] text in
       let delivered = EmbeddedCodexBridge.completeDelegation(handoffId: handoffId, text: text)
       if !delivered {
@@ -435,6 +655,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     autoStopTask = nil
     pendingHangUp = false
     stopWordMutedTurn = false
+    resetInterception()
+    orchestrator.speakInConversation = nil
     voiceOverride = nil
     isPreviewSession = false
     previewingVoice = nil
@@ -562,11 +784,150 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   }
 
   private func releaseAssistantAudio() {
-    guard isAssistantAudioSuppressed else { return }
+    guard isAssistantAudioSuppressed, !holdsAssistantAudio else { return }
     audioSuppressionTask?.cancel()
     audioSuppressionTask = nil
     remoteAudioTracks().forEach { $0.isEnabled = true }
     isAssistantAudioSuppressed = false
+  }
+
+  /// Mutes the model until the app's own result is delivered.
+  private func holdAssistantAudio() {
+    holdsAssistantAudio = true
+    remoteAudioTracks().forEach { $0.isEnabled = false }
+    isAssistantAudioSuppressed = true
+    audioSuppressionTask?.cancel()
+    audioSuppressionTask = nil
+  }
+
+  private func releaseHeldAudio() {
+    guard holdsAssistantAudio else { return }
+    holdsAssistantAudio = false
+    preHeldForCommand = false
+    releaseAssistantAudio()
+  }
+
+  private func resetInterception() {
+    interceptionTimer?.cancel()
+    interceptionTimer = nil
+    interception = nil
+    deferredFlushTask?.cancel()
+    deferredFlushTask = nil
+    deferredDelegations = []
+    answeredHandoffs = []
+    holdsAssistantAudio = false
+    preHeldForCommand = false
+    lastInterceptedTurn = nil
+    recentDelegation = nil
+  }
+
+  // MARK: Voice action bridge
+
+  /// The user's final words: an explicit command ("not al …", "yarın 10'da
+  /// hatırlat …") is executed by the app; the model's own reply is muted and
+  /// the app's result is spoken instead.
+  private func interceptIfCommand(_ text: String, assistantWasSpeaking: Bool) {
+    defer { flushDeferredDelegations() }
+    // "Dur" silences an answer; it is only a command when it answers a
+    // question the app asked ("Hayır" to "Kaydedeyim mi?").
+    let command = ConversationCommands.classify(
+      text, assistantName: AssistantIdentity.name, assistantSpeaking: assistantWasSpeaking)
+    let skip = command == .endConversation || (command == .stopSpeaking && orchestrator.pendingAction == nil)
+    guard !isPreviewSession, !pendingHangUp, !skip, !alreadyDelegated(text) else {
+      finishPreHold()
+      return
+    }
+    let turn = userTurnSerial
+    let handled = orchestrator.interceptVoiceTurn(text) { [weak self] result in
+      self?.interceptionResultReady(result, turn: turn)
+    }
+    guard handled else {
+      finishPreHold()
+      return
+    }
+    interception = TurnInterception(turn: turn)
+    lastInterceptedTurn = turn
+    holdAssistantAudio()
+    interceptionTimer?.cancel()
+    interceptionTimer = Task { @MainActor [weak self] in
+      // The model stayed silent: deliver without waiting for its reply.
+      try? await Task.sleep(nanoseconds: 3_000_000_000)
+      guard let self, !Task.isCancelled else { return }
+      if var current = self.interception, current.turn == turn, !current.delivered, !self.assistantTurnOpen {
+        current.modelReplyDone = true
+        self.interception = current
+        self.deliverInterceptionIfReady()
+      }
+      // Never keep the assistant muted for long.
+      try? await Task.sleep(nanoseconds: 20_000_000_000)
+      guard !Task.isCancelled, let current = self.interception, current.turn == turn else { return }
+      if !current.delivered {
+        self.interception?.modelReplyDone = true
+        self.deliverInterceptionIfReady()
+      }
+      self.interception = nil
+      self.releaseHeldAudio()
+    }
+  }
+
+  /// The model already delegated this very request (its delegation came
+  /// before the final transcript): it runs that way, not twice.
+  private func alreadyDelegated(_ text: String) -> Bool {
+    guard let recent = recentDelegation, Date().timeIntervalSince(recent.at) < 3 else { return false }
+    let spoken = Set(MemorySearch.tokens(text))
+    guard !spoken.isEmpty else { return false }
+    let delegated = Set(MemorySearch.tokens(recent.request))
+    return Double(spoken.intersection(delegated).count) / Double(spoken.count) >= 0.5
+  }
+
+  private func finishPreHold() {
+    guard preHeldForCommand else { return }
+    preHeldForCommand = false
+    releaseHeldAudio()
+  }
+
+  private func interceptionResultReady(_ result: String, turn: Int) {
+    guard var current = interception, current.turn == turn, !current.delivered else {
+      // The conversation moved on: tell the user the result anyway.
+      _ = sayAppMessage(result)
+      return
+    }
+    current.result = result
+    interception = current
+    deliverInterceptionIfReady()
+  }
+
+  /// Delivers once the result is ready and the model's turn is settled: as
+  /// the answer to its delegation, or as speakable context. The audio is
+  /// released when the muted reply has finished, so only the confirmation
+  /// is heard.
+  private func deliverInterceptionIfReady() {
+    guard var current = interception, !current.delivered, let result = current.result else { return }
+    guard current.handoffID != nil || current.modelReplyDone else { return }
+    let sent: Bool
+    if let handoff = current.handoffID {
+      sent = EmbeddedCodexBridge.completeDelegation(handoffId: handoff, text: result)
+    } else {
+      sent = sayAppMessage(result)
+    }
+    NSLog("[AutoLoom] command result delivered via %@ (%@)", current.handoffID == nil ? "context" : "delegation", sent ? "ok" : "failed")
+    current.delivered = true
+    if assistantTurnOpen {
+      current.releaseAfterTurn = true
+      interception = current
+      let turn = current.turn
+      Task { @MainActor [weak self] in
+        // In case the muted reply and the confirmation share one turn.
+        try? await Task.sleep(nanoseconds: 2_500_000_000)
+        guard let self, let pending = self.interception, pending.turn == turn, pending.releaseAfterTurn else { return }
+        self.interception = nil
+        self.releaseHeldAudio()
+      }
+    } else {
+      interception = nil
+      interceptionTimer?.cancel()
+      releaseHeldAudio()
+    }
   }
 
   // MARK: Spoken commands and the quiet timeout
@@ -714,10 +1075,25 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           userTranscript = ""
           assistantCaption = ""
           stopWordMutedTurn = false
+          // A new request: later delegations belong to it, and an unfinished
+          // command result must not keep the new answer muted.
+          lastInterceptedTurn = nil
+          if var current = interception {
+            current.acceptsDelegations = false
+            current.modelReplyDone = true
+            interception = current
+            releaseHeldAudio()
+          }
         }
         userTranscript += text
         noteActivity()
         handleUserSpeech(assistantWasSpeaking: assistantWasSpeaking)
+        // "Not al…", "benim adım…": hold the model's reply from the start.
+        if !holdsAssistantAudio, !isPreviewSession, !assistantWasSpeaking,
+           VoiceActionIntentBridge.looksLikeCommandStart(userTranscript, assistantName: AssistantIdentity.name) {
+          preHeldForCommand = true
+          holdAssistantAudio()
+        }
       }
     case "output_transcript.added":
       if let text = (event["item"] as? [String: Any])?["text"] as? String {
@@ -725,6 +1101,11 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           assistantTurnOpen = true
           assistantCaption = ""
           recordResponseLatency()
+        }
+        // A muted reply is neither shown nor counted as speaking.
+        if holdsAssistantAudio {
+          state = .thinking
+          return
         }
         assistantCaption += text
         state = .speaking
@@ -742,15 +1123,34 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           state = .thinking
           userTurnEndedAt = CACurrentMediaTime()
           noteActivity()
+          userTurnSerial += 1
           orchestrator.noteUserTurn(text)
           handleEndCommand(text, assistantWasSpeaking: assistantWasSpeaking)
+          interceptIfCommand(text, assistantWasSpeaking: assistantWasSpeaking)
         }
         if role == "assistant" {
           assistantTurnOpen = false
-          assistantCaption = text
+          let muted = holdsAssistantAudio
+          if !muted { assistantCaption = text }
           state = .listening
           noteActivity()
-          orchestrator.noteAssistantTurn(text)
+          // A muted reply was never heard, so it is not part of the context.
+          if !muted { orchestrator.noteAssistantTurn(text) }
+          if var current = interception {
+            if current.delivered, current.releaseAfterTurn {
+              interception = nil
+              interceptionTimer?.cancel()
+              releaseHeldAudio()
+            } else if !current.delivered {
+              current.modelReplyDone = true
+              interception = current
+              // A delegation for the same turn may still arrive.
+              Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                self?.deliverInterceptionIfReady()
+              }
+            }
+          }
           releaseAssistantAudio()
           // Let the last words play out, then end the preview or the
           // conversation the user asked to end.

@@ -12,7 +12,7 @@ struct HandsFreeSettingsView: View {
   @AppStorage(WakePhraseSettings.glassesArmingKey) private var armsWithGlasses = false
   @AppStorage(GreetingStyle.defaultsKey) private var greetingRaw = GreetingStyle.normal.rawValue
   @AppStorage(GreetingStyle.customTextKey) private var customGreeting = ""
-  @AppStorage(ActivationFeedback.defaultsKey) private var feedbackRaw = ActivationFeedback.subtle.rawValue
+  @AppStorage(ConnectionFeedback.defaultsKey) private var feedbackRaw = ConnectionFeedback.chimeAndVoice.rawValue
   @AppStorage(ConversationTimeout.defaultsKey) private var timeout = ConversationTimeout.minutes2.rawValue
   @Environment(\.openURL) private var openURL
 
@@ -57,17 +57,19 @@ struct HandsFreeSettingsView: View {
       }
 
       Section(
-        header: Text(L.t("When a hands-free conversation starts", "Eller serbest konuşma başlayınca")),
+        header: Text(L.t("When the connection is ready", "Bağlantı hazır olunca")),
         footer: Text(L.t(
-          "Applies to the wake phrase, Siri and shortcuts. Starting with the button stays quiet.",
-          "Uyandırma ifadesi, Siri ve kısayollar için geçerlidir. Düğmeyle başlatınca sessiz kalır."))) {
-        Picker(L.t("Feedback", "Geri bildirim"), selection: $feedbackRaw) {
-          ForEach(ActivationFeedback.allCases) { Text($0.label).tag($0.rawValue) }
+          "Played or said once per new conversation, only after ChatGPT, the voice connection and the audio route are really ready — never just because the wake phrase was heard. The spoken phrase is for hands-free starts; the on-screen button only chimes. If the connection fails you hear “The connection could not be established.”",
+          "Her yeni konuşmada bir kez, yalnızca ChatGPT, ses bağlantısı ve ses yolu gerçekten hazır olduğunda çalınır ya da söylenir — uyandırma ifadesi duyuldu diye asla. Sözlü ifade eller serbest başlatmalar içindir; ekrandaki düğme yalnızca ses çıkarır. Bağlantı kurulamazsa “Bağlantı kurulamadı.” duyarsınız."))) {
+        Picker(L.t("Connection feedback", "Bağlantı bildirimi"), selection: $feedbackRaw) {
+          ForEach(ConnectionFeedback.allCases) { Text($0.label).tag($0.rawValue) }
         }
-        Picker(L.t("Greeting", "Karşılama"), selection: $greetingRaw) {
-          ForEach(GreetingStyle.allCases) { Text($0.label).tag($0.rawValue) }
+        Picker(L.t("Phrase", "İfade"), selection: $greetingRaw) {
+          ForEach(GreetingStyle.allCases) { style in
+            Text(style.label + (style.text(turkish: L.isTurkish, custom: "").map { " — \($0)" } ?? "")).tag(style.rawValue)
+          }
         }
-        .disabled(feedbackRaw != ActivationFeedback.voiceOnly.rawValue)
+        .disabled(!(ConnectionFeedback(rawValue: feedbackRaw) ?? .chimeAndVoice).speaks)
         if greetingRaw == GreetingStyle.custom.rawValue {
           TextField(L.t("Custom greeting", "Özel karşılama"), text: $customGreeting)
         }
@@ -121,14 +123,30 @@ struct ToolsSettingsView: View {
   var body: some View {
     Form {
       Section(footer: Text(L.t(
-        "The AI only plans; the app runs every action itself. “Needs your yes” can be confirmed by voice or a tap; “Needs a tap” (calls, messages, links, maps, sharing) only by a tap. Email, purchases, payments and deleting your data are not supported.",
-        "Yapay zekâ yalnızca planlar; her işlemi uygulama kendisi yapar. “Onayınız gerekir” sesle veya dokunarak; “Dokunma gerekir” (arama, mesaj, bağlantı, harita, paylaşım) yalnızca dokunarak onaylanır. E-posta, satın alma, ödeme ve verilerinizi silme desteklenmez."))) {
+        "Spoken commands such as “not al”, “yarın 10'da hatırlat” and “cuma 3'e toplantı ekle” are recognised by the app itself and run directly; times are read by the app, and an unclear time is asked first. “Needs your yes” can be confirmed by voice or a tap; “Needs a tap” (calls, messages, links, maps, sharing) only by a tap. Text seen by the camera or on the web never starts an action. Email, purchases, payments and deleting your data are not supported.",
+        "“Not al”, “yarın 10'da hatırlat”, “cuma 3'e toplantı ekle” gibi sesli komutları uygulama kendisi tanır ve doğrudan yapar; saatleri uygulama okur, belirsiz saat önce sorulur. “Onayınız gerekir” sesle veya dokunarak; “Dokunma gerekir” (arama, mesaj, bağlantı, harita, paylaşım) yalnızca dokunarak onaylanır. Kamerada veya webde görülen metin asla bir işlem başlatmaz. E-posta, satın alma, ödeme ve verilerinizi silme desteklenmez."))) {
         Toggle(L.t("Allow iPhone actions", "iPhone işlemlerine izin ver"), isOn: $actionsEnabled)
       }
       Section(L.t("Tools", "Araçlar")) {
         ForEach(ToolRegistry.tools) { tool in
           ToolRow(tool: tool, permission: tool.permission.flatMap { permissions[$0] })
             .disabled(!actionsEnabled)
+        }
+      }
+      Section(L.t("Always available", "Her zaman kullanılabilir")) {
+        VStack(alignment: .leading, spacing: 4) {
+          Label(L.t("AutoLoom Tasks", "AutoLoom Görevleri"), systemImage: "checklist.checked")
+          Text(L.t("“Görev oluştur: …”, “bunu görev olarak ekle”. Saved on this iPhone, shown in the Tasks tab; a notification at the due time if notifications are allowed.",
+                   "“Görev oluştur: …”, “bunu görev olarak ekle”. Bu iPhone'a kaydedilir, Görevler sekmesinde görünür; bildirim izni varsa vakti gelince bildirim gelir."))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        VStack(alignment: .leading, spacing: 4) {
+          Label(L.t("Siri & Shortcuts", "Siri ve Kestirmeler"), systemImage: "square.2.layers.3d")
+          Text(L.t("“Start Conversation”, “Ask AutoLoom” and “Create AutoLoom Note” are available in the Shortcuts app.",
+                   "“Start Conversation”, “Ask AutoLoom” ve “Create AutoLoom Note” Kestirmeler uygulamasında kullanılabilir."))
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
       }
       Section {
