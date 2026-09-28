@@ -1,5 +1,6 @@
 import CoreGraphics
 import CoreImage
+import CoreMedia
 import CoreVideo
 import QuartzCore
 import UIKit
