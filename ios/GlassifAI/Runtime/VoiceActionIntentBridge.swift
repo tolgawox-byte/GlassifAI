@@ -65,6 +65,12 @@ enum VoiceIntent: Equatable {
   /// "Vazgeç" after the bridge asked something.
   case dropAwaiting
   case saveNote(text: String)
+  /// "Notlarım neler?"
+  case listNotes
+  /// "Mercedes için aldığım notları söyle"
+  case searchNotes(String)
+  /// "Bu notu sil" (nil: the note just saved, else the newest); waits for a yes.
+  case deleteNote(String?)
   case saveMemory(text: String, kind: MemoryKind?)
   case setName(String)
   case askName
@@ -120,6 +126,9 @@ enum VoiceIntent: Equatable {
     case .cancelTasks: "cancelTask"
     case .dropAwaiting: "dropQuestion"
     case .saveNote: "saveNote"
+    case .listNotes: "listNotes"
+    case .searchNotes: "searchNotes"
+    case .deleteNote: "deleteNote"
     case .saveMemory: "saveMemory"
     case .setName: "setProfileName"
     case .askName: "askProfileName"
@@ -242,6 +251,7 @@ enum VoiceActionIntentBridge {
       { translation($0, context) },
       { messages($0, context) },
       { notes($0, context) },
+      { noteQueries($0) },
       { reminders($0, context, now) },
       { tasks($0, context, now) },
       { dayPlan($0) },
@@ -275,7 +285,8 @@ enum VoiceActionIntentBridge {
   }
 
   private static let commandStarts: [[String]] = [
-    ["not", "al"], ["notal"], ["not", "et"], ["not", "tut"], ["sunu", "not"], ["bunu", "not"], ["notlara", "ekle"],
+    ["not", "al"], ["notal"], ["not", "et"], ["not", "tut"], ["not", "dus"], ["not", "olarak"], ["sunu", "not"],
+    ["bunu", "not"], ["notlara"], ["notlarima"], ["bir", "not"], ["bir", "yere"], ["bir", "kenara"], ["kaydet"],
     ["benim", "adim"], ["bunu", "hatirla"], ["sunu", "hatirla"], ["unutma"], ["aklinda", "tut"], ["hafizana"],
     ["hafizaya"], ["gorev", "olustur"], ["gorev", "ekle"], ["takvime", "ekle"], ["bana", "hatirlat"],
     ["bunu", "kopyala"], ["bunu", "paylas"], ["mesaj", "yaz"], ["mesaj", "at"], ["beni", "eve"],
@@ -422,53 +433,179 @@ enum VoiceActionIntentBridge {
 
   // MARK: 3. Notes
 
-  private static let noteStarts: [[String]] = [
-    ["bunu", "not", "olarak", "kaydet"], ["sunu", "not", "olarak", "kaydet"], ["not", "olarak", "kaydet"],
-    ["bunu", "not", "olarak", "yaz"], ["sunu", "not", "olarak", "yaz"], ["not", "olarak", "yaz"],
-    ["not", "olarak", "ekle"], ["notlarima", "ekle"], ["notlara", "ekle"], ["notlarima", "kaydet"],
-    ["notlara", "kaydet"], ["nota", "ekle"], ["nota", "yaz"],
-    ["bir", "not", "al"], ["sunu", "not", "al"], ["bunu", "not", "al"], ["not", "alir", "misin"],
-    ["not", "alabilir", "misin"], ["not", "alsana"], ["not", "al"], ["notal"], ["sunu", "not", "et"], ["bunu", "not", "et"],
-    ["not", "eder", "misin"], ["not", "et"], ["not", "tut"], ["not", "dus"], ["not", "ekle"], ["bir", "not", "yaz"],
-    ["not", "yaz"], ["sunu", "yaz"], ["bunu", "yaz"], ["sunu", "kaydet"], ["bunu", "kaydet"],
-    ["take", "a", "note"], ["make", "a", "note"], ["save", "a", "note"], ["add", "a", "note"], ["note", "that"],
-    ["note", "down"], ["write", "this", "down"], ["write", "that", "down"], ["write", "down"], ["jot", "down"],
-    ["save", "this", "as", "a", "note"], ["save", "that", "as", "a", "note"],
-  ]
-
-  private static let noteEnds: [[String]] = [
-    ["bunu", "not", "olarak", "kaydet"], ["not", "olarak", "kaydet"], ["not", "olarak", "ekle"], ["not", "olarak", "yaz"],
-    ["notlarima", "ekle"], ["notlara", "ekle"], ["notlara", "kaydet"], ["nota", "ekle"], ["nota", "yaz"],
-    ["bunu", "not", "al"], ["sunu", "not", "al"], ["not", "alir", "misin"], ["not", "alabilir", "misin"], ["not", "al"],
-    ["bunu", "not", "et"], ["not", "eder", "misin"], ["not", "et"], ["not", "dus"], ["bunu", "yaz"], ["sunu", "yaz"],
-    ["bunu", "kaydet"], ["sunu", "kaydet"],
-    ["note", "that", "down"], ["write", "that", "down"], ["write", "this", "down"], ["as", "a", "note"],
-  ]
-
   /// Words that only point at something said before ("bunu", "this").
   static let deictic: Set<String> = [
     "bunu", "sunu", "onu", "bu", "su", "o", "bunlari", "sunlari", "tekrar", "yine", "de", "da", "bir", "daha",
     "ki", "this", "that", "it", "again", "these", "bununla", "sununla", "onunla", "ilgili", "hakkinda", "about",
+    "bunun", "sunun", "onun", "icin",
   ]
 
-  private static func notes(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
-    var content: Utterance?
-    if let trigger = noteStarts.first(where: { u.starts(with: $0) }) {
-      content = u.dropping(0..<trigger.count)
-    } else if let trigger = noteEnds.first(where: { u.ends(with: $0) }) {
-      content = u.dropping((u.count - trigger.count)..<u.count)
-      content?.trimTrailing(["diye", "olarak", "bunu", "sunu"])
-    }
-    guard var content else { return nil }
-    content.trimLeading(["ki", "su", "sunu", "that", "this", "olarak"])
-    if content.isOnly(deictic) {
-      // "Bunu not al": the last real answer, else what the user just said.
-      if let previous = context.usefulAnswer ?? context.previousUserText ?? context.lastAssistantText, previous.count >= 3 {
-        return VoiceBridgeDecision(.saveNote(text: previous), "note trigger; content from the conversation")
+  /// Explicit note verbs, longer phrases first. Like the task and reminder
+  /// verbs they are found anywhere in the sentence: a word before "not al"
+  /// (a misheard assistant name, "hemen", "benim için") must never hide the
+  /// command, and the user's own verb decides ("Yarın Ahmet gelecek, not
+  /// al" is a note although it mentions tomorrow).
+  static let noteVerbs: [[String]] = [
+    ["bunu", "not", "olarak", "kaydet"], ["sunu", "not", "olarak", "kaydet"], ["bunu", "not", "olarak", "yaz"],
+    ["sunu", "not", "olarak", "yaz"], ["bunu", "notlara", "ekle"], ["sunu", "notlara", "ekle"], ["bunu", "notlara", "yaz"],
+    ["sunu", "notlara", "yaz"], ["bunu", "notlarima", "ekle"], ["sunu", "notlarima", "ekle"],
+    ["bir", "yere", "not", "et"], ["bir", "yere", "not", "al"], ["bir", "yere", "not", "dus"], ["bir", "yere", "yaz"],
+    ["bir", "yere", "kaydet"], ["bir", "kenara", "not", "et"], ["bir", "kenara", "not", "al"], ["bir", "kenara", "not", "dus"],
+    ["bir", "kenara", "yaz"], ["not", "defterine", "yaz"], ["deftere", "yaz"],
+    ["bir", "not", "dus"], ["bir", "not", "al"], ["bir", "not", "yaz"], ["bir", "not", "ekle"],
+    ["bunu", "not", "al"], ["sunu", "not", "al"], ["bunu", "not", "et"], ["sunu", "not", "et"], ["bunu", "not", "dus"],
+    ["sunu", "not", "dus"],
+    ["not", "olarak", "kaydet"], ["not", "olarak", "yaz"], ["not", "olarak", "ekle"], ["not", "olarak", "al"],
+    ["notlarima", "ekle"], ["notlara", "ekle"], ["notlarima", "kaydet"], ["notlara", "kaydet"], ["notlarima", "yaz"],
+    ["notlara", "yaz"], ["nota", "ekle"], ["nota", "yaz"], ["nota", "al"], ["nota", "gec"],
+    ["not", "alir", "misin"], ["not", "alabilir", "misin"], ["not", "eder", "misin"], ["not", "edebilir", "misin"],
+    ["not", "alsana"], ["not", "etsene"], ["not", "alin"], ["not", "edin"], ["not", "alalim"], ["not", "edelim"],
+    ["not", "al"], ["not", "all"], ["note", "al"], ["notal"], ["not", "et"], ["not", "tut"], ["not", "dus"], ["not", "ekle"],
+    ["not", "yaz"], ["bunu", "yaz"], ["sunu", "yaz"], ["bunu", "kaydet"], ["sunu", "kaydet"],
+    ["save", "this", "as", "a", "note"], ["save", "that", "as", "a", "note"], ["save", "it", "as", "a", "note"],
+    ["add", "this", "to", "my", "notes"], ["add", "that", "to", "my", "notes"], ["add", "it", "to", "my", "notes"],
+    ["add", "to", "my", "notes"], ["write", "this", "down"], ["write", "that", "down"], ["write", "it", "down"],
+    ["write", "down"], ["jot", "this", "down"], ["jot", "down"], ["take", "a", "note"], ["make", "a", "note"],
+    ["save", "a", "note"], ["add", "a", "note"], ["note", "this"], ["note", "that"], ["note", "down"], ["as", "a", "note"],
+  ]
+
+  /// Words before the note verb that are not content ("benim için not al").
+  private static let noteLeadFillers: Set<String> = [
+    "benim", "icin", "hemen", "lutfen", "simdi", "bir", "su", "ki", "hey", "ok", "okay", "tamam", "peki", "sey",
+    "please", "quickly", "now", "and", "ve", "also", "ayrica",
+  ]
+
+  /// Another command at the very end ("not al ve yarın hatırlat") is not
+  /// part of the note: the sentence asks for more than a note.
+  private static let otherFinalCommands: [[String]] = [
+    ["hatirlat"], ["hatirlatir", "misin"], ["hatirlatsana"], ["haber", "ver"], ["beni", "uyar"], ["gorev", "olustur"],
+    ["gorev", "ekle"], ["gorev", "olarak", "ekle"], ["gorev", "olarak", "kaydet"], ["gorevlere", "ekle"], ["todoya", "ekle"],
+    ["yapilacaklara", "ekle"], ["takvime", "ekle"], ["takvimime", "ekle"], ["hatirla"], ["unutma"], ["aklinda", "tut"],
+    ["hafizaya", "kaydet"], ["hafizana", "kaydet"],
+  ]
+
+  /// The earliest note verb, the longer phrase when two start together.
+  static func noteVerb(in u: Utterance) -> (verb: [String], range: Range<Int>)? {
+    var best: (verb: [String], range: Range<Int>)?
+    for verb in noteVerbs {
+      guard let range = u.range(of: verb) else { continue }
+      if let current = best {
+        if range.lowerBound < current.range.lowerBound
+          || (range.lowerBound == current.range.lowerBound && verb.count > current.verb.count) {
+          best = (verb, range)
+        }
+      } else {
+        best = (verb, range)
       }
-      return VoiceBridgeDecision(.ask(.note), "note trigger without content")
     }
-    return VoiceBridgeDecision(.saveNote(text: capitalizedFirst(content.text)), "note trigger")
+    return best
+  }
+
+  private static func notes(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+    guard let (verb, range) = noteVerb(in: u) else { return bareSave(u, context) }
+    var tail = u.dropping(0..<range.upperBound)
+    if otherFinalCommands.contains(where: { tail.ends(with: $0) }) { return nil }
+    tail.trimLeading(["ki", "su", "sunu", "bunu", "that", "this", "olarak", "lutfen", "hemen", "please"])
+    tail.trimTrailing(["lutfen", "please", "diye"])
+    var head = u.dropping(range.lowerBound..<u.count)
+    head.trimLeading(noteLeadFillers)
+    head.trimTrailing(["diye", "olarak", "ki", "bunu", "sunu", "ve", "and", "lutfen", "please"])
+    let rule = "note verb \"\(verb.joined(separator: " "))\""
+    if !tail.isEmpty, !tail.isOnly(deictic) {
+      return VoiceBridgeDecision(.saveNote(text: capitalizedFirst(tail.text)), rule)
+    }
+    if !head.isEmpty, !head.isOnly(deictic) {
+      return VoiceBridgeDecision(.saveNote(text: capitalizedFirst(head.text)), rule)
+    }
+    return contextNote(context, rule: rule)
+  }
+
+  /// "Bunu not al": the last real answer, else what the user just said;
+  /// asked when there is nothing to point at. "bunu" itself is never saved.
+  private static func contextNote(_ context: VoiceBridgeContext, rule: String) -> VoiceBridgeDecision {
+    if let previous = context.usefulAnswer ?? context.previousUserText ?? context.lastAssistantText,
+       previous.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3,
+       !(Utterance(previous)?.isOnly(deictic) ?? true) {
+      return VoiceBridgeDecision(.saveNote(text: previous), rule + "; content from the conversation")
+    }
+    return VoiceBridgeDecision(.ask(.note), rule + " without content")
+  }
+
+  /// "Sağ ön jant çizik, kaydet", "kaydet: Mercedes cuma geliyor": a bare
+  /// "kaydet" keeps the words as a note. Not "hafızaya kaydet" (memory),
+  /// "takvime kaydet" (calendar), "görev olarak kaydet" (task) or "fotoğrafı
+  /// kaydet".
+  private static func bareSave(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+    let destinations: Set<String> = [
+      "hafizaya", "hafizana", "hafizama", "takvime", "takvimime", "ajandaya", "ajandama", "olarak", "gorevlere",
+      "gorevlerime", "yapilacaklara", "listeye", "listesine", "listeme", "hatirlaticiya", "rehbere", "kisilere",
+    ]
+    let objects: Set<String> = [
+      "fotografi", "fotoyu", "resmi", "videoyu", "goruntuyu", "ekrani", "sesi", "dosyayi", "konumu", "numarayi", "sifreyi",
+    ]
+    var content: Utterance
+    if u.count >= 2, u.ends(with: ["kaydet"]) || u.ends(with: ["kaydeder", "misin"]) {
+      let length = u.ends(with: ["kaydet"]) ? 1 : 2
+      content = u.dropping((u.count - length)..<u.count)
+      guard let last = content.keys.last, !destinations.contains(last) else { return nil }
+      content.trimTrailing(["bunu", "sunu", "diye", "ve", "lutfen"])
+    } else if u.count >= 2, u.starts(with: ["kaydet"]) {
+      content = u.dropping(0..<1)
+      content.trimLeading(["bunu", "sunu", "su", "lutfen"])
+    } else {
+      return nil
+    }
+    guard !content.containsAny(destinations) else { return nil }
+    if content.count == 1, objects.contains(content.keys[0]) { return nil }
+    if content.isEmpty || content.isOnly(deictic) { return contextNote(context, rule: "bare \"kaydet\"") }
+    return VoiceBridgeDecision(.saveNote(text: capitalizedFirst(content.text)), "bare \"kaydet\"")
+  }
+
+  /// "Notlarım neler?", "Mercedes için aldığım notları söyle", "bu notu
+  /// sil". None of these creates a note.
+  private static func noteQueries(_ u: Utterance) -> VoiceBridgeDecision? {
+    guard u.count <= 10 else { return nil }
+    let noteWords: Set<String> = [
+      "notlarim", "notlarimi", "notlari", "notlar", "notlarimda", "notlarda", "notu", "notunu", "notumu", "notlarini",
+      "notes", "note",
+    ]
+    guard let index = u.keys.firstIndex(where: noteWords.contains) else { return nil }
+    // Delete: "bu notu sil", "son notu sil", "Mercedes notunu sil", "delete this note".
+    if u.ends(with: ["sil"]) || u.ends(with: ["siler", "misin"]) || u.ends(with: ["kaldir"]) || u.starts(with: ["delete"]) {
+      var target = u.dropping(index..<u.count)
+      target.trimLeading(["bu", "su", "o", "son", "the", "this", "last", "delete", "en"])
+      target.trimTrailing(["bu", "su", "son"])
+      return VoiceBridgeDecision(.deleteNote(target.isEmpty ? nil : target.text), "delete a note (needs a yes)")
+    }
+    // "Notes about the Mercedes", "what did I note about the Mercedes".
+    if u.keys[index] == "notes" || u.keys[index] == "note" {
+      var about = u.dropping(0..<(index + 1))
+      if about.starts(with: ["about"]) || about.starts(with: ["on"]) || about.starts(with: ["for"]) {
+        about.trimLeading(["about", "on", "for", "the"])
+        if !about.isEmpty { return VoiceBridgeDecision(.searchNotes(about.text), "note search") }
+      }
+    }
+    let lists: [[String]] = [
+      ["notlarim", "neler"], ["notlarim", "ne"], ["notlarimi", "oku"], ["notlarimi", "goster"], ["notlarimi", "soyle"],
+      ["son", "notlarim"], ["notlarimda", "ne", "var"], ["notlarda", "ne", "var"], ["what", "are", "my", "notes"],
+      ["read", "my", "notes"], ["show", "my", "notes"], ["my", "notes"],
+    ]
+    if lists.contains(where: { u.range(of: $0) != nil }) {
+      return VoiceBridgeDecision(.listNotes, "note list question")
+    }
+    // "Mercedes için aldığım notları söyle", "Mercedes ile ilgili notlar",
+    // "notes about the Mercedes".
+    let asks: Set<String> = ["soyle", "oku", "neler", "ne", "goster", "nedir", "var", "mi"]
+    let tailWords = u.dropping(0..<(index + 1))
+    guard tailWords.isOnly(asks) else { return nil }
+    var query = u.dropping(index..<u.count)
+    query.trimTrailing([
+      "icin", "ile", "ilgili", "hakkinda", "aldigim", "aldigin", "tuttugum", "yazdigim", "kaydettigim", "olan", "son",
+      "about", "on",
+    ])
+    query.trimLeading(["bu", "su", "the"])
+    guard !query.isEmpty else { return nil }
+    return VoiceBridgeDecision(.searchNotes(query.text), "note search")
   }
 
   // MARK: 3. Reminders and notifications
@@ -548,14 +685,15 @@ enum VoiceActionIntentBridge {
     ["gorev", "olarak", "ekle"], ["gorev", "olarak", "kaydet"], ["gorev", "listesine", "ekle"],
     ["gorevlerime", "ekle"], ["gorevlere", "ekle"], ["gorev", "olustur"], ["gorev", "ekle"],
     ["yapilacaklar", "listesine", "ekle"], ["yapilacaklarima", "ekle"], ["yapilacaklara", "ekle"],
-    ["is", "listesine", "ekle"],
+    ["is", "listesine", "ekle"], ["todoya", "ekle"], ["todo", "listeme", "ekle"], ["todo", "listesine", "ekle"],
+    ["task", "olustur"], ["task", "ekle"], ["gorev", "yap"],
     ["add", "it", "to", "my", "tasks"], ["add", "this", "to", "my", "tasks"], ["add", "to", "my", "tasks"],
     ["add", "to", "my", "to", "do", "list"], ["add", "to", "my", "todo", "list"], ["add", "a", "task"],
     ["create", "a", "task"], ["new", "task"],
   ]
 
   private static func tasks(_ u: Utterance, _ context: VoiceBridgeContext, _ now: Date) -> VoiceBridgeDecision? {
-    guard let range = firstTrigger(taskTriggers, in: u) else { return nil }
+    guard let range = firstTrigger(taskTriggers, in: u) ?? needToDo(u) else { return nil }
     var time = TimePhraseParser.parse(u.text, now: now)
     var rest = u.dropping(range)
     if let time { rest.removeTimeWords(time) }
@@ -573,6 +711,15 @@ enum VoiceActionIntentBridge {
     }
     if time == nil { time = TimePhraseParser.parse(previous, now: now) }
     return VoiceBridgeDecision(.createTask(title: shortTitle(previous), time: time), "task trigger; content from the conversation")
+  }
+
+  /// "Bunu yapmam lazım", "bugün bunu yapmam gerekiyor": a to-do, but not a
+  /// question ("Bugün ne yapmam lazım?" is the day plan).
+  private static func needToDo(_ u: Utterance) -> Range<Int>? {
+    let endings: [[String]] = [["yapmam", "lazim"], ["yapmam", "gerek"], ["yapmam", "gerekiyor"], ["yapmaliyim"]]
+    guard let ending = endings.first(where: { u.ends(with: $0) }), u.count > ending.count,
+          !u.containsAny(["ne", "neler", "nasil", "hangi", "mi", "mu"]) else { return nil }
+    return (u.count - ending.count)..<u.count
   }
 
   // MARK: 7. The day at a glance

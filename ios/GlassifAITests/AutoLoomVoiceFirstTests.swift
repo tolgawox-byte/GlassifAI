@@ -92,7 +92,7 @@ final class AutoLoomVoiceFirstTests: XCTestCase {
     let ledger = orchestrator.ledger
     let running = ledger.begin(
       sessionID: UUID(), turnID: 1, handoffID: "early-\(UUID())", source: .voiceDelegation, request: "not al")
-    XCTAssertEqual(orchestrator.takeOverDelegation(handoffID: running.handoffID ?? ""), .cancelled)
+    XCTAssertEqual(orchestrator.takeOverDelegation(handoffID: running.handoffID ?? "", signature: "save_note"), .cancelled)
     XCTAssertEqual(ledger.record(running.id)?.cancelled, true, "stopped; the app's result answers it")
 
     let answered = ledger.begin(
@@ -102,7 +102,7 @@ final class AutoLoomVoiceFirstTests: XCTestCase {
       $0.phase = .completed
     }
     XCTAssertEqual(
-      orchestrator.takeOverDelegation(handoffID: answered.handoffID ?? ""), .completedOther,
+      orchestrator.takeOverDelegation(handoffID: answered.handoffID ?? "", signature: "save_note"), .completedOther,
       "an answer that saved nothing does not count as the note")
 
     let acted = ledger.begin(
@@ -110,9 +110,30 @@ final class AutoLoomVoiceFirstTests: XCTestCase {
     ledger.update(acted.id) {
       $0.kind = .authorizedAction
       $0.phase = .completed
+      $0.executedAction = "save_note"
     }
-    XCTAssertEqual(orchestrator.takeOverDelegation(handoffID: acted.handoffID ?? ""), .completedAction)
-    XCTAssertEqual(orchestrator.takeOverDelegation(handoffID: "missing"), .unknown)
+    XCTAssertEqual(orchestrator.takeOverDelegation(handoffID: acted.handoffID ?? "", signature: "save_note"), .completedAction)
+    XCTAssertEqual(orchestrator.takeOverDelegation(handoffID: "missing", signature: "save_note"), .unknown)
+  }
+
+  /// The physical bug: the model's delegation saved a memory (or a
+  /// reminder) for "not al". That never counts as the note.
+  func testADelegationThatDidSomethingElseNeverStandsInForTheNote() {
+    let orchestrator = AssistantOrchestrator.shared
+    let ledger = orchestrator.ledger
+    for (kind, executed) in [(AssistantTaskKind.localMemory, "memory.save"), (.authorizedAction, "create_reminder")] {
+      let record = ledger.begin(
+        sessionID: UUID(), turnID: 1, handoffID: "other-\(UUID())", source: .voiceDelegation, request: "not al")
+      ledger.update(record.id) {
+        $0.kind = kind
+        $0.phase = .completed
+        $0.executedAction = executed
+      }
+      XCTAssertEqual(
+        orchestrator.takeOverDelegation(handoffID: record.handoffID ?? "", signature: VoiceIntent.saveNote(text: "x").actionSignature),
+        .completedOther, executed)
+    }
+    XCTAssertNil(VoiceIntent.createTask(title: "x", time: nil).actionSignature, "only the app creates AutoLoom tasks")
   }
 
   func testFreeTextDelegationsAndExecutorsNeverClaimAnAction() throws {

@@ -13,11 +13,17 @@ struct ActionTraceEntry: Identifiable, Equatable {
   let at: Date
   var transcript: String
   var intent: String
+  /// SAVE_NOTE, CREATE_TASK, …
+  var canonical = ""
   var parser: String
   var parsed = "—"
   var permission = "not needed"
   var executor = "—"
+  /// What the store or iOS confirmed ("NoteRecord saved; 12 notes").
+  var persistence = "—"
   var result = "running"
+  /// The sentence the user should hear ("Tamam, not aldım.").
+  var spoken = "—"
   var durationMs: Int?
 }
 
@@ -28,11 +34,12 @@ final class ActionTraceLog: ObservableObject {
   @Published private(set) var entries: [ActionTraceEntry] = []
 
   func begin(transcript: String, decision: VoiceBridgeDecision) -> UUID {
-    let entry = ActionTraceEntry(
+    var entry = ActionTraceEntry(
       at: Date(),
       transcript: TaskTrace.redactUserText(transcript, limit: 120),
       intent: decision.intent.traceName,
       parser: "\(decision.level.rawValue): \(decision.rule)")
+    entry.canonical = decision.intent.canonicalName
     entries.append(entry)
     if entries.count > 30 { entries.removeFirst(entries.count - 30) }
     return entry.id
@@ -52,9 +59,10 @@ final class ActionTraceLog: ObservableObject {
     entries.suffix(15).map { entry in
       """
       \(entry.at.formatted(date: .omitted, time: .standard))  "\(entry.transcript)"
-        intent: \(entry.intent) · \(entry.parser)
+        intent: \(entry.canonical) (\(entry.intent)) · \(entry.parser)
         parsed: \(entry.parsed) · permission: \(entry.permission)
-        executor: \(entry.executor) · result: \(entry.result)\(entry.durationMs.map { " · \($0) ms" } ?? "")
+        executor: \(entry.executor) · persistence: \(entry.persistence)
+        result: \(entry.result) · spoken: \(entry.spoken)\(entry.durationMs.map { " · \($0) ms" } ?? "")
       """
     }.joined(separator: "\n")
   }
@@ -84,6 +92,8 @@ struct IntentOutcome {
   var failed: String?
   /// The short confirmed result for the screen ("✓ Not kaydedildi").
   var feedback: ActionFeedback?
+  /// The sentence the user should hear, for the action trace.
+  var said: String?
 }
 
 /// Words the voice model is given for the app's own confirmations, so the
@@ -114,6 +124,46 @@ extension VoiceIntent {
   var isQuestion: Bool {
     if case .ask = self { return true }
     return false
+  }
+
+  /// SAVE_NOTE, CREATE_TASK, SAVE_MEMORY, CREATE_REMINDER…, for the trace.
+  var canonicalName: String {
+    switch self {
+    case .saveNote: "SAVE_NOTE"
+    case .listNotes: "LIST_NOTES"
+    case .searchNotes: "SEARCH_NOTES"
+    case .deleteNote: "DELETE_NOTE"
+    case .saveMemory: "SAVE_MEMORY"
+    case .createTask: "CREATE_TASK"
+    case .createReminder: "CREATE_REMINDER"
+    case .notify: "SCHEDULE_NOTIFICATION"
+    case .createEvent: "CREATE_EVENT"
+    case .call: "CALL"
+    case .message: "MESSAGE"
+    case .ask: "ASK"
+    default: traceName.uppercased()
+    }
+  }
+
+  /// What a delegation must already have done for this command to count as
+  /// done. A delegation that did something else (a memory or a reminder for
+  /// "not al") never stands in for the user's explicit command. AutoLoom
+  /// tasks have none: only the app creates them.
+  var actionSignature: String? {
+    switch self {
+    case .saveNote: DeviceActionKind.saveNote.rawValue
+    case .createReminder: DeviceActionKind.createReminder.rawValue
+    case .notify: DeviceActionKind.scheduleNotification.rawValue
+    case .createEvent: DeviceActionKind.createEvent.rawValue
+    case .saveMemory, .setName: "memory.save"
+    case .visualMemory: "memory.visual"
+    case .copyText: DeviceActionKind.copyText.rawValue
+    case .shareText: DeviceActionKind.shareText.rawValue
+    case .call: DeviceActionKind.call.rawValue
+    case .message: DeviceActionKind.message.rawValue
+    case .directions, .nearby, .directionsInView: DeviceActionKind.openMaps.rawValue
+    default: nil
+    }
   }
 
   /// Answers to a pending action; they must not cancel it as "superseded".
@@ -223,6 +273,7 @@ extension AssistantOrchestrator {
       if entry.result == "running" {
         entry.result = outcome.failed.map { "failed: " + LogSanitizer.sanitize($0, limit: 120) } ?? "success"
       }
+      if let said = outcome.said { entry.spoken = said }
     }
     if let feedback = outcome.feedback { postFeedback(feedback) }
     if outcome.failed == nil {
@@ -232,6 +283,18 @@ extension AssistantOrchestrator {
       noteConversationAction()
     }
     return outcome
+  }
+
+  /// The note was saved from the partial transcript (the final one came
+  /// late); when the final words still ask for a note, the note takes them.
+  func correctRecentNote(fromFinalTranscript text: String) {
+    guard let saved = recentSaved, let id = saved.noteID, Date().timeIntervalSince(saved.at) < 60,
+          case .saveNote(let content)? = bridgeDecision(for: text)?.intent,
+          content != saved.text,
+          let note = MemoryStore.shared.notes.first(where: { $0.id == id }) else { return }
+    MemoryStore.shared.updateNote(note, title: MemoryStore.defaultTitle(for: content), content: content, tags: note.tags)
+    recentSaved = (content, saved.at, id)
+    NSLog("[AutoLoom] note corrected from the final transcript")
   }
 
   /// Runs a command that was waiting for a permission, once the app is on
@@ -312,22 +375,90 @@ extension AssistantOrchestrator {
         reply: L.t("Okay.", "Tamam."))
 
     case .saveNote(let text):
+      // The user's words are saved first, locally, before anything is said;
+      // no model is involved and the tool switch is the only gate.
       guard ToolRegistry.allows(.saveNote) else { return toolOff(.saveNote) }
-      trace.update(traceID) { $0.executor = "SwiftData (AutoLoom Notes)" }
-      guard let note = store.addNote(title: nil, content: text, source: "voice") else {
-        return IntentOutcome(
-          spoken: "The note could not be saved on this iPhone. Tell the user honestly.",
-          reply: L.t("The note could not be saved.", "Not kaydedilemedi."), failed: "note save failed",
-          feedback: .failed(L.t("Note not saved", "Not kaydedilemedi")))
+      trace.update(traceID) {
+        $0.executor = "MemoryStore.addNote (SwiftData, AutoLoom Notes)"
+        $0.parsed = "content \"\(TaskTrace.redactUserText(text, limit: 80))\""
       }
-      recentSaved = (note.content, Date())
-      trace.update(traceID) { $0.parsed = "note \"\(TaskTrace.redactUserText(note.title, limit: 60))\"" }
+      guard let note = store.addNote(title: nil, content: text, source: "voice") else {
+        trace.update(traceID) { $0.persistence = "failed: " + (store.storageError ?? "no store") }
+        return IntentOutcome(
+          spoken: "The note could not be saved on this iPhone. Tell the user honestly, in a few words, for example \"Notu kaydedemedim.\"",
+          reply: L.t("The note could not be saved.", "Notu kaydedemedim."), failed: "note save failed",
+          feedback: .failed(L.t("Note not saved", "Notu kaydedemedim")), said: "Notu kaydedemedim.")
+      }
+      recentSaved = (note.content, Date(), note.id)
+      let saved = store.notes.contains { $0.id == note.id }
+      trace.update(traceID) {
+        $0.persistence = (store.isPersistent ? "saved on this iPhone" : "saved in a temporary store") +
+          "; Notes list \(saved ? "shows it" : "not refreshed") (\(store.notes.count))"
+      }
       return IntentOutcome(
         spoken: BridgeSpeech.done(
           "The app saved an AutoLoom note on this iPhone: \"\(note.title)\"." + temporaryStorageNote(store),
           tr: "Tamam, not aldım.", en: "Done, I've noted it."),
         reply: L.t("Noted: ", "Not alındı: ") + note.title,
-        feedback: .noteSaved())
+        feedback: .noteSaved(preview: note.content), said: L.t("Done, I've noted it.", "Tamam, not aldım."))
+
+    case .listNotes:
+      trace.update(traceID) { $0.executor = "AutoLoom Notes (read)" }
+      let recent = store.notes.prefix(6)
+      guard !recent.isEmpty else {
+        return IntentOutcome(
+          spoken: "The user has no AutoLoom notes yet. Say so briefly; they can say \"not al: …\".",
+          reply: L.t("No notes yet.", "Henüz not yok."))
+      }
+      let lines = recent.map { "- \($0.createdAt.formatted(date: .abbreviated, time: .shortened)): \($0.content.prefix(200))" }
+        .joined(separator: "\n")
+      trace.update(traceID) { $0.parsed = "\(store.notes.count) notes" }
+      return IntentOutcome(
+        spoken: "The user's most recent AutoLoom notes (\(store.notes.count) in total), newest first:\n" + lines +
+          "\nSay the newest few briefly and naturally.",
+        reply: lines)
+
+    case .searchNotes(let query):
+      trace.update(traceID) { $0.executor = "AutoLoom Notes search (on this iPhone)" }
+      let notes = store.search(query, limit: 12, includeTasks: false).compactMap { hit -> NoteRecord? in
+        if case .note(let note) = hit.item { return note }
+        return nil
+      }
+      trace.update(traceID) { $0.parsed = "\(notes.count) matching notes" }
+      guard !notes.isEmpty else {
+        return IntentOutcome(
+          spoken: "No AutoLoom note mentions \"\(query)\". Tell the user honestly.",
+          reply: L.t("No matching notes.", "Eşleşen not yok."))
+      }
+      let lines = notes.prefix(6).map { "- \($0.createdAt.formatted(date: .abbreviated, time: .shortened)): \($0.content.prefix(240))" }
+        .joined(separator: "\n")
+      return IntentOutcome(
+        spoken: "AutoLoom notes that match \"\(query)\", newest first:\n" + lines + "\nTell the user what they say, briefly.",
+        reply: lines)
+
+    case .deleteNote(let query):
+      trace.update(traceID) { $0.executor = "AutoLoom Notes (delete needs a yes)" }
+      let target: NoteRecord?
+      if let query {
+        target = store.search(query, limit: 3, includeTasks: false).compactMap { hit -> NoteRecord? in
+          if case .note(let note) = hit.item { return note }
+          return nil
+        }.first
+      } else if let saved = recentSaved, let id = saved.noteID, Date().timeIntervalSince(saved.at) < 600 {
+        target = store.notes.first { $0.id == id }
+      } else {
+        target = store.notes.first
+      }
+      guard let target else {
+        return IntentOutcome(
+          spoken: "There is no matching AutoLoom note to delete. Tell the user.",
+          reply: L.t("No matching note.", "Eşleşen not yok."))
+      }
+      var plan = DeviceActionPlan(kind: .deleteNote)
+      plan.noteID = target.id
+      plan.text = target.content
+      let staged = await stage(plan)
+      return IntentOutcome(spoken: staged.speakable, reply: staged.display ?? target.title, failed: staged.failed)
 
     case .saveMemory(let text, let kind):
       guard store.isEnabled else { return memoryOff() }
@@ -338,7 +469,7 @@ extension AssistantOrchestrator {
           reply: L.t("The memory could not be saved.", "Hafızaya kaydedilemedi."), failed: "memory save failed",
           feedback: .failed(L.t("Not remembered", "Hafızaya kaydedilemedi")))
       }
-      recentSaved = (record.text, Date())
+      recentSaved = (record.text, Date(), nil)
       trace.update(traceID) { $0.parsed = "\(record.kind.rawValue) · \(record.category.rawValue)" }
       return IntentOutcome(
         spoken: BridgeSpeech.done(
@@ -735,7 +866,14 @@ extension AssistantOrchestrator {
   private func createTask(title: String, time: ParsedTime?, traceID: UUID) async -> IntentOutcome {
     let store = MemoryStore.shared
     let trace = ActionTraceLog.shared
-    trace.update(traceID) { $0.executor = "SwiftData (AutoLoom Tasks)" }
+    trace.update(traceID) { $0.executor = "MemoryStore.addTask (SwiftData, AutoLoom Tasks)" }
+    // "Bunun için görev oluştur" right after a note: the task keeps a link
+    // to that note.
+    let sourceNote: UUID? = recentSaved.flatMap { saved in
+      guard let id = saved.noteID, Date().timeIntervalSince(saved.at) < 600,
+            VoiceActionIntentBridge.shortTitle(saved.text) == title else { return nil }
+      return id
+    }
     guard let task = store.addTask(
       title: title, dueAt: time?.date, dueHasTime: time?.hasTime ?? true, source: "voice") else {
       return IntentOutcome(
@@ -743,7 +881,11 @@ extension AssistantOrchestrator {
         reply: L.t("The task could not be saved.", "Görev kaydedilemedi."), failed: "task save failed",
         feedback: .failed(L.t("Task not added", "Görev eklenemedi")))
     }
-    recentSaved = (task.title, Date())
+    if let sourceNote {
+      store.link(task, toNote: sourceNote)
+      trace.update(traceID) { $0.persistence = "task saved; linked to the note just saved" }
+    }
+    recentSaved = (task.title, Date(), nil)
     var due = ""
     if let date = task.dueAt {
       due = " due " + TimePhraseParser.describe(date, hasTime: task.dueHasTime, turkish: false)
@@ -758,7 +900,8 @@ extension AssistantOrchestrator {
         "The app added an AutoLoom task on this iPhone: \"\(task.title)\"\(due). It is in the Tasks tab.",
         tr: "Tamam, görevlere ekledim.", en: "Done, it's on your task list."),
       reply: L.t("Task added: ", "Görev eklendi: ") + task.title,
-      feedback: .taskAdded(due: task.dueAt, hasTime: task.dueHasTime))
+      feedback: .taskAdded(due: task.dueAt, hasTime: task.dueHasTime),
+      said: L.t("Done, it's on your task list.", "Tamam, görevlere ekledim."))
   }
 
   /// An optional alert at the task's due time. The task is saved even when

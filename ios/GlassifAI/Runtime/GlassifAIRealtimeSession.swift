@@ -605,6 +605,18 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       if !deferredDelegations.contains(where: { $0.handoffID == handoffId }) {
         deferredDelegations.append((handoffId, request))
       }
+      // The model already decided the turn is over. When the words so far
+      // are an explicit command the app runs itself ("not al: …"), the turn
+      // ends here from them: the app saves the note and answers this
+      // delegation with the result, so the model's own routing (a memory, a
+      // reminder) can never replace the user's verb. A late final
+      // transcript only corrects the text.
+      if !isPreviewSession, !pendingHangUp, !userTranscript.isEmpty,
+         orchestrator.bridgeDecision(for: userTranscript) != nil {
+        NSLog("[AutoLoom] delegation during an open turn that is a command: finishing the turn now")
+        finalizeUserTurnEarly()
+        return
+      }
       deferredFlushTask?.cancel()
       deferredFlushTask = Task { @MainActor [weak self] in
         try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -912,7 +924,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     // command undone.
     var takenOver: String?
     if let earlier = earlierDelegation(matching: text) {
-      switch orchestrator.takeOverDelegation(handoffID: earlier.handoffID) {
+      switch orchestrator.takeOverDelegation(handoffID: earlier.handoffID, signature: decision.intent.actionSignature) {
       case .completedAction:
         NSLog("[AutoLoom] command already done by the model's delegation")
         finishPreHold()
@@ -1284,6 +1296,9 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
             userTranscript = text
             if !early.handled, Self.wordsDiffer(early.text, text) {
               interceptIfCommand(text, assistantWasSpeaking: false)
+            } else if early.handled, Self.wordsDiffer(early.text, text) {
+              // A note saved from the partial words gets the final words.
+              orchestrator.correctRecentNote(fromFinalTranscript: text)
             }
             return
           }

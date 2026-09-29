@@ -91,8 +91,9 @@ final class AssistantOrchestrator: ObservableObject {
   private var localWork = 0
   /// The person of the last call, message or contact lookup ("ona da yaz").
   var recentContact: (name: String, at: Date)?
-  /// What the user saved last (note, task, memory), for "bununla ilgili".
-  var recentSaved: (text: String, at: Date)?
+  /// What the user saved last (note, task, memory), for "bununla ilgili";
+  /// the note's id when it was a note.
+  var recentSaved: (text: String, at: Date, noteID: UUID?)?
   /// The app's last own result, shown as a short card with a haptic
   /// ("✓ Not kaydedildi"). Posted only after the store or iOS confirmed it.
   @Published private(set) var actionFeedback: ActionFeedback?
@@ -422,7 +423,10 @@ final class AssistantOrchestrator: ObservableObject {
   /// transcript arrived, and the app now recognises them as its own
   /// command. One request, one result: the running delegation is stopped
   /// and the app's result answers it; one that already acted is kept.
-  func takeOverDelegation(handoffID: String) -> DelegationTakeover {
+  /// `signature` is what the user's command does ("save_note"). Only a
+  /// delegation that already did exactly that counts as done: one that saved
+  /// a memory or a reminder for "not al" does not, and the note is saved.
+  func takeOverDelegation(handoffID: String, signature: String?) -> DelegationTakeover {
     guard let record = ledger.records.last(where: { $0.handoffID == handoffID }) else { return .unknown }
     if !record.phase.isTerminal {
       ledger.update(record.id) { $0.phase = .cancelled("taken over by the voice action bridge") }
@@ -431,8 +435,7 @@ final class AssistantOrchestrator: ObservableObject {
       refreshActivity()
       return .cancelled
     }
-    let acting: Set<AssistantTaskKind> = [.authorizedAction, .localMemory, .visualMemory, .report]
-    if record.completed, let kind = record.kind, acting.contains(kind) { return .completedAction }
+    if record.completed, let signature, record.executedAction == signature { return .completedAction }
     return .completedOther
   }
 
@@ -743,6 +746,23 @@ final class AssistantOrchestrator: ObservableObject {
     if let reason = ActionGuard.blockedReason(for: query) {
       return Outcome(speakable: ActionGuard.declineText(reason: reason), kind: .authorizedAction)
     }
+    // An explicit command in the delegated words ("not al: yarın …") runs
+    // deterministically, exactly as when the user says it: a note stays a
+    // note even when it mentions a time. Never after camera, web or agent
+    // content in this turn.
+    if untrustedTurnID != turnID {
+      var bridge = bridgeContext()
+      bridge.addressedOnly = false
+      bridge.awaiting = nil
+      if let decision = VoiceActionIntentBridge.decide(query, context: bridge), decision.intent.runsFromDelegation {
+        ledger.update(taskID) {
+          $0.notes.append("explicit command in the delegation, run by the voice action bridge")
+          $0.executedAction = decision.intent.actionSignature
+        }
+        let result = await runVoiceIntent(decision, transcript: query)
+        return Outcome(speakable: result.spoken, display: nil, kind: .authorizedAction, failed: result.failed)
+      }
+    }
     let result = try await callModel(
       taskID: taskID, kind: .authorizedAction, query: query, tools: [], attachment: nil,
       schema: AssistantTools.actionSchema)
@@ -779,6 +799,8 @@ final class AssistantOrchestrator: ObservableObject {
         ledger.update(taskID) { $0.notes.append("needs a yes: camera, web or agent content in this turn") }
       }
       staged = await stage(plan)
+      let executed = plan.kind.rawValue
+      ledger.update(taskID) { $0.executedAction = executed }
     }
     return Outcome(speakable: staged.speakable, display: staged.display, kind: .authorizedAction, failed: staged.failed)
   }
@@ -832,7 +854,9 @@ final class AssistantOrchestrator: ObservableObject {
         let text = try await DeviceActionExecutor.shared.run(plan)
         lastActionResult = text
         if let feedback = ActionFeedback.saved(plan) { postFeedback(feedback) }
-        if plan.kind == .saveNote, let saved = plan.text { recentSaved = (saved, Date()) }
+        if plan.kind == .saveNote, let saved = plan.text {
+          recentSaved = (saved, Date(), MemoryStore.shared.notes.first { $0.content == saved }?.id)
+        }
         return ActionStageResult(
           speakable: text + "\nTell the user naturally and briefly.", display: text, failed: nil)
       } catch {
@@ -1055,6 +1079,7 @@ final class AssistantOrchestrator: ObservableObject {
     }
     switch request {
     case .save(let text, let title, let kind):
+      ledger.update(taskID) { $0.executedAction = "memory.save" }
       guard let record = store.remember(text, title: title, kind: kind, source: "voice") else {
         return Outcome(speakable: "The memory could not be saved. Tell the user.", kind: .localMemory, failed: "memory save failed")
       }
@@ -1127,6 +1152,7 @@ final class AssistantOrchestrator: ObservableObject {
       source: "visual", location: location, thumbnail: thumbnail) else {
       return Outcome(speakable: "The visual memory could not be saved. Tell the user.", kind: .visualMemory, failed: "memory save failed")
     }
+    ledger.update(taskID) { $0.executedAction = "memory.visual" }
     var spoken = "Saved as a visual memory on this iPhone: \(record.text)"
     if let place = location?.placeName { spoken += " (place: \(place))" }
     return Outcome(speakable: spoken + "\nConfirm briefly and naturally.", display: record.text, kind: .visualMemory)

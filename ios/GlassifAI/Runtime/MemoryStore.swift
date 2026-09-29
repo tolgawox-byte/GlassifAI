@@ -897,6 +897,12 @@ final class MemoryStore: ObservableObject {
     save()
   }
 
+  /// "Bunun için görev oluştur" after a note: the task remembers the note.
+  func link(_ task: TaskItem, toNote noteID: UUID) {
+    task.linkedNoteID = noteID
+    save()
+  }
+
   func setNotificationID(_ task: TaskItem, _ id: String?) {
     task.notificationID = id
     save()

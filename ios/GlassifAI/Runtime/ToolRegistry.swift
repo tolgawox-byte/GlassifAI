@@ -39,7 +39,7 @@ enum ToolRegistry {
       turkishDetail: "Bugünü, yarını ve yaklaşan etkinlikleri okur; istediğiniz etkinliği ekler, saat belirsizse önce sorar."),
     NativeTool(
       id: "notes", english: "AutoLoom Notes", turkish: "AutoLoom Notları", systemImage: "note.text",
-      kinds: [.saveNote], permission: nil,
+      kinds: [.saveNote, .deleteNote], permission: nil,
       englishDetail: "Saved on this iPhone. Share a note to Apple Notes from the Memory tab.",
       turkishDetail: "Bu iPhone'a kaydedilir. Notu Hafıza sekmesinden Apple Notlar'a paylaşabilirsiniz."),
     NativeTool(

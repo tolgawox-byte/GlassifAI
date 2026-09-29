@@ -190,6 +190,10 @@ struct AssistantTaskRecord: Identifiable, Equatable {
   var sourceCount = 0
   /// Decisions worth tracing (high-detail retry, contact lookup, fallbacks).
   var notes: [String] = []
+  /// What the task really did ("save_note", "create_reminder",
+  /// "memory.save"), so a command is never counted as done by a task that
+  /// did something else.
+  var executedAction: String?
 
   var cancelled: Bool {
     if case .cancelled = phase { return true }

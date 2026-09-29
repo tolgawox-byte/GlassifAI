@@ -184,7 +184,7 @@ struct TaskTraceView: View {
         }
         ForEach(Array(actions.entries.reversed())) { entry in
           VStack(alignment: .leading, spacing: 3) {
-            Text("\(entry.intent) · \(entry.result)")
+            Text("\(entry.canonical.isEmpty ? entry.intent : entry.canonical) · \(entry.result)")
               .font(.footnote.weight(.semibold))
             Text("“\(entry.transcript)”")
               .font(.caption)
@@ -193,6 +193,8 @@ struct TaskTraceView: View {
             Text("Parsed: \(entry.parsed)").font(.caption2)
             Text("Permission: \(entry.permission)").font(.caption2)
             Text("Executor: \(entry.executor)" + (entry.durationMs.map { " · \($0) ms" } ?? "")).font(.caption2)
+            Text("Persistence: \(entry.persistence)").font(.caption2)
+            Text("Spoken: \(entry.spoken)").font(.caption2)
           }
           .foregroundStyle(.primary)
           .padding(.vertical, 2)

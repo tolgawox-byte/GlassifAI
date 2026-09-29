@@ -56,6 +56,7 @@ struct PendingActionCard: View {
   private var confirmTitle: String {
     switch plan.kind {
     case .forgetMemory: L.t("Forget", "Unut")
+    case .deleteNote: L.t("Delete", "Sil")
     case .agentTask: L.t("Send to agent", "Ajana gönder")
     default: L.t("Confirm", "Onayla")
     }
@@ -65,7 +66,7 @@ struct PendingActionCard: View {
   private var primaryButton: some View {
     switch plan.kind {
     case .createReminder, .createEvent, .saveNote, .listReminders, .todayEvents, .upcomingEvents, .copyText,
-         .scheduleNotification, .findContact, .forgetMemory, .agentTask, .none:
+         .scheduleNotification, .findContact, .forgetMemory, .deleteNote, .agentTask, .none:
       Button(confirmTitle) {
         working = true
         Task {

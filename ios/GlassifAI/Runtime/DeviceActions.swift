@@ -28,6 +28,8 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
   case message
   /// Forgetting a saved memory (chosen by the memory flow, not the planner).
   case forgetMemory = "forget_memory"
+  /// Deleting an AutoLoom note ("bu notu sil"; never chosen by the planner).
+  case deleteNote = "delete_note"
   /// A request for the user's own OpenClaw agent (never chosen by the planner).
   case agentTask = "agent_task"
   case none
@@ -45,7 +47,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .listReminders, .todayEvents, .upcomingEvents, .copyText, .saveNote, .scheduleNotification,
          .findContact, .createReminder, .createEvent, .none:
       .safe
-    case .forgetMemory, .agentTask:
+    case .forgetMemory, .deleteNote, .agentTask:
       .confirm
     case .openMaps, .openURL, .shareText, .call, .message:
       .strongConfirm
@@ -62,7 +64,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
 
   /// Kinds the action planner may choose.
   static var plannable: [DeviceActionKind] {
-    allCases.filter { $0 != .agentTask && $0 != .forgetMemory }
+    allCases.filter { $0 != .agentTask && $0 != .forgetMemory && $0 != .deleteNote }
   }
 
   var label: String {
@@ -82,6 +84,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .call: L.t("Phone call", "Arama")
     case .message: L.t("Message", "Mesaj")
     case .forgetMemory: L.t("Forget memory", "Hafızadan sil")
+    case .deleteNote: L.t("Delete note", "Notu sil")
     case .agentTask: L.t("Your agent (OpenClaw)", "Ajanınız (OpenClaw)")
     case .none: L.t("No action", "İşlem yok")
     }
@@ -101,6 +104,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .call: "phone"
     case .message: "message"
     case .forgetMemory: "brain"
+    case .deleteNote: "trash"
     case .agentTask: "server.rack"
     case .none: "questionmark.circle"
     }
@@ -130,6 +134,8 @@ struct DeviceActionPlan: Equatable {
   var phone: String?
   /// The memory to forget (forget_memory).
   var memoryID: UUID?
+  /// The note to delete (delete_note).
+  var noteID: UUID?
   /// The planner's short explanation (used for `none`).
   var reply: String = ""
   /// Planned by the model in a turn that also brought camera, web or agent
@@ -181,6 +187,8 @@ struct DeviceActionPlan: Equatable {
       return L.t("Message ", "Mesaj: ") + target + ": \"\((text ?? "").prefix(80))\""
     case .forgetMemory:
       return L.t("Forget", "Unut") + ": \"\((text ?? "").prefix(80))\""
+    case .deleteNote:
+      return L.t("Delete note", "Notu sil") + ": \"\((text ?? "").prefix(80))\""
     case .agentTask:
       return L.t("Ask your agent", "Ajanınıza sor") + ": \"\((text ?? "").prefix(120))\""
     case .listReminders, .todayEvents, .upcomingEvents, .none:
@@ -368,6 +376,8 @@ enum DeviceActionParser {
       guard plan.text != nil else { return .failure(.missing("the message text")) }
     case .forgetMemory:
       guard plan.memoryID != nil else { return .failure(.missing("which memory to forget")) }
+    case .deleteNote:
+      guard plan.noteID != nil else { return .failure(.missing("which note to delete")) }
     case .agentTask:
       guard plan.text != nil else { return .failure(.missing("what to ask your agent")) }
     case .listReminders, .todayEvents, .upcomingEvents, .none:
@@ -558,6 +568,14 @@ final class DeviceActionExecutor {
       let forgotten = String(record.text.prefix(80))
       MemoryStore.shared.delete(record)
       return "Forgotten: \(forgotten)"
+    case .deleteNote:
+      guard let id = plan.noteID, let note = MemoryStore.shared.notes.first(where: { $0.id == id }) else {
+        throw ExecutionError.failed("That note no longer exists.")
+      }
+      // Read before deleting: a deleted SwiftData object must not be touched.
+      let deleted = String(note.title.prefix(60))
+      MemoryStore.shared.deleteNote(note)
+      return "Deleted the AutoLoom note: \(deleted)"
     case .none:
       return plan.reply.isEmpty ? "No supported action was found for that request." : plan.reply
     case .openMaps, .openURL, .shareText, .call, .message:

@@ -30,13 +30,17 @@ struct ActionFeedback: Identifiable, Equatable {
   let detail: String?
   let success: Bool
   let at: Date
+  /// A short preview for the card only (the note's first words); never kept
+  /// in Recent activity.
+  let preview: String?
 
-  init(kind: Kind, title: String, detail: String? = nil, success: Bool = true, at: Date = Date()) {
+  init(kind: Kind, title: String, detail: String? = nil, success: Bool = true, at: Date = Date(), preview: String? = nil) {
     self.kind = kind
     self.title = title
     self.detail = detail
     self.success = success
     self.at = at
+    self.preview = preview.map { String($0.prefix(90)) }
   }
 
   var systemImage: String {
@@ -66,8 +70,8 @@ struct ActionFeedback: Identifiable, Equatable {
 
   // MARK: Common results
 
-  static func noteSaved() -> ActionFeedback {
-    ActionFeedback(kind: .note, title: L.t("Note saved", "Not kaydedildi"))
+  static func noteSaved(preview: String? = nil) -> ActionFeedback {
+    ActionFeedback(kind: .note, title: L.t("Note saved", "Not kaydedildi"), preview: preview)
   }
 
   static func memorySaved() -> ActionFeedback {
@@ -98,6 +102,8 @@ struct ActionFeedback: Identifiable, Equatable {
       return ActionFeedback(kind: .copy, title: L.t("Copied", "Kopyalandı"))
     case .forgetMemory:
       return ActionFeedback(kind: .forgotten, title: L.t("Forgotten", "Hafızadan silindi"))
+    case .deleteNote:
+      return ActionFeedback(kind: .forgotten, title: L.t("Note deleted", "Not silindi"))
     default:
       return nil
     }
@@ -229,6 +235,12 @@ struct ActionFeedbackToast: View {
           Text(detail)
             .font(.caption)
             .foregroundStyle(.secondary)
+        }
+        if let preview = feedback.preview {
+          Text(preview)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
         }
       }
       Spacer(minLength: 0)
