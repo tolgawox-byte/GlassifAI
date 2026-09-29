@@ -100,7 +100,10 @@ struct IntentOutcome {
 /// user hears one short natural answer ("Tamam, not aldım.").
 enum BridgeSpeech {
   static func done(_ fact: String, tr: String, en: String) -> String {
-    "\(fact) Tell the user in the conversation's language, in one short natural sentence such as \"\(tr)\" (in English: \"\(en)\"). Do not add anything else and do not ask a follow-up question."
+    // Jarvis Style adapts the example ("Tamam, not aldım." → "Not aldım efendim.").
+    let tr = JarvisStyle.adapt(tr, turkish: true)
+    let en = JarvisStyle.adapt(en, turkish: false)
+    return "\(fact) Tell the user in the conversation's language, in one short natural sentence such as \"\(tr)\" (in English: \"\(en)\"). Do not add anything else and do not ask a follow-up question."
   }
 
   static func ask(_ tr: String, en: String, note: String = "") -> String {
@@ -285,6 +288,12 @@ extension AssistantOrchestrator {
     beginLocalWork()
     let outcome = await perform(decision, transcript: transcript, traceID: traceID)
     endLocalWork()
+    // The local agent's work in the routing log (intent only, no words).
+    ProviderRegistry.shared.record(RoutingDiagnostic(
+      at: started, intent: decision.intent.canonicalName.lowercased(), strategy: .local,
+      steps: ["deviceAction → local (\(decision.level.rawValue))"],
+      result: outcome.failed == nil ? "success" : "failed", latencyMs: Int((Date().timeIntervalSince(started) * 1_000).rounded()),
+      fallback: nil))
     trace.update(traceID) { entry in
       entry.durationMs = Int((Date().timeIntervalSince(started) * 1_000).rounded())
       if entry.result == "running" {

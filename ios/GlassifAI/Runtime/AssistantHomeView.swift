@@ -18,6 +18,7 @@ struct AssistantHomeView: View {
   @ObservedObject private var liveVision = LiveVisionController.shared
   @ObservedObject private var wake = WakePhraseListener.shared
   @ObservedObject private var media = RayBanMediaCoordinator.shared
+  @ObservedObject private var agents = AutoLoomAgentOrchestrator.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
@@ -289,6 +290,9 @@ struct AssistantHomeView: View {
     HStack(spacing: 8) {
       if showsRecordingChip {
         RecordingChip(media: media)
+      }
+      if agents.activeSpecialists > 1 {
+        chip(L.t("\(agents.activeSpecialists) specialists working", "\(agents.activeSpecialists) uzman çalışıyor"), systemImage: "person.3")
       }
       if liveVision.isActive {
         chip(

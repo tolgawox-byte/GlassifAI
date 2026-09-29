@@ -97,6 +97,10 @@ struct SettingsView: View {
           NavigationLink { AudioSettingsView() } label: {
             row(L.t("Audio", "Ses çıkışı"), "speaker.wave.2", value: AudioRoutePreference.current.label)
           }
+          NavigationLink { PersonalitySettingsView() } label: {
+            row(L.t("Personality", "Kişilik"), "person.crop.circle.badge.checkmark",
+                value: JarvisStyle.isEnabled ? L.t("Jarvis Style", "Jarvis tarzı") : L.t("Natural", "Doğal"))
+          }
         }
 
         Section(L.t("Voice", "Ses")) {
@@ -124,9 +128,12 @@ struct SettingsView: View {
           NavigationLink { AccountSettingsView() } label: {
             row(L.t("ChatGPT account", "ChatGPT hesabı"), "person.crop.circle", value: chatGPT.isAuthenticated ? L.t("Connected", "Bağlı") : L.t("Not connected", "Bağlı değil"))
           }
+          NavigationLink { IntelligenceSettingsView() } label: {
+            row(L.t("Intelligence", "Zekâ"), "sparkles", value: intelligenceSummary)
+          }
           if chatGPT.isAuthenticated {
             NavigationLink { ModelSettingsView() } label: {
-              row(L.t("Intelligence", "Zekâ"), "cpu", value: modelOverride.isEmpty ? L.t("Automatic", "Otomatik") : modelOverride)
+              row(L.t("ChatGPT models", "ChatGPT modelleri"), "cpu", value: modelOverride.isEmpty ? L.t("Automatic", "Otomatik") : modelOverride)
             }
           }
           NavigationLink { WebSettingsView() } label: {
@@ -206,6 +213,14 @@ struct SettingsView: View {
       }
     }
     .tint(AutoLoomTheme.electricBlue)
+  }
+
+  /// "Automatic · 3 providers".
+  private var intelligenceSummary: String {
+    let registry = ProviderRegistry.shared
+    let count = ProviderID.allCases.filter { $0 != .local && registry.isConnected($0) }.count
+    let mode = registry.automatic ? L.t("Automatic", "Otomatik") : L.t("Manual", "Elle")
+    return "\(mode) · \(count)"
   }
 
   private var voiceSummary: String {

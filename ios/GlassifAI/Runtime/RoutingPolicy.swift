@@ -304,7 +304,7 @@ enum AssistantInstructions {
         String(recentConversation.prefix(500))
     }
     if jarvisStyle {
-      text += "\n\n" + JarvisStyle.instructions
+      text += "\n\n" + JarvisStyle.instructions(profileName: profileName)
     }
     return text
   }

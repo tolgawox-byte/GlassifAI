@@ -75,10 +75,13 @@ enum ConnectionFeedback: String, CaseIterable, Identifiable {
 
   /// The phrase for a new conversation that became ready. Starts with the
   /// on-screen button only chime: the user is looking at the screen.
+  @MainActor
   static func readyPhrase(for reason: VoiceStartReason, turkish: Bool) -> String? {
     guard reason != .button, current.speaks else { return nil }
-    return GreetingStyle.current.text(
-      turkish: turkish, custom: UserDefaults.standard.string(forKey: GreetingStyle.customTextKey) ?? "")
+    guard let text = GreetingStyle.current.text(
+      turkish: turkish, custom: UserDefaults.standard.string(forKey: GreetingStyle.customTextKey) ?? "") else { return nil }
+    // Jarvis Style: "Bağlantı hazır. Sizi dinliyorum efendim."
+    return JarvisStyle.greeting(text, turkish: turkish, profileName: MemoryStore.shared.profile.preferredName)
   }
 
   static func failureText(turkish: Bool) -> String {
@@ -218,9 +221,6 @@ enum JarvisStyle {
     UserDefaults.standard.bool(forKey: enabledKey)
   }
 
-  static let instructions = """
-  Jarvis Style is on. Speak like a composed, discreet personal assistant: calm, precise, courteous and economical with words, with at most an occasional touch of dry, understated humour. Keep a steady, unhurried pace. In Turkish use a polished, respectful register (siz) and you may say "efendim" now and then, never in every sentence; in English a lightly formal tone ("Certainly.", "Right away.") is fine. If you know the user's name, use it only occasionally. Do not imitate any real actor or film character, do not quote films, and never claim to be a character from a film.
-  """
 
   /// Turns the style on or off, switching to the suggested voice (and back
   /// to the earlier voice when it is turned off).

@@ -530,6 +530,29 @@ final class AssistantOrchestrator: ObservableObject {
     }
 
     do {
+      // Multi-agent routing: every request gets a plan (Settings → Intelligence
+      // → Routing diagnostics). A specialist or a team runs only when one is
+      // connected and suits the job; otherwise, and whenever every
+      // specialist fails, the ChatGPT path below answers as before.
+      let plan = agentPlan(for: query, kind: kind, camera: camera)
+      ledger.update(taskID) { $0.agentPlan = plan.summary }
+      if plan.strategy == .local, plan.reason == "offline" {
+        return Outcome(
+          speakable: "The phone is offline, so this cannot be answered right now. Notes, tasks, reminders and memory still work. Tell the user briefly.",
+          kind: kind, failed: "offline")
+      }
+      // Reports (saved as a note) and requests for the user's own agent
+      // (confirmed first) keep their own flows.
+      if plan.usesSpecialist, kind != .report, kind != .agent, plan.primary.role != .external,
+         let outcome = try await runSpecialists(plan, taskID: taskID, kind: kind, query: query, detail: detail) {
+        return outcome
+      }
+      if !plan.usesSpecialist {
+        ProviderRegistry.shared.record(RoutingDiagnostic(
+          at: Date(), intent: plan.intent, strategy: plan.strategy,
+          steps: plan.allSteps.map { "\($0.role.rawValue) → \($0.provider.rawValue)" },
+          result: plan.strategy == .local ? "local tools" : "default path (ChatGPT)", latencyMs: nil, fallback: nil))
+      }
       if kind == .localMemory {
         return try await runMemory(taskID: taskID, query: query)
       }
@@ -565,6 +588,84 @@ final class AssistantOrchestrator: ObservableObject {
         speakable: "The request failed. Tell the user briefly and offer to try again.",
         kind: kind,
         failed: LogSanitizer.sanitize(error.localizedDescription))
+    }
+  }
+
+  // MARK: Multi-agent
+
+  /// The router's plan for this request. Settings the user turned off
+  /// (camera, web search) are respected before routing.
+  private func agentPlan(for query: String, kind: AssistantTaskKind?, camera: CaptureSource) -> AgentPlan {
+    var profile = RequestAnalyzer.analyze(query, kind: kind)
+    if !AssistantPreferences.webSearchEnabled {
+      profile.needsWeb = false
+      profile.needsCurrentInformation = false
+      profile.researchFacets = []
+    }
+    if camera == .off {
+      profile.needsVision = false
+      profile.needsLiveVideo = false
+    }
+    profile.intent = RequestAnalyzer.intent(for: profile)
+    return AgentRouter.plan(for: profile, context: ProviderRegistry.shared.routingContext())
+  }
+
+  /// Runs the plan's specialists (or team) with the minimum context: the
+  /// words, the camera image when the job is visual, a few relevant
+  /// memories, the recent conversation and the current entities. Returns
+  /// nil when every specialist failed, so the ChatGPT path answers instead.
+  private func runSpecialists(
+    _ plan: AgentPlan,
+    taskID: UUID,
+    kind: AssistantTaskKind?,
+    query: String,
+    detail: VisionDetail
+  ) async throws -> Outcome? {
+    var agentContext = AutoLoomAgentOrchestrator.Context(query: query)
+    if plan.allSteps.contains(where: { $0.role == .vision || $0.role == .translation }) {
+      ledger.update(taskID) { $0.visionProfile = detail }
+      let attachment = try await prepareVisionImage(taskID: taskID, detail: detail)
+      agentContext.images = attachment.images.map(\.jpeg)
+      agentContext.ocrText = attachment.ocrText
+    }
+    agentContext.memory = MemoryStore.shared.relevantItems(for: query)
+    agentContext.conversation = context.promptContext(memory: [])
+    agentContext.entities = EntityContext.shared.contextLine()
+    agentContext.turkish = context.detectedLanguage.map { $0 == "Turkish" } ?? L.isTurkish
+    ledger.update(taskID) {
+      $0.phase = plan.primary.role == .research || plan.strategy == .team ? .searching : .reasoning
+      $0.model = plan.allSteps.map { "\($0.role.rawValue)→\($0.provider.rawValue)" }.joined(separator: ", ")
+    }
+    refreshActivity()
+    do {
+      let answer = try await AutoLoomAgentOrchestrator.shared.execute(plan, context: agentContext)
+      try Task.checkCancellation()
+      let fetched = Date()
+      let sources = answer.sources.map { source in
+        WebSource(
+          title: source.title ?? source.url.host ?? source.url.absoluteString, url: source.url, snippet: nil,
+          fetchedAt: fetched, publishedAt: source.published)
+      }
+      var speakable = String(answer.spoken.prefix(1_800))
+      if !sources.isEmpty {
+        let names = sources.prefix(3).map(\.host).joined(separator: ", ")
+        speakable += "\n(Sources: \(names). Mention the main source by name; do not read URLs.)"
+      }
+      if answer.disagreement {
+        speakable += "\n(The sources disagree on the figures: say so and give the range.)"
+      }
+      ledger.update(taskID) {
+        $0.notes.append("agents: \(answer.providers.map(\.rawValue).joined(separator: ", "))"
+          + (answer.fallbackUsed ? " (fallback used)" : ""))
+      }
+      let resultKind: AssistantTaskKind = kind
+        ?? (plan.primary.role == .research ? .webSearch : (plan.primary.role == .vision ? .vision : .deepReasoning))
+      return Outcome(speakable: speakable, display: answer.text, kind: resultKind, sources: sources)
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      ledger.update(taskID) { $0.notes.append("specialists unavailable → ChatGPT path") }
+      return nil
     }
   }
 
@@ -1171,6 +1272,17 @@ final class AssistantOrchestrator: ObservableObject {
       VisionFrameEncoder.encode(pixelBuffer, detail: .fast, useCPU: background)
     }.value
     guard let encoded else { throw ResponsesError.failed("The live image could not be prepared.") }
+    // Live Vision on a specialist (Gemini) when it leads the live-vision
+    // role; ChatGPT otherwise, and whenever the specialist fails.
+    let routing = ProviderRegistry.shared.routingContext()
+    let specialists = Array(AgentRouter.candidates(for: .liveVision, context: routing).prefix { $0 != .chatgpt })
+    if !specialists.isEmpty,
+       let text = try? await AutoLoomAgentOrchestrator.shared.describeLive(
+         jpeg: encoded.jpeg, providers: specialists,
+         turkish: context.detectedLanguage.map { $0 == "Turkish" } ?? L.isTurkish),
+       !text.isEmpty {
+      return text
+    }
     let catalog = self.catalog
     guard let model = ModelSelector.model(
       for: .vision, available: availableModels, catalog: catalog, needsImages: true,

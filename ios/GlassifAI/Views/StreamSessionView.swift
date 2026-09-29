@@ -79,6 +79,8 @@ struct StreamSessionView: View {
         gestureSession = GlassesGestureSession(wearables: wearables)
       }
       AudioRouteMonitor.shared.start()
+      // Cloud agents are not tried offline.
+      NetworkStatus.shared.start()
       VoiceCatalog.migrateStoredSelection()
       ConnectionFeedback.migrateStoredValue()
       await activateCaptureSource()

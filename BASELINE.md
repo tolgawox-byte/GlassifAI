@@ -1,5 +1,21 @@
 # Baseline — last device-verified working build
 
+## Baseline for the multi-agent pass (recorded 2026-09-28, brief "ULTIMATE MULTI-AGENT + JARVIS-STYLE PERSONAL AI")
+
+| Item | Value |
+| --- | --- |
+| Branch | `autoloom-glasses-jarvis-v1` (work continues here; other branches untouched) |
+| Starting HEAD | `0e425e8` (Ray-Ban locked-screen vision + photos/videos, CI run 36513869746 running at the time) on top of `f11377f` |
+| Last green build | CI run [36512170295](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36512170295), commit `f11377f`: iOS 191/191, Rust 8/8, Debug + Release IPAs (spoken-note reliability fix) |
+| Rollback tag | `rollback-f11377f-before-multi-agent` (on `f11377f`); older: `baseline-94575fd-jarvis-v1.3`, `rollback-e79fd85-before-voice-first` |
+| Remote | `origin` https://github.com/tolgawox-byte/GlassifAI.git |
+
+What exists before this pass: one realtime ChatGPT voice (the user's ChatGPT account through the embedded Codex bridge) that talks and delegates `TASK: kind | QUERY`; `AssistantOrchestrator` running local memory, iPhone actions, reports, the optional OpenClaw gateway, and ChatGPT Responses calls (per-role model choice from the account's catalog, hosted or direct web search, Ray-Ban/iPhone vision); the LEVEL 1 local intent bridge for explicit commands (notes, reminders, tasks, calls, messages, maps, photos, videos). The multi-agent layer must keep all of this working with only ChatGPT + local connected.
+
+Rollback: install the IPA from run 36512170295, or rebuild with `git checkout rollback-f11377f-before-multi-agent`.
+
+---
+
 ## Baseline for the voice-first pass (recorded 2026-09-28, brief "ULTIMATE VOICE-FIRST PERSONAL ASSISTANT + PREMIUM UI")
 
 | Item | Value |

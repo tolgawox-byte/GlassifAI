@@ -194,6 +194,8 @@ struct AssistantTaskRecord: Identifiable, Equatable {
   /// "memory.save"), so a command is never counted as done by a task that
   /// did something else.
   var executedAction: String?
+  /// The router's plan ("RESEARCH · SPECIALIST · research→perplexity"), no content.
+  var agentPlan: String?
 
   var cancelled: Bool {
     if case .cancelled = phase { return true }
