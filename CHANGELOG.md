@@ -4,7 +4,7 @@ All notable changes are documented here. The project follows [Keep a Changelog](
 
 ## [AutoLoom Jarvis v1.4 — multi-agent, Ray-Ban media, reliable notes] — branch `autoloom-glasses-jarvis-v1`
 
-Rollback tag: `rollback-f11377f-before-multi-agent` (before the multi-agent layer). Not device-verified.
+Final CI run [36523415778](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36523415778) on `f38bcad`: iOS 263/265 (2 skipped), Rust 8/8; tag `baseline-f38bcad-jarvis-v1.4`. Rollback tags: `rollback-f11377f-before-multi-agent`, `rollback-c2d7cfe-before-dealer`. Not device-verified.
 
 ### Added
 - **Multi-agent orchestrator**: logical agents (chat, vision, live vision, research, reasoning, coding, actions, memory, dealer, translation, documents, planning, external), `AgentPlan`, `AgentRouter` (LOCAL / FAST / SPECIALIST / TEAM), cost preferences (Balanced, Best quality, Lower cost, Local first), per-role pins, automatic routing, offline handling.

@@ -14,6 +14,8 @@ What exists before this pass: one realtime ChatGPT voice (the user's ChatGPT acc
 
 Rollback: install the IPA from run 36512170295, or rebuild with `git checkout rollback-f11377f-before-multi-agent`.
 
+Result of this pass (v1.4: multi-agent, Dealer Mode, daily life, Ray-Ban photos and video): CI run [36523415778](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36523415778), commit `f38bcad`: iOS 263/265 (2 Keychain tests skipped in the unsigned simulator), Rust 8/8, Debug + Release IPAs; tag `baseline-f38bcad-jarvis-v1.4`. Not device-verified.
+
 ---
 
 ## Baseline for the voice-first pass (recorded 2026-09-28, brief "ULTIMATE VOICE-FIRST PERSONAL ASSISTANT + PREMIUM UI")

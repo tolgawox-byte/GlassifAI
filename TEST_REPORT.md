@@ -1,4 +1,4 @@
-# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, Jarvis v1.3)
+# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, v1.4)
 
 Result categories:
 - **BUILD PASS**: compiled into the Debug and Release IPAs in CI.
@@ -6,6 +6,90 @@ Result categories:
 - **PHYSICAL TEST REQUIRED**: needs the iPhone and Ray-Ban Meta Gen 1. The tables below are for you to fill in.
 
 Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
+
+## Multi-agent, Dealer Mode, daily life, Ray-Ban photos and video (v1.4)
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [36523415778](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36523415778) | `f38bcad` | **BUILD PASS · iOS 263/265 (2 skipped) · Rust 8/8** | **Final run for v1.4 — install this Release IPA** (`AutoLoomMediaGlasses-Release-unsigned.ipa`) |
+| [36520754831](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36520754831) | `ac8be1f` | BUILD PASS · iOS 259/263 (2 skipped) · Rust 8/8 | Place reminders. The voice timer test ran past its 3-minute allowance (most likely why the tests of 36518376601 ran so long) and Vision found no QR code in the simulator; both fixed in `f38bcad` |
+| [36520266622](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36520266622) | `df7b690` | BUILD PASS · tests cancelled | Parking and QR; superseded by `ac8be1f` while its tests ran |
+| [36518376601](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36518376601) | `ba97b22` | BUILD PASS · tests cancelled | Superseded by `df7b690` while its tests ran |
+| [36518316078](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36518316078) | `d771f9b` | cancelled | Superseded by `ba97b22` |
+| [36517875234](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36517875234) | `06142d1` | build failed | The routine `switch` lacked the new review cases (fixed in `ba97b22`) |
+| [36515901004](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36515901004) | `d12b4bc` | BUILD PASS · iOS 235/239 · Rust 8/8 | Multi-agent. Two Keychain tests: the unsigned simulator app has no Keychain entitlement (now skipped with that reason). Two routing tests: "bug" matched "bugün" (fixed in `d771f9b`) |
+| [36513869746](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36513869746) | `0e425e8` | BUILD PASS · iOS 213/213 · Rust 8/8 | Ray-Ban background vision, photos, video, media library |
+| [36512170295](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36512170295) | `f11377f` | BUILD PASS · iOS 191/191 · Rust 8/8 | Spoken notes |
+| [36510421307](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36510421307) | `f917edb` | BUILD PASS · iOS 190/191 · Rust 8/8 | The Notes tool's risk label (fixed in `f11377f`) |
+
+New test classes: `AutoLoomRayBanMediaTests` (decoder recovery, stall policy, locked-screen vision, photo and video outcomes, what is said), `AutoLoomMultiAgentTests` (routing, fallbacks, circuit breaker, teams and fusion, provider adapters against stubbed HTTP, the normaliser, Jarvis Style), `AutoLoomDealerTests` (VIN check digit and look-alikes, odometer, body zones, checklists, the vehicle store, quick commands, linking), `AutoLoomDailyLifeTests` (durations, timers, shopping list, parking, QR codes, undo, reviews, modes, unreadable files kept).
+
+Skipped in CI: the two tests that store a provider key. CI builds the test app unsigned, and an unsigned simulator app has no Keychain. Test A5 below covers them on the phone.
+
+### Physical tests (v1.4)
+
+Install the Release IPA from the first row (Diagnostics **Commit** = `f38bcad`). After any failure, copy Settings → Developer → Action & task trace; for Ray-Ban, also Camera diagnostics.
+
+Spoken notes:
+
+| # | Say / do | Pass when | Result |
+|---|---|---|---|
+| N1 | "AutoLoom, not al: yarın lastikleri kontrol et." | "Tamam, not aldım." only once the note is in Memory → Notes | |
+| N2 | "Lastikleri kontrol etmeyi görev olarak ekle." | A task in Tasks, not a note | |
+| N3 | After any answer: "bunu not al" | The note holds that answer | |
+| N4 | With a vehicle active: "not al: sol arka lastik değişecek" | In Notes, and the vehicle shows one linked note | |
+
+Ray-Ban vision, photos and video:
+
+| # | Say / do | Pass when | Result |
+|---|---|---|---|
+| R1 | Glasses streaming, lock the phone, ask "önümde ne var?" | It describes what the glasses see; Camera diagnostics shows frames still arriving | |
+| R2 | Settings → Ray-Ban → Screen locked off; lock; ask again | It says the camera is off while locked; no image is used | |
+| R3 | "Fotoğraf çek" | Shutter sound; "…Fotoğraflar'a kaydettim" only when the Photos app has it | |
+| R4 | Deny adding to Photos, then "fotoğraf çek" | Kept in Explore → Captures and it says so; Save again works once allowed | |
+| R5 | "Video kaydet" … 20 s … "kaydı durdur" | Start and stop sounds; the video is in Photos, silent (DAT 0.5 has no camera audio) | |
+| R6 | Record, lock the phone for 30 s, unlock, stop | The locked time is in the video (maybe as segments); if it stopped, it said why | |
+| R7 | "Kayıt ne kadar oldu?" while recording | The time so far | |
+| R8 | With a vehicle active: "jantın fotoğrafını çek" | The photo is linked to the vehicle; "Wheels and tires" is ticked | |
+
+Dealer Mode:
+
+| # | Say / do | Pass when | Result |
+|---|---|---|---|
+| D1 | "Yeni araç" | Explore → Dealer shows the active vehicle | |
+| D2 | Looking at the VIN plate: "VIN oku" | The last six characters are read out; "doğrulandı" only when the check digit matches; an unclear character comes as options, never a guess | |
+| D3 | "Kilometre 45 bin 320"; then, at the cluster, "kilometreyi oku" | Saved as 45.320 km and shown on the card | |
+| D4 | "Hasar ekle: sağ ön çamurluk çizik" | The vehicle lists "sağ ön çamurluk çizik" | |
+| D5 | "Foto checklist" | The photos still missing | |
+| D6 | "Piyasa bak" (web search on) | A price range with sources; saved under Research | |
+| D7 | "İlan hazırla" | A listing in Notes that uses only the recorded facts and states the damage | |
+| D8 | Right after D4: "Son yaptığını geri al" | The damage is gone | |
+| D9 | "Bu araç tamam", then "sonraki araç" | A short summary; the next vehicle starts | |
+
+Daily life and Shortcuts:
+
+| # | Say / do | Pass when | Result |
+|---|---|---|---|
+| L1 | "10 dakika timer kur", lock the phone | The chip counts down; the notification rings at the end while locked | |
+| L2 | With it running: "Ne kadar kaldı?", then "timerı durdur" | The time left; then no notification later | |
+| L3 | "Alışveriş listesine süt ve ekmek ekle" → "alışveriş listemde ne var" → "sütü listeden çıkar" | Explore → Shopping list matches each step | |
+| L4 | "Bugün ne yaptım?", "haftalık özet" | Counts of notes, tasks, memories, captures and vehicles; nothing invented | |
+| L5 | Shortcuts / Siri: "New AutoLoom task", "AutoLoom shopping list", "Start a dealer session in AutoLoom", "AutoLoom today's briefing", "Remember this in AutoLoom" | Each does what it says | |
+| L6 | Outdoors: "park yerimi kaydet: B2 katı" → walk away → "arabam nerede?" → "beni arabama götür" | The place and "B2 katı" are read back; Maps opens walking directions to the spot; the location prompt appears only the first time | |
+| L7 | Look at a restaurant menu QR code: "QR kodu oku"; then a Wi-Fi QR code | The web address's site name is read out and nothing opens; for Wi-Fi only the network name, never the password | |
+| L8 | With "Hatırla: ev adresim …" saved: "Eve varınca süt almayı hatırlat", then go home | A reminder "Süt al" with a location in the Reminders app; it rings on arrival (Reminders needs Location Services) | |
+
+Multi-agent and personality:
+
+| # | Say / do | Pass when | Result |
+|---|---|---|---|
+| A1 | Only ChatGPT connected: the usual vision, web, memory and note requests | As fast and as good as v1.3; Settings → Intelligence → Routing diagnostics shows only FAST or LOCAL | |
+| A2 | Optional, paid: Settings → Intelligence → Perplexity → key → accept the cost notice → Test connection | "Connected"; a news question shows research on Perplexity in the diagnostics | |
+| A3 | Airplane mode: "not al: …" and a news question | The note is saved; the news question says it is offline | |
+| A4 | Settings → Personality: intensity Subtle / Balanced / Full; address "Efendim" / none | Confirmations follow it; "efendim" only now and then | |
+| A5 | After A2, quit and reopen the app | The provider is still connected (key in the Keychain); the key is never shown | |
+
+---
 
 ## Voice-first actions and UI (v1.3)
 
