@@ -156,6 +156,10 @@ enum VoiceIntent: Equatable {
   case whatChanged
   /// "Bu belgeyi özetle", "fişi kaydet", "bu ay ne harcadım?".
   case document(DocumentCommand)
+  /// "Müzik çal", "sonraki şarkı", "ne çalıyor?".
+  case music(MusicCommand)
+  /// "Sabah turu rutinini başlat": a routine the user built.
+  case userRoutine(String)
   /// "Bunu yarına taşı": moves a task (nil title: the task just mentioned).
   case moveTask(title: String?, time: ParsedTime)
   /// "Hayır, cumartesi": the waiting or just-saved action gets this day/time.
@@ -232,6 +236,8 @@ enum VoiceIntent: Equatable {
     case .findVisual: "findVisual"
     case .whatChanged: "whatChanged"
     case .document(let command): "document(\(command.key))"
+    case .music(let command): "music(\(command.key))"
+    case .userRoutine: "userRoutine"
     case .moveTask: "moveTask"
     case .correctPending: "correctPending"
     case .graph(let steps): "graph(\(steps.count))"
@@ -274,6 +280,8 @@ struct VoiceBridgeContext {
   var activeVehicle = false
   /// Live Vision is watching ("ne değişti?" asks about the view).
   var liveVisionActive = false
+  /// Names of the user's own routines ("sabah turu").
+  var routineNames: [String] = []
   /// An event or reminder was saved moments ago ("hayır, cumartesi" fixes it).
   var recentTimedAction = false
   /// Addressed-only mode: act only when the user says the assistant's name.
@@ -376,6 +384,7 @@ enum VoiceActionIntentBridge {
       { capabilities($0) },
       { whatChanged($0, context) },
       { documents($0) },
+      { music($0) },
       { translation($0, context) },
       { messages($0, context) },
       { notes($0, context) },
@@ -387,6 +396,7 @@ enum VoiceActionIntentBridge {
       { calendar($0, now) },
       { taskQueries($0) },
       { routines($0) },
+      { userRoutine($0, context) },
       { calls($0) },
       { contactQuestions($0) },
       { directions($0, context) },

@@ -528,6 +528,36 @@ enum ActionCatalog {
       examplesTR: ["[live] Ne değişti?", "[live] Bir şey değişti mi?"], examplesEN: ["[live] What changed?"],
       capabilities: [.camera], ui: "Assistant → Live Vision chip", status: .physicalTestRequired, keys: ["whatChanged"]),
     ActionDefinition(
+      "media.play", .media, name: "Play music", tr: "Müzik çal",
+      summary: "The system Music player; songs by name come from your own library (MusicKit catalogue not used).",
+      examplesTR: ["Müzik çal", "Tarkan şarkısını çal"], examplesEN: ["Play some music"],
+      parameters: [.init("query", .text, required: false, "Song, artist or album in your library")],
+      voiceOnly: "The Music app is the player; library access is asked the first time",
+      status: .partial, keys: ["music.play"]),
+    ActionDefinition(
+      "media.pause", .media, name: "Pause the music", tr: "Müziği durdur",
+      summary: "Pauses the system Music player; “dur” alone still stops the assistant.",
+      examplesTR: ["Müziği durdur"], examplesEN: ["Pause the music"], voiceOnly: "The Music app is the player",
+      status: .working, keys: ["music.pause"]),
+    ActionDefinition(
+      "media.next", .media, name: "Next song", tr: "Sonraki şarkı",
+      summary: "Skips to the next song.", examplesTR: ["Sonraki şarkı"], examplesEN: ["Next song"],
+      voiceOnly: "The Music app is the player", status: .working, keys: ["music.next"]),
+    ActionDefinition(
+      "media.previous", .media, name: "Previous song", tr: "Önceki şarkı",
+      summary: "Goes back one song.", examplesTR: ["Önceki şarkı"], examplesEN: ["Previous song"],
+      voiceOnly: "The Music app is the player", status: .working, keys: ["music.previous"]),
+    ActionDefinition(
+      "media.nowPlaying", .media, name: "What's playing?", tr: "Ne çalıyor?",
+      summary: "The song the Music player is playing.", examplesTR: ["Ne çalıyor?"], examplesEN: ["What's playing?"],
+      voiceOnly: "The Music app shows it", status: .working, keys: ["music.nowPlaying"]),
+    ActionDefinition(
+      "routine.user", .automation, name: "Run my routine", tr: "Rutinimi başlat",
+      summary: "A routine you built from safe steps, run in order with an honest report.",
+      examplesTR: ["[routine] Sabah turu rutinini başlat"], examplesEN: ["[routine] Run the Sabah turu routine"],
+      parameters: [.init("name", .text, "The routine's name")], ui: "Explore → Routines", status: .working,
+      keys: ["userRoutine"]),
+    ActionDefinition(
       "document.summarize", .vision, name: "Summarise a document", tr: "Belgeyi özetle",
       summary: "Reads the document on the phone (text only kept), finds dates and amounts; a reminder only after your yes.",
       examplesTR: ["Bu belgeyi özetle", "Bu belgede ne var?"], examplesEN: ["Summarize this document"],
@@ -881,6 +911,12 @@ enum ActionCatalog {
     case "document.summarize": return .document(.summarize)
     case "document.receipt": return .document(.saveReceipt)
     case "document.spending": return .document(.spending)
+    case "media.play": return .music(.play(text("query")))
+    case "media.pause": return .music(.pause)
+    case "media.next": return .music(.next)
+    case "media.previous": return .music(.previous)
+    case "media.nowPlaying": return .music(.nowPlaying)
+    case "routine.user": return text("name").map { .userRoutine($0) }
     case "task.create":
       guard let title = text("title") else { return .ask(.task) }
       var due = time("due")
@@ -1098,6 +1134,8 @@ extension VoiceIntent {
     case .findVisual: "findVisual"
     case .whatChanged: "whatChanged"
     case .document(let command): "document." + command.key
+    case .music(let command): "music." + command.key
+    case .userRoutine: "userRoutine"
     case .correctPending: "correctPending"
     case .graph: "graph"
     case .ask(let awaiting): "ask." + awaiting.label

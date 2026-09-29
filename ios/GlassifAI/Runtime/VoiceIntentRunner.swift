@@ -160,6 +160,8 @@ extension VoiceIntent {
     case .findVisual: "FIND_VISUAL"
     case .whatChanged: "WHAT_CHANGED"
     case .document: "DOCUMENT"
+    case .music: "MUSIC"
+    case .userRoutine: "USER_ROUTINE"
     case .moveTask: "MOVE_TASK"
     case .correctPending: "CORRECT_PENDING"
     case .graph: "ACTION_GRAPH"
@@ -265,6 +267,7 @@ extension AssistantOrchestrator {
     bridge.timerRunning = TimerCenter.shared.isRunning
     bridge.activeVehicle = DealerStore.shared.active != nil
     bridge.liveVisionActive = LiveVisionController.shared.isActive
+    bridge.routineNames = UserRoutineStore.shared.routines.map(\.name)
     bridge.recentTimedAction = DeviceActionExecutor.shared.lastCreated.map { Date().timeIntervalSince($0.at) < 180 } ?? false
     return bridge
   }
@@ -847,6 +850,12 @@ extension AssistantOrchestrator {
 
     case .document(let command):
       return await runDocument(command, traceID: traceID)
+
+    case .music(let command):
+      return await runMusic(command, traceID: traceID)
+
+    case .userRoutine(let name):
+      return await runUserRoutine(name, traceID: traceID)
 
     case .moveTask(let title, let time):
       return moveTask(title: title, time: time, traceID: traceID)

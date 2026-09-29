@@ -1,3 +1,4 @@
+import CoreSpotlight
 import Foundation
 #if canImport(FoundationModels)
 import FoundationModels

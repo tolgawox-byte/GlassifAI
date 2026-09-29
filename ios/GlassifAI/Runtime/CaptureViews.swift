@@ -358,6 +358,11 @@ struct ExploreTabView: View {
           } label: {
             Label(L.t("Visual memory", "Görsel hafıza"), systemImage: "eye")
           }
+          NavigationLink {
+            RoutinesView()
+          } label: {
+            Label(L.t("Routines", "Rutinler"), systemImage: "list.bullet.circle")
+          }
         }
         TimersSection()
         Section {

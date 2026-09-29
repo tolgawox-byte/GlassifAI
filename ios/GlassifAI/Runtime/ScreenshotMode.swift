@@ -171,6 +171,7 @@ struct ScreenshotRootView: View {
       case "raybancaps": NavigationStack { RayBanCapabilitiesView() }
       case "translation": NavigationStack { TranslationView() }
       case "documents": NavigationStack { DocumentsView() }
+      case "routines": NavigationStack { RoutinesView() }
       default: StreamSessionView(wearables: nil)
       }
     }

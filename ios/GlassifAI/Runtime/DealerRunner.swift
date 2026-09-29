@@ -244,12 +244,15 @@ extension AssistantOrchestrator {
 
     case .briefing:
       let today = store.today()
-      let open = store.openVehicles
-      let missing = open.reduce(0) { $0 + $1.remainingPhotos.count }
-      let damage = today.reduce(0) { $0 + $1.damage.count }
-      return dealerOutcome(
-        tr: "Bugün \(today.count) araçla çalıştın; \(open.count) araç açık, toplam \(missing) fotoğraf eksik, \(damage) hasar kaydı.",
-        en: "Today you worked on \(today.count) vehicles; \(open.count) are open with \(missing) photos missing and \(damage) damage notes.")
+      let tasks = MemoryStore.shared.tasks
+      let turkishLines = DealerBriefing.lines(vehicles: store.vehicles, tasks: tasks, turkish: true)
+      let englishLines = DealerBriefing.lines(vehicles: store.vehicles, tasks: tasks, turkish: false)
+      trace.update(traceID) { $0.parsed = "\(today.count) vehicles today, \(store.openVehicles.count) open" }
+      return IntentOutcome(
+        spoken: "The dealer's picture for today, from this iPhone's records only (in the conversation's language):\n"
+          + L.t(englishLines.joined(separator: "\n"), turkishLines.joined(separator: "\n"))
+          + "\nSay it in two or three short sentences, most urgent first. Do not read VINs aloud.",
+        reply: L.t(englishLines.joined(separator: "\n"), turkishLines.joined(separator: "\n")))
     }
   }
 
