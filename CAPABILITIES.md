@@ -1,13 +1,13 @@
 # AutoLoom Media Glasses — capability report
 
-Branch `autoloom-glasses-jarvis-v1` (Jarvis v1.1). Status meanings:
+Branch `autoloom-glasses-jarvis-v1` (v1.4). Status meanings:
 - **WORKING**: verified on the physical iPhone and Ray-Ban Meta Gen 1 by the owner, and unchanged since.
 - **PARTIAL**: works with a stated limit.
 - **EXPERIMENTAL**: implemented and covered by automated tests in CI; behaviour that depends on the AI model still needs real use.
 - **PHYSICAL TEST REQUIRED**: implemented and built in CI, but it depends on iOS, the audio hardware or the glasses in a way only the phone can confirm. `TEST_REPORT.md` has the test.
 - **UNAVAILABLE**: not possible on the current platforms or connection, or deliberately not built.
 
-Nothing is marked WORKING without a device test. Everything new in Jarvis v1 and v1.1 starts as EXPERIMENTAL or PHYSICAL TEST REQUIRED.
+Nothing is marked WORKING without a device test. Everything new since Jarvis v1 starts as EXPERIMENTAL or PHYSICAL TEST REQUIRED.
 
 This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex uses (`chatgpt.com/backend-api/codex/*`). Signing in does not unlock every feature of the ChatGPT app. No new paid service, API key or subscription is used.
 
@@ -19,7 +19,7 @@ Nothing here is device-verified. With only ChatGPT + Local connected, requests t
 |---|---|---|
 | Agent orchestrator (roles, plans, LOCAL / FAST / SPECIALIST / TEAM) | **EXPERIMENTAL** | Unit-tested routing examples; `docs/AGENT_ARCHITECTURE.md`, `docs/AGENT_ROUTING.md` |
 | ChatGPT provider (account sign-in, no API billing) | **WORKING** | The existing path, unchanged; also the compatible fallback for every cloud role |
-| Local agent (notes, memory, tasks, reminders, calendar, contacts, maps, clipboard, Photos, OCR) | **WORKING** / as listed below | Always local; works offline |
+| Local agent (notes, memory, tasks, reminders, calendar, contacts, maps, clipboard, Photos, timers, shopping list, Dealer Mode) | as listed in each section | Always local; works offline |
 | Claude (Anthropic API key) | **NOT CONNECTED** | Adapter unit-tested (request, reply, models, errors); needs the owner's key |
 | Gemini (Google AI Studio API key) | **NOT CONNECTED** | Adapter unit-tested; Live Vision via Flash frames, not the streaming Live API |
 | Perplexity (API key) | **NOT CONNECTED** | Adapter unit-tested; sources with titles and dates |
@@ -48,6 +48,42 @@ Nothing here is device-verified. With only ChatGPT + Local connected, requests t
 |---|---|---|
 | Note verbs anywhere in the sentence; the user's verb decides (note vs task/reminder/memory) | **PHYSICAL TEST REQUIRED** | Unit-tested (Turkish, English, contextual "bunu not et", "kaydet") |
 | Note search, list and delete (delete waits for a yes) | **EXPERIMENTAL** | |
+
+## Dealer Mode (new in v1.4)
+
+Everything is stored on this iPhone (`dealer.json` in Application Support); nothing goes to an AutoLoom server or a dealership system. `docs/DEALER_MODE.md`, `docs/VEHICLE_SESSION.md`.
+
+| Capability | Status | Notes |
+|---|---|---|
+| Vehicle sessions ("yeni araç", "sonraki araç", "bu araç tamam"); one active vehicle | **EXPERIMENTAL** | Explore → Dealer; notes, tasks, damage and Ray-Ban captures made while it is active link to it |
+| VIN reading ("VIN oku"): camera → 17 characters → ISO 3779 check digit | **PHYSICAL TEST REQUIRED** | Never completes a character: an unreadable one is "?", a look-alike (G/6, 8/B…) is offered as options, I/O/Q corrected and stated; saved only with 17 valid characters |
+| Make, model and year from the VIN | **UNAVAILABLE** | No VIN decoding database is connected; a camera guess is labelled "visual guess" until the user confirms |
+| Odometer by voice ("kilometre 45 bin 320") and by camera ("kilometreyi oku") | **EXPERIMENTAL** / camera **PHYSICAL TEST REQUIRED** | km or miles; "unclear" is not saved |
+| Damage by voice ("hasar ekle: sağ ön çamurluk çizik") with Turkish/English body zones | **EXPERIMENTAL** | Zone and kind parsed on the phone; the user's words are kept |
+| Photo (15), delivery (10) and test-drive (5) checklists; a labelled Ray-Ban photo ticks its item | **EXPERIMENTAL** | No driver's licence or customer data is stored |
+| Market research ("piyasa bak") and listing draft ("ilan hazırla") | **EXPERIMENTAL** | Through the agent router; only the vehicle's recorded facts are sent; prices are suggestions; the listing states known damage and is saved as a note |
+| Recall and parts research | **PARTIAL** | Asked in words ("bu aracın recall'u var mı?"), answered by web research; no dedicated recall database |
+| Dealer briefing, vehicle summary, export (share sheet) | **EXPERIMENTAL** | The screen shows only the VIN's last six characters |
+| Plate, customer and CRM data | **UNAVAILABLE** | Deliberately not stored; no production AutoLoom backend is connected |
+
+## Daily life (new in v1.4)
+
+| Capability | Status | Notes |
+|---|---|---|
+| Timers ("10 dakika timer kur", "ne kadar kaldı?", "timerı durdur") with a local notification | **PHYSICAL TEST REQUIRED** | The ring when locked depends on notification permission; it says so when it is off |
+| Shopping list by voice and in Explore | **EXPERIMENTAL** | Turkish accusative forms ("sütü") saved as the item ("Süt") |
+| "Bugün ne yaptım?" / "haftalık özet" | **EXPERIMENTAL** | Counted from what is on the phone; nothing guessed |
+| Undo of the last local action ("son yaptığını geri al"): note, task, memory, shopping item, timer, parking spot, damage, odometer | **EXPERIMENTAL** | Ten minutes; calls, messages and shares are never undone |
+| Modes (Automatic, General, Dealer, Daily life, Travel, Shopping, Translation, DIY, Accessibility) | **EXPERIMENTAL** | One line in the voice instructions; never changes permissions |
+| Shortcuts: new task, remember, start dealer session, today's briefing, shopping list | **PHYSICAL TEST REQUIRED** | App Intents; Siri phrases need a device |
+| Location-based reminders ("eve varınca hatırlat") | **UNAVAILABLE** | Not built in this version (needs Always location permission) |
+| QR code / barcode reading ("QR kodu oku") | **PHYSICAL TEST REQUIRED** | Vision on the phone, on the current camera image; read out only, never opened; no Wi-Fi password read or shown |
+| Receipts and expenses, flight status | **UNAVAILABLE** | Not built; no bank or airline connection |
+| Long document reader (multi-page capture) | **PARTIAL** | One view at a time via "vision_read"; a document specialist is used when connected |
+| Several commands in one sentence | **PARTIAL** | "Fotoğrafını çek ve not al: …" runs as one; other pairs need one sentence each |
+| Global search and a history page | **PARTIAL** | Memory search and Recent activity exist; no single search across everything |
+| Widget, Live Activity | **UNAVAILABLE** | Need a widget extension target; not built |
+| Parking ("park yerimi kaydet", "arabam nerede?", "beni arabama götür") | **PHYSICAL TEST REQUIRED** | One location fix when asked, plus the user's words; walking directions in Maps; without location access, or when iOS gives no fix with the phone locked, only the words are kept |
 
 ## Voice-first actions (new in v1.3)
 

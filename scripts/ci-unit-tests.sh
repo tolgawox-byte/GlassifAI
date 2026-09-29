@@ -42,6 +42,8 @@ for test in $TESTS; do
 done
 
 rm -rf "$RESULT"
+# A test that hangs fails on its own after its time allowance (named in the
+# results) instead of the whole step being killed without any results.
 set +e
 xcodebuild test \
   -project "$ROOT/ios/GlassifAI.xcodeproj" \
@@ -50,6 +52,9 @@ xcodebuild test \
   -destination "platform=iOS Simulator,id=$UDID" \
   -derivedDataPath "$ROOT/build-tests" \
   -resultBundlePath "$RESULT" \
+  -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 180 \
+  -maximum-test-execution-time-allowance 300 \
   CODE_SIGNING_ALLOWED=NO \
   "${ONLY_TESTING[@]}" 2>&1 | tee "$LOG"
 status=${PIPESTATUS[0]}

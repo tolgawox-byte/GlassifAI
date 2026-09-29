@@ -152,6 +152,8 @@ extension VoiceIntent {
     case .timer: "TIMER"
     case .undoLast: "UNDO"
     case .shopping: "SHOPPING_LIST"
+    case .parking: "PARKING"
+    case .readCode: "READ_CODE"
     case .ask: "ASK"
     default: traceName.uppercased()
     }
@@ -793,6 +795,12 @@ extension AssistantOrchestrator {
 
     case .shopping(let command):
       return runShopping(command, traceID: traceID)
+
+    case .parking(let command):
+      return await runParking(command, transcript: transcript, traceID: traceID)
+
+    case .readCode:
+      return await runCodeReading(traceID: traceID)
 
     case .ask(let awaiting):
       return askQuestion(awaiting)
@@ -1514,6 +1522,27 @@ extension AssistantOrchestrator {
       reply: plan.summary)
   }
 
+  /// Walking directions to a saved point (the parking spot): Maps opens at
+  /// once when the app is on screen, otherwise a card waits for a tap.
+  func openMaps(_ url: URL, destination: String, label: String, traceID: UUID) async -> IntentOutcome {
+    if UIApplication.shared.applicationState == .active, await UIApplication.shared.open(url) {
+      ActionTraceLog.shared.update(traceID) { $0.result = "Maps opened" }
+      return IntentOutcome(
+        spoken: BridgeSpeech.done(
+          "Apple Maps is open on the phone with walking directions to \(label).",
+          tr: "Yol tarifini Haritalar'da açtım.", en: "I've opened directions in Maps."),
+        reply: L.t("Opened in Maps: ", "Haritalar'da açıldı: ") + label,
+        feedback: ActionFeedback(kind: .directions, title: L.t("Directions opened", "Yol tarifi açıldı")))
+    }
+    var plan = DeviceActionPlan(kind: .openMaps)
+    plan.location = destination
+    _ = await stage(plan)
+    ActionTraceLog.shared.update(traceID) { $0.result = "waiting for a tap on the phone" }
+    return IntentOutcome(
+      spoken: "Directions to \(label) are ready on the phone screen; nothing has opened yet. The user taps Open in Maps when they look at the phone. Tell them in one short sentence.",
+      reply: plan.summary)
+  }
+
   // MARK: Clipboard and share
 
   /// "Kopyaladım" only after the clipboard really changed.
@@ -1672,13 +1701,13 @@ extension AssistantOrchestrator {
       reply: L.t("Memory is off in Settings.", "Hafıza Ayarlar'da kapalı."), failed: "memory off")
   }
 
-  private func actionsOff() -> IntentOutcome {
+  func actionsOff() -> IntentOutcome {
     IntentOutcome(
       spoken: "iPhone actions are turned off in the app settings, so nothing was done. The user can turn them on in Settings, Tools. Tell them briefly.",
       reply: L.t("iPhone actions are off in Settings.", "iPhone işlemleri Ayarlar'da kapalı."), failed: "actions off")
   }
 
-  private func toolOff(_ kind: DeviceActionKind) -> IntentOutcome {
+  func toolOff(_ kind: DeviceActionKind) -> IntentOutcome {
     IntentOutcome(
       spoken: "The \(kind.label) tool is turned off in Settings, Tools, so nothing was done. Tell the user briefly.",
       reply: L.t("\(kind.label) is off in Settings → Tools.", "\(kind.label) Ayarlar → Araçlar'da kapalı."), failed: "tool off")

@@ -360,6 +360,7 @@ struct ExploreTabView: View {
               Text("\(shopping.open.count)").font(.footnote).foregroundStyle(.secondary)
             }
           }
+          ParkingRow()
         }
         TimersSection()
         Section {

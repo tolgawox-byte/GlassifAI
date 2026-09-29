@@ -137,6 +137,10 @@ enum VoiceIntent: Equatable {
   case undoLast
   /// "Alışveriş listesine süt ekle", "alışveriş listemde ne var?".
   case shopping(ShoppingCommand)
+  /// "Park yerimi kaydet", "arabam nerede?", "beni arabama götür".
+  case parking(ParkingCommand)
+  /// "QR kodu oku", "barkodu oku": read on the phone, never opened.
+  case readCode
   /// A command without its content: ask for it ("Neyi not alayım?").
   case ask(Awaiting)
   /// LEVEL 2: the kind of request is certain; the details are left to the
@@ -198,6 +202,14 @@ enum VoiceIntent: Equatable {
       case .add: "shoppingAdd"
       case .read: "shoppingRead"
       case .remove: "shoppingRemove"
+      }
+    case .readCode: "readCode"
+    case .parking(let command):
+      switch command {
+      case .save: "parkingSave"
+      case .recall: "parkingRecall"
+      case .directions: "parkingDirections"
+      case .clear: "parkingClear"
       }
     case .ask(let awaiting): "ask(\(awaiting.label))"
     case .classify(let kind, _): "classify(\(kind.rawValue))"

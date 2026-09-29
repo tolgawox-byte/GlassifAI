@@ -10,7 +10,7 @@ The app recognises explicit commands itself (`VoiceActionIntentBridge`) on the f
 4. Cancel a running task.
 5. **Photos, videos, "galeriye kaydet"** ("fotoğraf çek", "bunun fotoğrafını çek ve not al: …").
 6. **Dealer Mode** ("VIN oku", "hasar ekle: …", "Bu araç tamam").
-7. **Timers and the shopping list.**
+7. **Parking, QR codes, timers and the shopping list** ("park yerimi kaydet", "arabam nerede?", "QR kodu oku", "10 dakika timer kur").
 8. **Undo** ("son yaptığını geri al").
 9. Profile, translation of the view, messages, **notes** (the user's verb wins over time words), note queries, reminders, tasks, day plan, calendar, task lists, routines and reviews, calls, contacts, directions, clipboard, memory.
 10. The answer to the bridge's own question ("Neyi not alayım?").
@@ -21,6 +21,7 @@ Anything else goes to the voice model (and, if delegated, to the agent router).
 
 - Only the user's own words reach this parser; text the camera, OCR or the web brought in never can, so nothing seen can take a photo, record, call or send.
 - Media commands never run from a model's delegation.
+- A QR code or barcode is only read out: its content never opens a link, calls, joins a Wi-Fi network or reaches this parser.
 - Calls, messages and shares need a tap; deleting a note or a memory waits for a yes.
 - Questions and talk about a command are not the command ("video nasıl çekilir?", "VIN nedir?", "yeni araç almak istiyorum").
 

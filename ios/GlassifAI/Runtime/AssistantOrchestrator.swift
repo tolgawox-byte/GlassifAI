@@ -1315,6 +1315,19 @@ final class AssistantOrchestrator: ObservableObject {
   ///   locked the same decoded glasses frames are used; when none is fresh
   ///   the glasses take a still photo (JPEG, processed on the CPU).
   /// - iPhone: the freshest camera frame.
+  /// The current camera image for reading on the phone (QR codes), with the
+  /// same rules as vision: a fresh image only, never an earlier one.
+  func cameraImageForReading() async -> (jpeg: Data?, unavailable: String?) {
+    do {
+      let attachment = try await prepareVisionImage(taskID: UUID(), detail: .high)
+      return (attachment.images.first?.jpeg, nil)
+    } catch let error as VisionUnavailable {
+      return (nil, error.speakable)
+    } catch {
+      return (nil, "The camera image could not be prepared.")
+    }
+  }
+
   private func prepareVisionImage(
     taskID: UUID,
     detail: VisionDetail

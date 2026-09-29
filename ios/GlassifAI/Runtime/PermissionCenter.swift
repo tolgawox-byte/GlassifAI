@@ -192,10 +192,14 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
     manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways
   }
 
-  func currentLocation(timeout: TimeInterval = 5) async -> MemoryLocation? {
+  func currentLocation(
+    timeout: TimeInterval = 5,
+    accuracy: CLLocationAccuracy = kCLLocationAccuracyHundredMeters
+  ) async -> MemoryLocation? {
     guard isAuthorized, continuation == nil else { return nil }
     let location: CLLocation? = await withCheckedContinuation { (continuation: CheckedContinuation<CLLocation?, Never>) in
       self.continuation = continuation
+      manager.desiredAccuracy = accuracy
       manager.requestLocation()
       Task { @MainActor [weak self] in
         try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))

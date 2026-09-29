@@ -225,8 +225,12 @@ final class ShoppingListStore: ObservableObject {
       ?? FileManager.default.temporaryDirectory).appendingPathComponent("AutoLoom", isDirectory: true)
     try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     fileURL = base.appendingPathComponent("shopping.json")
-    if let data = try? Data(contentsOf: fileURL), let decoded = try? JSONDecoder().decode([ShoppingItem].self, from: data) {
-      items = decoded
+    if let data = try? Data(contentsOf: fileURL) {
+      if let decoded = try? JSONDecoder().decode([ShoppingItem].self, from: data) {
+        items = decoded
+      } else {
+        LocalJSONFile.setAside(fileURL)
+      }
     }
   }
 

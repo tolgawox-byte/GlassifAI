@@ -14,16 +14,22 @@ Rollback tag: `rollback-f11377f-before-multi-agent` (before the multi-agent laye
 - **Jarvis Style**: intensity (Subtle / Balanced / Full), form of address (None / My name / Sir – Efendim / Custom), persona confirmations ("Not aldım efendim."), greeting ("Bağlantı hazır. Sizi dinliyorum efendim."); Settings → Personality and Settings → Intelligence.
 - **Ray-Ban photos and videos**: "fotoğraf çek", "video kaydını başlat", "kaydı durdur", "kayıt yapıyor musun?", "galeriye kaydet"; add-only Photos saving, Captures (Explore tab), recording chip, shutter and record buttons, dealer labels, photo + note.
 - **Locked-screen vision**: software VideoToolbox decoder by default, bounded fresh-frame recovery, still-photo fallback in the background, "Continue vision with the screen locked".
-- Tests: `AutoLoomMultiAgentTests`, `AutoLoomRayBanMediaTests`, `AutoLoomNoteReliabilityTests`.
+- **Dealer Mode**: vehicle sessions ("yeni araç", "sonraki araç", "bu araç tamam"), VIN reading with the ISO 3779 check digit (never completes a character; look-alikes offered as options), odometer by voice or camera, damage with Turkish/English body zones, photo / delivery / test-drive checklists (a labelled Ray-Ban photo ticks its item), market research and listing drafts through the agent router, dealer briefing; notes, tasks and captures link to the active vehicle; Explore → Dealer. Rollback tag `rollback-c2d7cfe-before-dealer`.
+- **Daily life**: timers with local notifications and a countdown chip, shopping list, parking spot ("park yerimi kaydet", "arabam nerede?", "beni arabama götür"), QR codes and barcodes read on the phone and never opened ("QR kodu oku"), evening and weekly review, undo of the last local action, assistant modes (Dealer automatically while a vehicle is active).
+- **Shortcuts**: new task, remember, start dealer session, today's briefing, shopping list (App Intents).
+- Tests: `AutoLoomMultiAgentTests`, `AutoLoomRayBanMediaTests`, `AutoLoomNoteReliabilityTests`, `AutoLoomDealerTests`, `AutoLoomDailyLifeTests`.
 
 ### Fixed
 - Spoken notes: note verbs are found anywhere in the sentence (a misheard name or "benim için" before "not al" hid the command); the user's verb beats time words; delegations that did something else never stand in for the note.
 - A tool's level in Settings is its main action's (Notes saves directly; deleting a note still waits for a yes).
 - Background vision stopped when the phone locked: iOS tears down hardware decoder sessions; the app rebuilt hardware sessions and never switched to software.
+- Routing: English keywords matched the start of Turkish words ("bug" in "bugün", "haber" in "haber ver", "market" the grocery store).
+- A vehicle, shopping or parking file this version cannot read is renamed, never overwritten by the next save.
 
 ### Privacy
 - Provider keys only in the Keychain (this device only), never logged or shown; each provider gets the minimum context; research providers never get images; nothing paid is enabled without a cost notice and the user's confirmation.
 - Ray-Ban captures: add-only Photos access; nothing uploaded; the Captures list keeps labels and small thumbnails.
+- Dealer Mode stores no customer, plate or driver's licence data; the screen shows only the VIN's last six characters. The parking spot is one location fix taken when the user asks, never tracking.
 
 ## [AutoLoom Jarvis v1.3 — voice-first actions] — branch `autoloom-glasses-jarvis-v1`
 

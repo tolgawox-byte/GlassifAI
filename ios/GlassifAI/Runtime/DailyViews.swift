@@ -60,7 +60,8 @@ struct ShoppingListView: View {
           }
         }
         .onDelete { offsets in
-          for index in offsets { store.delete(store.items[index].id) }
+          // IDs first: deleting shifts the indexes of the rest.
+          offsets.map { store.items[$0].id }.forEach { store.delete($0) }
         }
       }
       if store.items.contains(where: \.done) {
@@ -78,6 +79,38 @@ struct ShoppingListView: View {
   }
 }
 
+/// Explore → Daily: the saved parking spot, with walking directions.
+struct ParkingRow: View {
+  @ObservedObject private var store = ParkingStore.shared
+  @Environment(\.openURL) private var openURL
+
+  var body: some View {
+    if let spot = store.spot {
+      VStack(alignment: .leading, spacing: 6) {
+        Label(spot.placeName ?? L.t("Parking spot", "Park yeri"), systemImage: "parkingsign.circle")
+        if let note = spot.note {
+          Text(note).font(.footnote)
+        }
+        Text(spot.at.formatted(date: .abbreviated, time: .shortened))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        HStack {
+          if let url = spot.mapsURL {
+            Button(L.t("Directions", "Yol tarifi")) { openURL(url) }
+              .buttonStyle(.bordered)
+          }
+          Button(L.t("Clear", "Sil"), role: .destructive) { store.clear() }
+            .buttonStyle(.bordered)
+        }
+      }
+    } else {
+      Label(L.t("No parking spot. Say “park yerimi kaydet”.", "Park yeri yok. “Park yerimi kaydet” deyin."),
+            systemImage: "parkingsign.circle")
+        .foregroundStyle(.secondary)
+    }
+  }
+}
+
 /// Running timers with their time left and a cancel button.
 struct TimersSection: View {
   @ObservedObject private var center = TimerCenter.shared
@@ -89,7 +122,7 @@ struct TimersSection: View {
           HStack {
             TimerChip(timer: timer)
             Spacer()
-            Button(L.t("Cancel", "İptal"), role: .destructive) { center.cancel(label: timer.label) }
+            Button(L.t("Cancel", "İptal"), role: .destructive) { center.cancel(id: timer.id) }
               .buttonStyle(.borderless)
           }
         }

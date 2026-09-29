@@ -683,8 +683,11 @@ final class DealerStore: ObservableObject {
   }
 
   private func load() {
-    guard let data = try? Data(contentsOf: fileURL),
-          let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
+    guard let data = try? Data(contentsOf: fileURL) else { return }
+    guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else {
+      LocalJSONFile.setAside(fileURL)
+      return
+    }
     vehicles = snapshot.vehicles
     activeID = snapshot.activeID
   }
@@ -692,5 +695,23 @@ final class DealerStore: ObservableObject {
   private func persist() {
     guard let data = try? JSONEncoder().encode(Snapshot(vehicles: vehicles, activeID: activeID)) else { return }
     try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+  }
+}
+
+/// Small JSON files the app keeps on this iPhone.
+enum LocalJSONFile {
+  /// A file this version cannot read is renamed ("dealer-unreadable-…json")
+  /// instead of being overwritten by the next save, so nothing is lost.
+  @discardableResult
+  static func setAside(_ url: URL, now: Date = Date()) -> URL? {
+    let stamp = Int(now.timeIntervalSince1970)
+    let name = url.deletingPathExtension().lastPathComponent + "-unreadable-\(stamp)." + url.pathExtension
+    let target = url.deletingLastPathComponent().appendingPathComponent(name)
+    do {
+      try FileManager.default.moveItem(at: url, to: target)
+      return target
+    } catch {
+      return nil
+    }
   }
 }

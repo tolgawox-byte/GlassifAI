@@ -136,6 +136,7 @@ struct PrivacySettingsView: View {
         CaptureLibrary.shared.deleteEverything()
         DealerStore.shared.deleteEverything()
         ShoppingListStore.shared.deleteEverything()
+        ParkingStore.shared.clear()
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()
         wiped = true

@@ -16,7 +16,7 @@ enum ShoppingCommand: Equatable {
 extension VoiceActionIntentBridge {
   static func daily(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
     guard u.count <= 30 else { return nil }
-    return timer(u, context) ?? shopping(u)
+    return parking(u) ?? readCode(u) ?? timer(u, context) ?? shopping(u)
   }
 
   static func isTimerWord(_ key: String) -> Bool {
