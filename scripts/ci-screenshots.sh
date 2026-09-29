@@ -27,6 +27,18 @@ sys.exit(1)
 ')" || { echo "::warning title=Screenshots::No iPhone simulator"; exit 0; }
 
 BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")"
+# The test build leaves package frameworks (MWDATMockDevice…) beside the app;
+# tests find them through DYLD_FRAMEWORK_PATH, a plain launch does not.
+PRODUCTS="$(dirname "$APP")"
+if [ -d "$PRODUCTS/PackageFrameworks" ]; then
+  mkdir -p "$APP/Frameworks"
+  for framework in "$PRODUCTS"/PackageFrameworks/*.framework; do
+    [ -d "$framework" ] || continue
+    name="$(basename "$framework")"
+    [ -d "$APP/Frameworks/$name" ] || cp -R "$framework" "$APP/Frameworks/"
+  done
+fi
+export SIMCTL_CHILD_DYLD_FRAMEWORK_PATH="$PRODUCTS/PackageFrameworks:$PRODUCTS"
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
 xcrun simctl ui "$UDID" appearance dark || true
