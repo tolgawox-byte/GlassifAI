@@ -57,6 +57,11 @@ done
 rm -rf "$OUT"
 mkdir -p "$OUT/logs"
 LOGS="$OUT/logs"
+# The first launch after installing is slow (the launch screen would be
+# captured): warm up once.
+xcrun simctl launch "$UDID" "$BUNDLE" -AutoLoomScreenshot explore >/dev/null 2>&1 || true
+sleep 15
+xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
 taken=0
 crashed=0
 for screen in $SCREENS; do
@@ -70,6 +75,13 @@ for screen in $SCREENS; do
     continue
   fi
   sleep 7
+  # Not running: one more try before reporting (a launch can be refused
+  # while the previous process is still going away).
+  if ! xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
+    sleep 2
+    xcrun simctl launch "$UDID" "$BUNDLE" -AutoLoomScreenshot "$screen" >>"$LOGS/$screen.launch.txt" 2>&1 || true
+    sleep 8
+  fi
   # A launch that did not stay up: say why (crash report, app output).
   if ! xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
     report="$(python3 "$ROOT/scripts/crash-summary.py" GlassifAI "$started" 2>&1 | head -c 1500)"

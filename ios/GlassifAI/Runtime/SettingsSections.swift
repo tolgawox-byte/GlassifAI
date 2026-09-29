@@ -40,7 +40,11 @@ struct PrivacyNowSection: View {
       state(L.t("Live Vision", "Canlı görüş"), liveVision.isActive, "eye")
       state(L.t("Remote Assist sharing", "Uzaktan yardım paylaşımı"), sharing.isSharing, "dot.radiowaves.left.and.right")
       state(L.t("Scene Timeline", "Sahne zaman çizelgesi"), timelineOn, "clock.arrow.circlepath")
-      LabeledContent(L.t("Skills (MCP)", "Beceriler (MCP)"), value: "\(skills.enabledServers.count)")
+      LabeledContent {
+        Text("\(skills.enabledServers.count)")
+      } label: {
+        Label(L.t("Skills (MCP)", "Beceriler (MCP)"), systemImage: "puzzlepiece.extension")
+      }
     } header: {
       Text(L.t("Right now", "Şu an"))
     }

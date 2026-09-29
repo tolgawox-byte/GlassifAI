@@ -134,6 +134,7 @@ extension VoiceActionIntentBridge {
     ["fotograf", "cekermisin"], ["fotografini", "cekebilir", "misin"], ["fotografini", "ceker", "misin"],
     ["fotografini", "cekermisin"], ["foto", "ceker", "misin"], ["fotograf", "cekiver"], ["fotografini", "cekiver"],
     ["fotograf", "cekelim"], ["fotografini", "cekelim"], ["fotograf", "cek"], ["foto", "cek"], ["fotografini", "cek"],
+    ["fotograf", "ceksene"], ["foto", "ceksene"], ["fotografini", "ceksene"],
     ["fotografi", "cek"], ["fotosunu", "cek"], ["resim", "cek"], ["resmini", "cek"],
     ["take", "another", "photo"], ["take", "one", "more", "photo"], ["take", "a", "photo"], ["take", "a", "picture"],
     ["take", "a", "pic"], ["take", "photo"], ["take", "picture"], ["snap", "a", "photo"], ["snap", "a", "picture"],

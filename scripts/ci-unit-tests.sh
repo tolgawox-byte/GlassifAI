@@ -60,8 +60,12 @@ xcodebuild test \
 status=${PIPESTATUS[0]}
 set -e
 
-# The voice evaluation's report lines (AutoLoomVoiceEvaluationTests prints them).
-grep -h "VOICE_EVAL" "$LOG" | sed 's/.*VOICE_EVAL/VOICE_EVAL/' | sort -u | head -n 16   | while IFS= read -r line; do echo "::notice title=Voice evaluation::${line}"; done || true
+# The voice evaluation's report (AutoLoomVoiceEvaluationTests writes it in the
+# test app's temporary folder on the simulator).
+EVAL="$(find "$HOME/Library/Developer/CoreSimulator/Devices/$UDID" -name autoloom-voice-eval.txt -mmin -60 2>/dev/null | head -n 1)"
+if [ -n "$EVAL" ]; then
+  head -n 16 "$EVAL" | while IFS= read -r line; do echo "::notice title=Voice evaluation::${line}"; done || true
+fi
 
 if [ "$status" -ne 0 ]; then
   # Test-target compile errors, visible without the raw log.

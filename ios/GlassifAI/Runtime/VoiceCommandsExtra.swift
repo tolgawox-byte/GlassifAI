@@ -16,7 +16,7 @@ enum ActionGraph {
 
   /// Longest first, so ", sonra" is not split as "," + "sonra".
   static let separators = [
-    ", ve sonra ", " ve sonra ", ", sonra da ", ", sonra ", " sonra da ", " ardından ", ", ardından ",
+    ", ve sonra ", " ve sonra ", ", sonra da ", ", sonra ", " sonra da ", " sonra ", " ardından ", ", ardından ",
     ", and then ", " and then ", ", then ", " then ", ", ", " ve ", " and ",
   ]
 

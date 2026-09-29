@@ -48,8 +48,8 @@ struct DealerHomeView: View {
       }
       Section {
         Text(L.t(
-          "Say: “VIN oku”, “kilometre 45 bin 320”, “hasar ekle: sağ ön çamurluk çizik”, “jantın fotoğrafını çek”, “foto checklist”, “piyasa bak”, “ilan hazırla”, “bu araç tamam”.",
-          "Deyin: “VIN oku”, “kilometre 45 bin 320”, “hasar ekle: sağ ön çamurluk çizik”, “jantın fotoğrafını çek”, “foto checklist”, “piyasa bak”, “ilan hazırla”, “bu araç tamam”."))
+          "Say: “VIN oku”, “VIN'i çöz”, “recall kontrol et”, “kilometre 45 bin 320”, “sağ ön jant çizik, not et”, “lastiği oku”, “uyarı ışıklarına bak”, “sol taraf temiz”, “kondisyon raporu”, “foto checklist”, “piyasa bak”, “bu araç tamam”.",
+          "Deyin: “VIN oku”, “VIN'i çöz”, “recall kontrol et”, “kilometre 45 bin 320”, “sağ ön jant çizik, not et”, “lastiği oku”, “uyarı ışıklarına bak”, “sol taraf temiz”, “kondisyon raporu”, “foto checklist”, “piyasa bak”, “bu araç tamam”."))
           .font(.footnote)
           .foregroundStyle(.secondary)
       }

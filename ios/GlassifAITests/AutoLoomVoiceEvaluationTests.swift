@@ -125,8 +125,12 @@ final class AutoLoomVoiceEvaluationTests: XCTestCase {
     let hits = byArea.values.reduce(0) { $0 + $1.hit }
     let accuracy = Double(hits) / Double(Self.samples.count)
     let areas = byArea.keys.sorted().map { "\($0) \(byArea[$0]!.hit)/\(byArea[$0]!.total)" }.joined(separator: ", ")
-    print("VOICE_EVAL accuracy \(String(format: "%.0f", accuracy * 100))% (\(hits)/\(Self.samples.count)) · \(areas) · chains \(Self.chains.count - chainMisses.count)/\(Self.chains.count)")
-    for miss in misses + chainMisses { print("VOICE_EVAL miss \(miss)") }
+    var report = ["VOICE_EVAL accuracy \(String(format: "%.0f", accuracy * 100))% (\(hits)/\(Self.samples.count)) · \(areas) · chains \(Self.chains.count - chainMisses.count)/\(Self.chains.count)"]
+    report += (misses + chainMisses).map { "VOICE_EVAL miss \($0)" }
+    report.forEach { print($0) }
+    // The CI script reads this file from the simulator and shows it on the run page.
+    try? report.joined(separator: "\n").write(
+      to: FileManager.default.temporaryDirectory.appendingPathComponent("autoloom-voice-eval.txt"), atomically: true, encoding: .utf8)
     XCTAssertGreaterThanOrEqual(accuracy, 0.9, "Voice evaluation misses:\n" + misses.joined(separator: "\n"))
     XCTAssertTrue(chainMisses.isEmpty, "Chains missed:\n" + chainMisses.joined(separator: "\n"))
   }
