@@ -291,7 +291,8 @@ enum TimePhraseParser {
     let dayWords: [(String, Int, PartOfDay?)] = [
       ("yarindan sonra", 2, nil), ("obur gun", 2, nil), ("day after tomorrow", 2, nil),
       ("bu aksam", 0, .evening), ("bu gece", 0, .night), ("tonight", 0, .tonight),
-      ("bugun", 0, nil), ("today", 0, nil), ("yarin", 1, nil), ("tomorrow", 1, nil),
+      // "yarına", "yarınki", "bugünkü": the day with its ending.
+      ("bugun(?:e|ku|de)?", 0, nil), ("today", 0, nil), ("yarin(?:a|ki|da)?", 1, nil), ("tomorrow", 1, nil),
     ]
     for (word, offset, part) in dayWords {
       if let match = firstMatch(#"\b"# + word + #"\b"#, in: s) {

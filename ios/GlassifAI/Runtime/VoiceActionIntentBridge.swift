@@ -11,6 +11,8 @@ enum VoiceIntent: Equatable {
     case memory
     case task
     case reminderTime(title: String)
+    /// "Neyi hatırlatayım?" after a bare "hatırlatıcı oluştur".
+    case reminderTitle
     case eventTime(title: String)
     /// "Ahmet'e ne yazayım?"
     case messageBody(contact: String)
@@ -26,6 +28,7 @@ enum VoiceIntent: Equatable {
       case .memory: "memory"
       case .task: "task"
       case .reminderTime: "reminderTime"
+      case .reminderTitle: "reminderTitle"
       case .eventTime: "eventTime"
       case .messageBody: "messageBody"
       case .messageRecipient: "messageRecipient"
@@ -95,6 +98,9 @@ enum VoiceIntent: Equatable {
   case directions(String)
   /// "En yakın benzinlik": a Maps search around the user.
   case nearby(String)
+  /// "Buraya yol tarifi aç" while looking at an address: the camera reads
+  /// it, the user checks it, then Maps.
+  case directionsInView
   /// "Bunu kopyala": the text, or nil when there is nothing to copy.
   case copyText(String?)
   /// "Bunu paylaş": the share sheet with the text.
@@ -136,6 +142,7 @@ enum VoiceIntent: Equatable {
     case .findContact: "findContact"
     case .directions: "directions"
     case .nearby: "nearbySearch"
+    case .directionsInView: "directionsInView"
     case .copyText: "copyText"
     case .shareText: "shareText"
     case .routine(let routine): "routine(\(routine.rawValue))"
@@ -502,6 +509,10 @@ enum VoiceActionIntentBridge {
         title = shortTitle(previous)
       }
       guard let title else {
+        // "Bir hatırlatıcı oluştur" alone: ask what to remind.
+        if time == nil, u.count <= 4 {
+          return VoiceBridgeDecision(.ask(.reminderTitle), "reminder trigger without content")
+        }
         // "Yarın 10'da hatırlat" with nothing to go on: the model reads the
         // conversation and fills the details (strict JSON, time by the app).
         return VoiceBridgeDecision(.classify(.authorizedAction, query: u.text), "reminder trigger without a title", level: .model)
@@ -621,7 +632,18 @@ enum VoiceActionIntentBridge {
       rest.removeKeys(titleFillers)
       rest.trimLeading(["bir", "a", "an", "to", "for"])
       rest.trimTrailing(["icin", "diye", "bir"])
-      let title = rest.isOnly(deictic) ? noun ?? L.t("Event", "Etkinlik") : capitalizedFirst(rest.text)
+      // "Ahmet'le toplantı ekle" → "Ahmet'le toplantı"; "add a meeting
+      // with John" → "Meeting with John".
+      let title: String
+      if rest.isOnly(deictic) {
+        title = noun ?? L.t("Event", "Etkinlik")
+      } else if let noun, rest.keys.first == "with" {
+        title = noun + " " + rest.text
+      } else if let noun {
+        title = capitalizedFirst(rest.text + " " + noun.lowercased(with: Locale(identifier: "tr_TR")))
+      } else {
+        title = capitalizedFirst(rest.text)
+      }
       guard let time, time.hasTime else {
         return VoiceBridgeDecision(.ask(.eventTime(title: title)), "event trigger without a time")
       }
@@ -1049,17 +1071,22 @@ enum VoiceActionIntentBridge {
     guard let destination, !destination.isEmpty, destination.count <= 5, !destination.containsAny(questionWords) else {
       return nil
     }
-    // "Bu adrese yol tarifi aç": the address from the last answer. The
-    // model picks it out (strict JSON); Maps opens only after a tap.
-    if destination.containsAny(["adres", "adrese", "adresine", "address"]),
-       destination.containsAny(["bu", "su", "o", "this", "that"]) {
-      guard let answer = context.usefulAnswer ?? context.recentSavedText else { return nil }
-      return VoiceBridgeDecision(
-        .classify(.authorizedAction, query: "open_maps: directions to the address mentioned here: \(answer)"),
-        "directions to an address from the conversation", level: .model)
+    // "Bu restoranı bul ve yol tarifi aç" needs a search first: the voice
+    // model plans it.
+    guard !destination.containsAny(["ve", "bul", "and", "find", "search"]) else { return nil }
+    let here: Set<String> = ["buraya", "suraya", "oraya", "bura", "sura", "ora", "here", "there"]
+    let pointing: Set<String> = ["bu", "su", "o", "this", "that", "bunun", "sunun"]
+    if destination.containsAny(here) || destination.containsAny(pointing) {
+      // "Bu adrese", "şu restorana": the place from the last answer (the
+      // model picks it out, strict JSON), else what is in view ("buraya").
+      // Either way Maps opens only after the user checked it and tapped.
+      if !destination.containsAny(here), let answer = context.usefulAnswer ?? context.recentSavedText {
+        return VoiceBridgeDecision(
+          .classify(.authorizedAction, query: "open_maps: directions to the place meant by \"\(destination.text)\" in: \(answer)"),
+          "directions to a place from the conversation", level: .model)
+      }
+      return context.cameraAvailable ? VoiceBridgeDecision(.directionsInView, "directions to what is in view") : nil
     }
-    let visual: Set<String> = ["buraya", "suraya", "oraya", "bura", "sura", "ora", "here", "there", "this", "that", "bunun", "sunun"]
-    guard !destination.containsAny(visual) else { return nil }
     if destination.count == 1 {
       switch destination.keys[0] {
       case "eve", "evime", "evimize", "home": return VoiceBridgeDecision(.directions("Home"), "directions home")
@@ -1264,6 +1291,18 @@ enum VoiceActionIntentBridge {
         return VoiceBridgeDecision(.createReminder(title: title, time: nil), "answer: no time")
       }
       return nil
+    case .reminderTitle:
+      let time = TimePhraseParser.parse(u.text, now: now)
+      var rest = u
+      if let time { rest.removeTimeWords(time) }
+      rest.removeKeys(titleFillers)
+      rest.trimTrailing(["diye", "icin"])
+      guard !rest.isEmpty else { return nil }
+      let title = reminderTitle(rest.text)
+      guard let time else {
+        return VoiceBridgeDecision(.ask(.reminderTime(title: title)), "answer: reminder content; asking the time")
+      }
+      return VoiceBridgeDecision(.createReminder(title: title, time: time), "answer: reminder content")
     case .eventTime(let title):
       guard let time = TimePhraseParser.parse(u.text, now: now), time.hasTime else { return nil }
       return VoiceBridgeDecision(.createEvent(title: title, time: time), "answer: event time")

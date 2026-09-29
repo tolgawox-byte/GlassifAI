@@ -487,39 +487,53 @@ struct AssistantHomeView: View {
     var id: String { title }
   }
 
-  /// A few things to ask, shown while nothing is happening.
-  private var suggestions: [IdleSuggestion] {
-    var items = [
-      IdleSuggestion(title: L.t("My day", "Bugünüm"), request: L.t("What do I need to do today?", "Bugün ne yapmam gerekiyor?")),
-      IdleSuggestion(title: L.t("My tasks", "Görevlerim"), request: L.t("What are my tasks?", "Görevlerim neler?")),
+  /// Things to ask while nothing is happening: three at a time, changing
+  /// every few seconds (brief §48). A tap asks it as a typed question.
+  private func suggestions(at date: Date) -> [IdleSuggestion] {
+    var pool = [
+      IdleSuggestion(title: L.t("Today's tasks?", "Bugünkü görevlerim ne?"), request: L.t("What do I need to do today?", "Bugün ne yapmam gerekiyor?")),
+      IdleSuggestion(title: L.t("Take a note", "Not al"), request: L.t("Take a note", "Not al")),
+      IdleSuggestion(title: L.t("Create a reminder", "Bir hatırlatıcı oluştur"), request: L.t("Create a reminder", "Bir hatırlatıcı oluştur")),
+      IdleSuggestion(title: L.t("What's on my calendar?", "Takvimimde ne var?"), request: L.t("What's on my calendar today?", "Bugün takvimimde ne var?")),
     ]
     if captureSource != .off {
-      items.insert(
-        IdleSuggestion(title: L.t("What's in front of me?", "Önümde ne var?"), request: L.t("What am I looking at?", "Önümde ne var?")),
-        at: 0)
+      pool.insert(
+        IdleSuggestion(title: L.t("What am I looking at?", "Şu an ne görüyorum?"), request: L.t("What am I looking at?", "Şu an ne görüyorum?")),
+        at: 1)
     }
-    return items
+    let start = Int(date.timeIntervalSinceReferenceDate / 12) % pool.count
+    return (0..<min(3, pool.count)).map { pool[(start + $0) % pool.count] }
   }
 
   private var suggestionChips: some View {
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 8) {
-        ForEach(suggestions) { suggestion in
-          Button { orchestrator.submitTyped(suggestion.request) } label: {
-            Text(suggestion.title)
-              .font(.footnote.weight(.semibold))
-              .foregroundStyle(.white)
-              .padding(.horizontal, 13)
-              .padding(.vertical, 7)
-              .background(.ultraThinMaterial, in: Capsule())
-              .overlay(Capsule().strokeBorder(AutoLoomTheme.electricBlue.opacity(0.4)))
-          }
-          .buttonStyle(PressableButtonStyle(scale: 0.96))
-        }
+    TimelineView(.periodic(from: .now, by: 12)) { context in
+      let items = suggestions(at: context.date)
+      ScrollView(.horizontal, showsIndicators: false) {
+        chipRow(items)
       }
-      .frame(maxWidth: .infinity)
+      .scrollBounceBehavior(.basedOnSize)
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: items.map(\.id))
     }
-    .scrollBounceBehavior(.basedOnSize)
+  }
+
+  private func chipRow(_ items: [IdleSuggestion]) -> some View {
+    HStack(spacing: 8) {
+      ForEach(items) { suggestion in
+        Button { orchestrator.submitTyped(suggestion.request) } label: {
+          Text(suggestion.title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(AutoLoomTheme.electricBlue.opacity(0.4)))
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.96))
+        .transition(.opacity)
+      }
+    }
+    .padding(.horizontal, 2)
   }
 
   private var idleHint: String {

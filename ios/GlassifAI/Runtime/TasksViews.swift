@@ -176,6 +176,8 @@ struct TasksTabView: View {
   @State private var editingTask: TaskItem?
   @State private var rescheduling: RemindersBoard.Item?
   @State private var deleting: RemindersBoard.Item?
+  /// Counts completions, for the success haptic.
+  @State private var completions = 0
   @Environment(\.openURL) private var openURL
 
   var body: some View {
@@ -236,6 +238,7 @@ struct TasksTabView: View {
         await board.load()
       }
       .task { await board.load() }
+      .sensoryFeedback(.success, trigger: completions)
       .sheet(isPresented: $showNewTask) {
         NavigationStack { TaskEditorView(task: nil) }
       }
@@ -350,6 +353,7 @@ struct TasksTabView: View {
   private func taskRow(_ task: TaskItem) -> some View {
     HStack(spacing: 12) {
       Button {
+        if !task.completed { completions += 1 }
         store.setCompleted(task, !task.completed)
       } label: {
         Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
@@ -422,6 +426,7 @@ struct TasksTabView: View {
   private func reminderRow(_ item: RemindersBoard.Item) -> some View {
     HStack(spacing: 12) {
       Button {
+        if !item.completed { completions += 1 }
         Task { await board.setCompleted(item, !item.completed) }
       } label: {
         Image(systemName: item.completed ? "checkmark.circle.fill" : "circle")

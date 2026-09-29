@@ -545,6 +545,9 @@ extension AssistantOrchestrator {
     case .directions(let destination):
       return await prepareDirections(to: destination, traceID: traceID)
 
+    case .directionsInView:
+      return await prepareDirectionsInView(traceID: traceID)
+
     case .nearby(let query):
       guard AssistantPreferences.actionsEnabled else { return actionsOff() }
       guard ToolRegistry.allows(.openMaps) else { return toolOff(.openMaps) }
@@ -592,6 +595,10 @@ extension AssistantOrchestrator {
       return IntentOutcome(
         spoken: BridgeSpeech.ask("Ne zaman hatırlatayım?", en: "When should I remind you?", note: "The reminder will say \"\(title)\"."),
         reply: L.t("When should I remind you?", "Ne zaman hatırlatayım?"))
+    case .reminderTitle:
+      return IntentOutcome(
+        spoken: BridgeSpeech.ask("Neyi hatırlatayım?", en: "What should I remind you about?"),
+        reply: L.t("What should I remind you about?", "Neyi hatırlatayım?"))
     case .eventTime(let title):
       return IntentOutcome(
         spoken: BridgeSpeech.ask("Saat kaçta olsun?", en: "What time should it be?", note: "The event is \"\(title)\"."),
@@ -1076,6 +1083,33 @@ extension AssistantOrchestrator {
     return await openMaps(place, search: false, traceID: traceID)
   }
 
+  /// "Buraya yol tarifi aç" while looking at an address: the camera reads
+  /// it (high detail), then a card shows what was read. Text from the
+  /// camera never opens anything by itself; the user checks it and taps.
+  private func prepareDirectionsInView(traceID: UUID) async -> IntentOutcome {
+    guard AssistantPreferences.actionsEnabled else { return actionsOff() }
+    guard ToolRegistry.allows(.openMaps) else { return toolOff(.openMaps) }
+    ActionTraceLog.shared.update(traceID) { $0.executor = "camera (high detail) → Apple Maps after a tap" }
+    let result = await runBridgeTask(
+      .vision,
+      query: "Read the street address or the place name the user is looking at (a sign, card, screen or building). Reply with only the address or name exactly as written, or NONE if none is readable.",
+      detail: .high)
+    let read = (result.display ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard result.failed == nil, !read.isEmpty, read.uppercased() != "NONE", read.count <= 200 else {
+      return IntentOutcome(
+        spoken: "No readable address or place name was found in view, so nothing was prepared. Tell the user briefly and suggest pointing the camera at the address.",
+        reply: L.t("No address in view.", "Görüntüde adres bulunamadı."), failed: "no address in view")
+    }
+    var plan = DeviceActionPlan(kind: .openMaps)
+    plan.location = read
+    plan.afterUntrustedContent = true
+    _ = await stage(plan)
+    ActionTraceLog.shared.update(traceID) { $0.result = "waiting for the user to check the address and tap" }
+    return IntentOutcome(
+      spoken: "The camera read this address: \"\(read)\". Directions to it are ready on the phone screen; text from the camera is never opened by itself, so the user checks it and taps Open in Maps. Say the address briefly and ask them to tap if it is right.",
+      reply: plan.summary)
+  }
+
   /// Opens Maps at once when the app is on screen and says so only after
   /// iOS opened it; otherwise a card waits for a tap.
   private func openMaps(_ place: String, search: Bool, traceID: UUID) async -> IntentOutcome {
@@ -1191,9 +1225,21 @@ extension AssistantOrchestrator {
           "\nGive a short, friendly start-of-day summary: the next event first, then what is due today. Two to four sentences.",
         reply: parts.joined(separator: "\n"))
     case .briefing:
+      // Weather only from a real web search, and only when web search is on
+      // and the user's city is set (Settings); never invented.
+      var weather = "Weather is not included (web search is off or no city is set in Settings); do not guess it."
+      let city = AssistantPreferences.region
+      if AssistantPreferences.webSearchEnabled, !city.isEmpty {
+        let result = await runBridgeTask(
+          .webSearch, query: "Today's weather forecast for \(city): temperature range and chance of rain, in one short sentence.")
+        weather = result.failed == nil
+          ? "Weather for \(city), from a web search just now: " + String(result.speakable.prefix(500))
+          : "The weather could not be looked up just now; say so in a few words."
+      }
+      parts.append(weather)
       return IntentOutcome(
         spoken: "The user asked for a briefing of their day. " + parts.joined(separator: "\n") +
-          "\nSummarise in three or four natural sentences. Weather or news are not included; offer to look them up if they want.",
+          "\nSummarise in three or four natural sentences: the weather first if it is there, then the calendar, then what is due. News is not included.",
         reply: parts.joined(separator: "\n"))
     }
   }

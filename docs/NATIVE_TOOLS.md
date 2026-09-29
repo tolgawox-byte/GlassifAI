@@ -2,7 +2,7 @@
 
 ## Flow
 
-Explicit spoken commands are recognised by the app itself (Jarvis v1.1, `VoiceActionIntentBridge`); everything else can still be delegated by the voice model as before.
+Explicit spoken commands are recognised by the app itself (`VoiceActionIntentBridge`; see `VOICE_ARCHITECTURE.md` for the priority order and the name spellings); everything else can still be delegated by the voice model as before. Free-text delegations that are explicit commands go through the same bridge.
 
 ```
 "Jarvis, yarın saat 10'da patronu aramamı hatırlat"
@@ -33,15 +33,25 @@ This is enforced in code as well as in the prompts: when camera, web or agent co
 | AutoLoom Tasks | local tasks ("görev oluştur") | SAFE | none (Notifications only for an optional alert) |
 | Memory | forget_memory (memory flow only) | CONFIRM | none |
 | Notifications | schedule_notification | SAFE | Notifications, asked on first use |
-| Contacts lookup | find_contact (+ name resolution for calls/messages) | SAFE (read-only) | Contacts, asked on first use |
-| Maps | open_maps | STRONG CONFIRM | none |
+| Contacts lookup | find_contact, "Ahmet'in numarası ne?" (+ name resolution for calls/messages) | SAFE (read-only; several matches are asked about) | Contacts, asked on first use |
+| Maps | open_maps: directions ("Kadıköy'e yol tarifi aç", home and work from memory), nearby search ("en yakın benzinlik") | Spoken by the user with the app on screen: Maps opens at once. Otherwise, or planned after camera/web content: STRONG CONFIRM | none |
 | Open link | open_url (public http/https only; SSRF guard) | STRONG CONFIRM | none |
-| Clipboard | copy_text | SAFE | none |
-| Share | share_text | STRONG CONFIRM | none |
-| Phone call | call | STRONG CONFIRM | none (tel: link; the Phone app places the call) |
-| Message | message | STRONG CONFIRM | none (Messages opens with the text; the user presses Send) |
+| Clipboard | copy_text | SAFE; "Kopyaladım" only after the clipboard changed | none |
+| Share | share_text | The share sheet opens (the user picks where); "Paylaşıldı" only when it completed | none |
+| Phone call | call | The phone's own call prompt (iOS asks before dialling); never "aradım" | Contacts for the number |
+| Message | message | Messages' compose sheet with the text; the user taps Send; "gönderildi" only when Messages reports it | Contacts for the number |
+| Day plan | "Bugün ne yapmam gerekiyor?": AutoLoom tasks, Apple Reminders and the calendar together, counted | SAFE (read-only) | Reminders and Calendars when allowed |
 
-Every tool has a switch in Settings → Tools, plus a master "Allow iPhone actions" switch. Section 70 of the brief: save note, save memory, list tasks and read the calendar are SAFE; an ambiguous event and deleting a memory need a yes; calls, messages, external sharing and destructive changes need a tap.
+Every tool has a switch in Settings → Tools, plus a master "Allow iPhone actions" switch.
+
+Safety levels (brief §33):
+- **SAFE**: note, memory, reading tasks, reminders and the calendar, copy.
+- **Confirm if ambiguous**: reminder, task, calendar (an unclear time is asked first), maps (a card when the request came after camera or web content, or the app is not on screen).
+- **Strong confirm / system UI**: call (the iOS call prompt), message (the Messages sheet), share (the share sheet), deleting a memory (a yes or a tap).
+
+Several contacts with the spoken name are asked about ("İki Ahmet buldum: Ahmet Yılmaz mı, Ahmet Kaya mı?"); "ikincisi" or "Kaya olan" answers it. "Annem" is also looked up as "Anne". A message to someone not in Contacts still opens Messages, where the user picks the recipient.
+
+Privacy: the action trace keeps no names, numbers or message text for calls, messages and contact lookups, and those requests are not added to the conversation context. Recent activity on the Assistant screen shows labels and times only ("✓ Not kaydedildi", "✓ Hatırlatıcı oluşturuldu · Yarın · 10:00").
 
 ## Deterministic time parsing
 
@@ -58,6 +68,7 @@ Every tool has a switch in Settings → Tools, plus a master "Allow iPhone actio
 | "cuma akşam 8" | Fri 2 Oct 20:00 |
 | "15 Ekim 14:30" / "15 Ekim'de" | 15 Oct 14:30 / 15 Oct, no time |
 | "gece 2'de", "8'e çeyrek kala" | Mon 02:00 / Mon 07:45 |
+| "yarına", "yarınki", "bugünkü" | Mon / Mon / today, no time (the day word with its ending) |
 | "bir de süt al", "anahtar onda", "pazara gidince", "Salih'i ara", "3'e böl" | not a time (no false match) |
 
 Rules:
@@ -65,12 +76,13 @@ Rules:
 - Two-digit clock times ("07:30", "11:00") are 24-hour. 6, 7 and 8 o'clock without "sabah/akşam/am/pm" are ambiguous when both readings are ahead, and the assistant asks before saving.
 - Past times are refused ("That time is in the past").
 - A reminder with no time ("süt almayı hatırlat") → "Ne zaman hatırlatayım?"; "fark etmez" saves it without a time.
+- A reminder with nothing at all ("bir hatırlatıcı oluştur") → "Neyi hatırlatayım?"; the answer may carry the time ("yarın 10'da patronu aramamı").
 
 ## Tasks tab
 
 AutoLoom tasks and Apple Reminders together:
 - **Today** (due today or overdue), **Upcoming** (later, and undated), **Completed** (AutoLoom: last 20; Reminders: last 7 days).
-- AutoLoom tasks: add, edit (natural-language "when" field), complete, delete; an optional notification at the due time when notifications are allowed.
+- AutoLoom tasks: add, edit (natural-language "when" field), complete, delete; swipe right for **Tomorrow** (same time tomorrow, with a new alert) or **Reschedule**; an optional notification at the due time when notifications are allowed.
 - Apple Reminders through EventKit: complete, delete (confirmation), reschedule; "Connect" card when access was not asked yet.
 - Notifications scheduled by the assistant are listed and can be cancelled.
 - Everything the assistant creates by voice appears immediately (the store is observed; Reminders are reloaded after each spoken action).

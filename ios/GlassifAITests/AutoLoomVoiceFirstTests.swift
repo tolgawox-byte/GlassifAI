@@ -138,6 +138,75 @@ final class AutoLoomVoiceFirstTests: XCTestCase {
     XCTAssertEqual(store.tasks.count, 1)
   }
 
+  // MARK: The brief's sentences
+
+  /// Brief §51: each phrase reaches its action.
+  func testTheBriefsVoiceActionPhrases() {
+    var context = VoiceBridgeContext()
+    context.previousUserText = "Yarın lastikleri değiştirmem lazım"
+    XCTAssertEqual(decide("not al yarın kamera getireceğim"), .saveNote(text: "Yarın kamera getireceğim"))
+    XCTAssertEqual(decide("bunu hatırla arabam siyah"), .saveMemory(text: "Arabam siyah", kind: nil))
+    guard case .createReminder? = decide("yarın saat 10'da patronu aramamı hatırlat") else { return XCTFail("reminder") }
+    guard case .createTask? = decide("bunu görev olarak ekle", context) else { return XCTFail("task") }
+    XCTAssertEqual(decide("bugün takvimimde ne var"), .readCalendar(.today))
+    XCTAssertEqual(decide("Ahmet'i ara"), .call(contact: "Ahmet"))
+    XCTAssertEqual(decide("Ahmet'e gecikeceğim diye mesaj yaz"), .message(contact: "Ahmet", body: "Gecikeceğim"))
+    var answer = VoiceBridgeContext()
+    answer.lastAssistantText = "Bu ürünün modeli ABC123."
+    XCTAssertEqual(decide("bunu kopyala", answer), .copyText("Bu ürünün modeli ABC123."))
+  }
+
+  /// Brief §62: the physical test sentences reach the right action.
+  func testThePhysicalTestSentences() {
+    XCTAssertEqual(decide("AutoLoom, not al: yarın kamerayı yanıma al."), .saveNote(text: "Yarın kamerayı yanıma al"))
+    var afterNote = VoiceBridgeContext()
+    afterNote.recentSavedText = "Yarın kamerayı yanıma al"
+    afterNote.lastAssistantText = "Tamam, not aldım."
+    guard case .createReminder(let reminder, let time)? = decide("AutoLoom, iki dakika sonra bunu hatırlat.", afterNote) else {
+      return XCTFail("TEST 2: a real reminder")
+    }
+    XCTAssertEqual(reminder, "Yarın kamerayı yanıma al")
+    XCTAssertEqual(time?.date, now.addingTimeInterval(120))
+    guard case .createTask(let task, _)? = decide("AutoLoom, bunu görev olarak ekle.", afterNote) else {
+      return XCTFail("TEST 3: a task")
+    }
+    XCTAssertEqual(task, "Yarın kamerayı yanıma al")
+    XCTAssertEqual(decide("AutoLoom, bugün programım ne?"), .dayPlan(.today))
+    XCTAssertEqual(decide("AutoLoom, Ahmet'i ara."), .call(contact: "Ahmet"))
+    XCTAssertEqual(
+      decide("AutoLoom, Ahmet'e 10 dakika gecikeceğimi yaz."), .message(contact: "Ahmet", body: "10 dakika gecikeceğim"))
+    XCTAssertEqual(decide("AutoLoom, bunu hatırla: arabam siyah."), .saveMemory(text: "Arabam siyah", kind: nil))
+    XCTAssertEqual(decide("Ne hatırlıyorsun?"), .listMemories)
+  }
+
+  /// Brief §53: the answer is noted, then a task for tomorrow refers to it.
+  func testTheBriefsContextScenario() {
+    var context = VoiceBridgeContext()
+    context.lastAssistantText = "Bu ürünün modeli ABC123."
+    XCTAssertEqual(decide("bunu not al.", context), .saveNote(text: "Bu ürünün modeli ABC123."))
+    context.recentSavedText = "Bu ürünün modeli ABC123."
+    context.previousUserText = "bunu not al."
+    context.lastAssistantText = "Tamam, not aldım."
+    guard case .createTask(let title, let time)? = decide("yarına bununla ilgili görev oluştur.", context) else {
+      return XCTFail("expected a task about the noted model")
+    }
+    XCTAssertTrue(title.contains("ABC123"), title)
+    XCTAssertEqual(time?.date, local(9, 28, 0))
+    XCTAssertEqual(time?.hasTime, false)
+  }
+
+  func testABareReminderCommandAsksWhatToRemind() {
+    XCTAssertEqual(decide("bir hatırlatıcı oluştur"), .ask(.reminderTitle))
+    var asking = VoiceBridgeContext()
+    asking.awaiting = .reminderTitle
+    guard case .createReminder(let title, let time)? = decide("yarın saat 10'da patronu aramamı", asking) else {
+      return XCTFail("the answer with a time creates the reminder")
+    }
+    XCTAssertEqual(title, "Patronu ara")
+    XCTAssertEqual(time?.date, local(9, 28, 10))
+    XCTAssertEqual(decide("süt almayı", asking), .ask(.reminderTime(title: "Süt al")), "no time yet: ask when")
+  }
+
   // MARK: Paraphrases
 
   func testNoteParaphrases() {
@@ -262,6 +331,22 @@ final class AutoLoomVoiceFirstTests: XCTestCase {
     XCTAssertEqual(
       VoiceActionIntentBridge.placeName(Utterance("Antalya")!, stripDative: true), "Antalya",
       "a name keeps its ending")
+    XCTAssertNil(decide("Bu restoranı bul ve yol tarifi aç"), "a search first: the voice model plans it (§28)")
+    var camera = VoiceBridgeContext()
+    camera.cameraAvailable = true
+    XCTAssertEqual(decide("Buraya yol tarifi aç", camera), .directionsInView, "§27: the camera reads the address")
+  }
+
+  func testCalendarTitlesAndTheDaysEndings() throws {
+    guard case .createEvent(let meeting, let time)? = decide("cuma saat 3'e Ahmet'le toplantı ekle") else {
+      return XCTFail("expected an event")
+    }
+    XCTAssertEqual(meeting, "Ahmet'le toplantı")
+    XCTAssertEqual(time?.date, local(10, 2, 15))
+    XCTAssertEqual(decide("yarın programım ne?"), .dayPlan(.tomorrow))
+    let tomorrow = try XCTUnwrap(TimePhraseParser.parse("yarına", now: now))
+    XCTAssertEqual(tomorrow.date, local(9, 28, 0))
+    XCTAssertFalse(tomorrow.hasTime)
   }
 
   func testAnAddressFromTheConversation() {

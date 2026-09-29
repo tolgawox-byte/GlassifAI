@@ -11,6 +11,27 @@ Nothing is marked WORKING without a device test. Everything new in Jarvis v1 and
 
 This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex uses (`chatgpt.com/backend-api/codex/*`). Signing in does not unlock every feature of the ChatGPT app. No new paid service, API key or subscription is used.
 
+## Voice-first actions (new in v1.3)
+
+Nothing in this section is device-verified. The physical test plan (TESTs 1–8) is in `TEST_REPORT.md`.
+
+| Capability | Status | Notes |
+|---|---|---|
+| "AutoLoom, not al: yarın kamerayı getireceğim." with the recogniser's spellings of the name ("Oto lum", "Otoloom", "Autolum") | **PHYSICAL TEST REQUIRED** | Root causes fixed in code (`docs/VOICE_ARCHITECTURE.md`, "The failing note command"); unit-tested with ten spellings |
+| A delegation made before the final transcript is taken over, not skipped | **PHYSICAL TEST REQUIRED** | Depends on the real event order; unit-tested decision |
+| Late or missing final transcript: stable partial words finish the turn | **PHYSICAL TEST REQUIRED** | 1.2 s of quiet after the model starts answering |
+| Free-text delegations with an explicit command run through the bridge; executor steps never claim a save | **EXPERIMENTAL** | Not in a turn with camera, web or agent content |
+| Same note or task within 60 s stored once | **EXPERIMENTAL** | Unit-tested |
+| Day plan ("Bugün ne yapmam gerekiyor?", "programım ne?"): tasks + reminders + calendar, counted | **PHYSICAL TEST REQUIRED** | Reads only what the phone has |
+| Calls ("Ahmet'i ara", "annemi ara"): Contacts, several matches asked about, the iOS call prompt | **PHYSICAL TEST REQUIRED** | Never "aradım"; a card when the app is not on screen |
+| Messages ("Ahmet'e … diye mesaj yaz", "ona … de yaz"): the Messages compose sheet | **PHYSICAL TEST REQUIRED** | "Mesajı hazırladım, göndermen için ekranı açtım."; "sent" only when Messages reports it |
+| Contact lookup ("Ahmet'in numarası ne?") | **PHYSICAL TEST REQUIRED** | Read-only; the words are kept out of the trace and the conversation facts |
+| Maps: directions, home/work from memory, nearby search, an address from the last answer, an address in view (camera → check → tap) | **PHYSICAL TEST REQUIRED** | "Bu restoranı bul ve yol tarifi aç" is left to the voice model (search first) |
+| Copy ("bunu kopyala"): "Kopyaladım" only after the clipboard changed | **EXPERIMENTAL** | |
+| Share ("bunu paylaş"): the share sheet; "shared" only when it completed | **PHYSICAL TEST REQUIRED** | |
+| Follow-up context: "bunu" = the last useful answer, "bununla ilgili" = what was just saved, "ona" = the last contact | **EXPERIMENTAL** | Unit-tested, including the brief's ABC123 scenario |
+| Action feedback cards with haptics ("✓ Not kaydedildi", "✓ Hatırlatıcı oluşturuldu · Yarın · 10:00") and Recent activity | **EXPERIMENTAL** | Labels and times only |
+
 ## Voice actions (new in v1.1)
 
 | Capability | Status | Notes |
@@ -51,22 +72,22 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Arming by wearing the glasses (`donState`) | **UNAVAILABLE** in this build | DAT 1.0 API; see `docs/DAT_1_MIGRATION.md` |
 | "Hey Meta, start AutoLoom" | **UNAVAILABLE** | Needs DAT 1.0, firmware V128, Meta AI V290 and Voice Invocation approval in the Wearables Developer Center |
 | A system-wide custom wake word | **UNAVAILABLE** | Not offered to third-party apps |
-| Routines: "İşe başlıyorum" (today's tasks + calendar + arms Hands-Free Ready), "günün özeti" | **EXPERIMENTAL** | Reads only phone data; weather/news not included |
+| Routines: "İşe başlıyorum" (today's tasks + calendar + arms Hands-Free Ready), "günün özeti" | **EXPERIMENTAL** | Phone data; the briefing adds the weather from a web search only when web search is on and a city is set (v1.3); news not included |
 | Daily briefing on the first conversation of the day | **EXPERIMENTAL** (off by default) | Settings → Name & conversation → Daily briefing: once a day, after the ready greeting, from the calendar, reminders and AutoLoom tasks on this iPhone; also on request ("günün özeti") |
 
 ## Memory, notes and tasks
 
 | Capability | Status | Notes |
 |---|---|---|
-| AutoLoom Memory (SwiftData on this iPhone) | **EXPERIMENTAL** | Types PROFILE, PREFERENCE, FACT, PERSON, PLACE, VEHICLE, EPISODE, NOTE, TASK_CONTEXT, VISUAL_MEMORY, CONVERSATION_SUMMARY |
+| AutoLoom Memory (SwiftData on this iPhone) | **EXPERIMENTAL** | Types PROFILE, PREFERENCE, FACT, PERSON, PLACE, VEHICLE, PROJECT (v1.3), EPISODE, NOTE, TASK_CONTEXT, VISUAL_MEMORY, CONVERSATION_SUMMARY |
 | User profile ("Benim adım Tolga" → "Benim adım ne?") | **EXPERIMENTAL** | Only what the user says or types; used "naturally, not in every sentence" |
 | Conversation memory (summaries of meaningful conversations) | **EXPERIMENTAL** | On by default; summaries only, never transcripts; searchable; the latest goes into the next conversation |
 | Smart Memory (offers to remember, saves only after a yes) | **EXPERIMENTAL** | Off by default |
 | Retrieval: Turkish stems, English on-device embedding, exact names, pinned, recency | **PARTIAL** | No Turkish sentence embedding exists on iOS |
-| Memory tab (About me, Pinned, Recent, People, Places, Vehicles, Conversations, Visual; edit, pin, forget, Clear all) | **PHYSICAL TEST REQUIRED** | |
+| Memory tab (About me, Pinned, Recent, People, Places, Vehicles, Projects, Conversations, Visual; edit, pin, forget, Clear all) | **PHYSICAL TEST REQUIRED** | |
 | Visual memory ("bunu hatırla", "anahtarımı buraya bıraktığımı hatırla") | **PHYSICAL TEST REQUIRED** | Opt-in; one frame when asked, never continuous |
 | AutoLoom Notes | **EXPERIMENTAL** | Separate from memory; share to Apple Notes |
-| AutoLoom Tasks (Today / Upcoming / Completed, optional alert) | **EXPERIMENTAL** | Local, next to Apple Reminders in the Tasks tab |
+| AutoLoom Tasks (Today / Upcoming / Completed, optional alert; swipe for Tomorrow / Reschedule) | **EXPERIMENTAL** | Local, next to Apple Reminders in the Tasks tab |
 | Apple Notes direct write | **UNAVAILABLE** | No public API; Share is offered |
 | ChatGPT account memory or chat history | **UNAVAILABLE** | Not reachable; the assistant says so |
 
@@ -79,7 +100,7 @@ This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex use
 | Calendar (today, tomorrow, upcoming, create) | **PHYSICAL TEST REQUIRED** | SAFE for an explicit request; an unclear time is asked |
 | Tasks tab | **PHYSICAL TEST REQUIRED** | AutoLoom tasks + Apple Reminders; refreshes right after a spoken action |
 | Local notifications | **PHYSICAL TEST REQUIRED** | SAFE |
-| Contacts lookup, maps, links, share, call, message | **EXPERIMENTAL** / **PHYSICAL TEST REQUIRED** | Unchanged; calls/messages/sharing need a tap |
+| Contacts lookup, maps, links, share, call, message | **PHYSICAL TEST REQUIRED** | v1.3: spoken directly (see "Voice-first actions"); calls, messages and sharing finish in the system's own UI |
 | Email, purchases, payments, deleting data, posting | **UNAVAILABLE** | Refused locally |
 | Camera, web or agent text never triggers a change (brief §70–71) | **EXPERIMENTAL** (v1.1.1) | Enforced in code: a change the planner proposes in a turn that brought camera, web or agent content waits for a spoken yes or a tap; see `docs/NATIVE_TOOLS.md` |
 | App Intents: Start Conversation, Ask AutoLoom, Create AutoLoom Note, Start Live Vision | **EXPERIMENTAL** | "Ask AutoLoom" now also runs commands ("not al: …") |

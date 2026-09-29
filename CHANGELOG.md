@@ -2,6 +2,34 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1.3 — voice-first actions] — branch `autoloom-glasses-jarvis-v1`
+
+Rollback tag: `rollback-e79fd85-before-voice-first`. Not device-verified; physical TESTs 1–8 are in `TEST_REPORT.md`.
+
+### Fixed
+- **"AutoLoom, not al: yarın kamerayı getireceğim." could save nothing.** Traced from the realtime events to `MemoryStore.addNote` (`docs/VOICE_ARCHITECTURE.md`). The speech recogniser's spellings of the name ("Oto lum", "Otoloom", "Autolum", "Carvis") were not treated as the address, so the command was not recognised while the voice model waited for the app. Near spellings of names of five letters or more now count, also for "kapat"/"dur".
+- A delegation that arrived before the final transcript made the app **skip** the command even when that delegation saved nothing. It is now taken over: stopped and answered with the app's result, or left alone when it already did the action.
+- Delegations without a `TASK:` line went to a step that cannot save, whose model could say "not aldım". Explicit commands in them now run through the app, and steps that cannot act are told never to claim a save, call or send.
+- A turn whose final transcript came late or only in older event shapes was never read; its stable partial words now finish it.
+- The same note or task saved twice within a minute is stored once.
+- "Yarına", "yarınki" and "bugünkü" are read as days.
+
+### Added
+- **Calls**: "Ahmet'i ara", "annemi ara", "call Mom" → Contacts (several matches are asked about: "İki Ahmet buldum: Ahmet Yılmaz mı, Ahmet Kaya mı?") → the iOS call prompt. The app never says a call was made.
+- **Messages**: "Ahmet'e 10 dakika gecikeceğim diye mesaj yaz", "ona gecikeceğimi de yaz" → Messages' compose sheet with the text ("Mesajı hazırladım, göndermen için ekranı açtım."); "sent" only when Messages reports it. Missing parts are asked ("Kime yazayım?", "Ahmet'e ne yazayım?").
+- **Contacts**: "Ahmet'in numarası ne?".
+- **Maps**: "beni eve götür" / "işe götür" (addresses saved with "hatırla: ev adresim …"), "Kadıköy'e yol tarifi aç", "havalimanına nasıl giderim", "en yakın benzinliğe götür" (Maps search), "bu adrese yol tarifi aç" (from the last answer), "buraya yol tarifi aç" (the camera reads the address; a card shows it; the user taps).
+- **Clipboard and share**: "bunu kopyala" ("Kopyaladım" after the clipboard changed), "bunu paylaş" (share sheet; "shared" only when completed).
+- **Day plan**: "Bugün ne yapmam gerekiyor?", "programım ne?" → AutoLoom tasks, Apple Reminders and the calendar together, counted ("Bugün 3 işin var.").
+- **Follow-up context**: "bunu" is the last useful answer, "bununla ilgili" what was just saved, "ona" the last contact.
+- A bare "hatırlatıcı oluştur" asks "Neyi hatırlatayım?".
+- Daily briefing: the weather from a web search when web search is on and a city is set.
+- **UI**: action feedback cards with haptics, Recent activity, rotating quick suggestions, the WAKE orb state, the status pill for iPhone Camera / Camera Off, greeting options "Buradayım.", "Dinliyorum.", "Nasıl yardımcı olabilirim?", a Projects memory group, Tomorrow / Reschedule for AutoLoom tasks.
+- Tests: `AutoLoomVoiceFirstTests`.
+
+### Privacy
+- Calls, messages and contact lookups keep no names, numbers or message text in the action trace or the conversation facts. Recent activity shows labels and times only.
+
 ## [AutoLoom Jarvis v1.2 — Ray-Ban connection and animated UI] — branch `autoloom-glasses-jarvis-v1`
 
 Rollback tag: `rollback-dd1b756-before-connection-fix`. Not device-verified; see `docs/RAYBAN_CONNECTION.md` (tests A–L) and `TEST_REPORT.md`.

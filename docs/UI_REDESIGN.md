@@ -1,4 +1,4 @@
-# Interface redesign (Jarvis v1, updated in v1.1 and v1.2)
+# Interface redesign (Jarvis v1, updated in v1.1, v1.2 and v1.3)
 
 The vNext main screen looked like a developer console: FPS, frame counters, audio routes and a red "hang up" button. Jarvis v1 turns it into a consumer app. All technical information moved to Settings → Developer.
 
@@ -7,8 +7,8 @@ The vNext main screen looked like a developer console: FPS, frame counters, audi
 | Tab | Content |
 |---|---|
 | **Assistant** | The conversation screen (below). While Ray-Ban is chosen but not connected, the glasses setup appears here instead |
-| **Memory** | Search (memories, notes, tasks); About me / Pinned / Recent / People / Places / Vehicles / Other / Conversations / Visual memories; notes; edit, pin, forget; Clear all AutoLoom memory |
-| **Tasks** | AutoLoom tasks and Apple Reminders together: Today / Upcoming / Completed; create, edit, complete, delete, reschedule; scheduled notifications |
+| **Memory** | Search (memories, notes, tasks); About me / Pinned / Recent / People / Places / Vehicles / Projects / Other / Conversations / Visual memories; notes (search, pin, tags, edit, delete, share); edit, pin, forget; Clear all AutoLoom memory |
+| **Tasks** | AutoLoom tasks and Apple Reminders together: Today / Upcoming / Completed; add, complete (the circle), swipe for Tomorrow / Reschedule, delete; scheduled notifications |
 | **Settings** | ASSISTANT, VOICE, AI, VISION, MEMORY, TOOLS, PRIVACY, DEVELOPER, ABOUT |
 
 ## Assistant screen
@@ -29,6 +29,17 @@ The vNext main screen looked like a developer console: FPS, frame counters, audi
 │               Tap to talk                    │
 └────────────────────────────────────────────┘
 ```
+
+### v1.3: voice-first feedback
+
+- **Action feedback cards**: a short card slides in from the top after the app really finished something, with a subtle haptic (success or error), and disappears after about three seconds or on a tap: "✓ Not kaydedildi", "✓ Hatırlatıcı oluşturuldu · Yarın · 10:00", "✓ Görev eklendi", "✓ Kopyalandı", "✓ Yol tarifi açıldı", "✓ Mesaj gönderildi" (only when Messages sent it). Nothing appears before iOS or the store confirmed it.
+- **Recent activity**: while idle, the last three results as labels and times ("Not kaydedildi · 2 dk önce"). No note text, names, numbers or messages.
+- **Quick suggestions**: while idle, three chips that change every 12 seconds ("Bugünkü görevlerim ne?", "Not al", "Şu an ne görüyorum?" when a camera is on, "Bir hatırlatıcı oluştur", "Takvimimde ne var?"). A tap asks it as a typed question.
+- **WAKE orb state**: when the wake phrase is heard, two rings close in on the core and it pops once (a quick, focused pulse), with the light haptic; then the connecting arc.
+- **Status pill for every source**: "Ray-Ban Connected" / "Connecting…" (glasses), "iPhone Camera", "Camera Off", in the same animated pill.
+- **Activation greeting** (Settings → Voice): "Buradayım.", "Dinliyorum.", "Bağlandım, dinliyorum." (default), "Nasıl yardımcı olabilirim?", "Bağlandım.", Jarvis style or custom; said once per new conversation, only when the voice path really works.
+
+Orb states and what drives them: READY (slow breathing), WAKE (focused pulse), CONNECTING (orbiting arc), LISTENING (microphone level), THINKING (slow orbit), LOOKING (scanning rings), SEARCHING (faster orbit), SAVING (check mark), SPEAKING (voice-level rings), SUCCESS (soft silver-blue expansion), ERROR (restrained amber pulse). All come from the real session and task state; Reduce Motion shows a still image of the same state.
 
 ### v1.2: connection, motion and feedback
 
