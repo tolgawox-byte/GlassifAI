@@ -1,4 +1,4 @@
-# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, v1.4)
+# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, v1.5)
 
 Result categories:
 - **BUILD PASS**: compiled into the Debug and Release IPAs in CI.
@@ -6,6 +6,28 @@ Result categories:
 - **PHYSICAL TEST REQUIRED**: needs the iPhone and Ray-Ban Meta Gen 1. The tables below are for you to fill in.
 
 Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
+
+## Ultimate Jarvis expansion (v1.5)
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [36600758014](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36600758014) | `a4e0eb3` | **BUILD PASS · iOS 321/323 (2 skipped) · Rust 8/8** | **Final run for v1.5 — install this Release IPA** (`AutoLoomMediaGlasses-Release-unsigned.ipa`); tag `baseline-a4e0eb3-jarvis-v1.5`; 19 screenshots on `ci-screenshots` |
+| [36600722736](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36600722736) | `eec8b31` | cancelled | Superseded by `a4e0eb3` (a CI script guard) |
+| [36596191749](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36596191749) | `d5163a7` | **BUILD PASS · iOS 321/323 (2 skipped) · Rust 8/8** | Tag `baseline-d5163a7-jarvis-v1.5-green`. Screenshots published (assistant, memory, explore, dealer, vehicle, settings…) |
+| [36590836733](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36590836733) | `8ee1a24` | BUILD PASS · iOS 320/323 (1 failed, 2 skipped) · Rust 8/8 | Voice evaluation above 90 %; one chain ("… ekle sonra park yerimi kaydet") was taken as one command: a bare "sonra" was not a separator (fixed in `d5163a7`). First screenshots after the launch fix |
+| [36590331604](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36590331604) | `2510f7f` | build failed | A skill call wrote the orchestrator's read-only last result (fixed in `8ee1a24`) |
+| [36586766851](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36586766851) | `92a6434` | **BUILD PASS · iOS 312/314 (2 skipped) · Rust 8/8** | Apple intelligence, visual memory, Dealer SuperMode, translation, documents, music, routines. Screenshots: the app crashed at launch in the simulator (missing `MWDATMockDevice.framework`, fixed in `2510f7f`) |
+| [36586030088](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36586030088) | `2efc910` | build failed | `SpotlightSearchTool` needs `import CoreSpotlight` (fixed in `92a6434`) |
+| [36585086492](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36585086492) | `3e81deb` | build failed | A main-actor setting used as a default argument (fixed in `2efc910`) |
+| [36579372097](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36579372097) | `fe5754e` | BUILD PASS · iOS 282/287 (3 failed, 2 skipped) · Rust 8/8 | ActionCatalog. Three catalog/test data issues (a camera example without its tag, actions with one example, a tuple shown as text), fixed in `3e81deb` |
+
+New test classes: `AutoLoomActionCatalogTests` (completeness, every example through the speech parser, negatives, delegation, high-priority commands, every intent has an entry, tool schemas, parameters), `AutoLoomJarvisExpansionTests` (media resources, Gen 1 capabilities, corrections, graphs, vehicle questions, moving tasks, global search, capabilities), `AutoLoomAppleIntelligenceTests` (optional and honest on-device model, Spotlight privacy), `AutoLoomVisualMemoryTests` (visual search, index, offline description, Scene Timeline), `AutoLoomDealerSuperModeTests` (vPIC, Transport Canada wording, tires/DOT, phrases, severity, reports, photo linking, photo director), `AutoLoomDocumentsTranslationTests` (amounts, dates, totals, spending, phrases, languages), `AutoLoomMusicRoutinesTests`, `AutoLoomRemoteAssistTests`, `AutoLoomSkillsTests` (MCP client against a fake server, risk, https-only servers, tool choice), `AutoLoomShortcutTests`, `AutoLoomVoiceEvaluationTests` (everyday Turkish-first phrases and command chains; accuracy shown on the run page).
+
+Still skipped in CI: the two tests that store a provider key (no Keychain in the unsigned simulator app).
+
+### Physical tests (v1.5)
+
+`docs/PHYSICAL_TEST_MATRIX.md` has the steps and expected results for every new feature on the iPhone and the Ray-Ban glasses. None has been run yet.
 
 ## Multi-agent, Dealer Mode, daily life, Ray-Ban photos and video (v1.4)
 

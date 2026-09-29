@@ -2,6 +2,34 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1.5 — Ultimate Jarvis expansion] — branch `autoloom-glasses-jarvis-v1`
+
+Final CI run [36600758014](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36600758014) on `a4e0eb3`: iOS 321/323 (2 skipped), Rust 8/8; tag `baseline-a4e0eb3-jarvis-v1.5`. Rollback tag: `rollback-405e461-before-jarvis-expansion`. Not device-verified; `docs/PHYSICAL_TEST_MATRIX.md` lists the checks.
+
+### Added
+- **ActionCatalog**: one definition per action (names, Turkish/English examples, parameters, risk, confirmation, permissions, capabilities, offline, undo, route, App Intent, UI place, status) feeding the voice bridge, App Intents (`RunAutoLoomActionIntent` and dedicated intents), the tool schemas, the Command Library, Command Lab and the new command palette. CI checks that every example reaches its action through the same parser as speech.
+- **Jarvis context**: several commands in one sentence, "hayır, cumartesi" corrections, "bunu yarına taşı", vehicle questions ("kaç kilometre?"), session snapshot (vehicle, person, place, document, task, recording, sharing, timeline, providers).
+- **Apple intelligence (optional)**: on-device Foundation Models profiles (weak-linked), note titles and tags, entities, summaries, search rewrite, offline answers; iOS 27 Dynamic Profiles and Spotlight search tool; Spotlight second brain (masked VINs, memories opt-in, complete protection); global natural-language search.
+- **Visual Second Brain**: visual memories keep on-device text and objects, the active vehicle and (only if allowed) a photo; "anahtarımı en son nerede gördüm?", "bugün neler gördüm?"; opt-in Scene Timeline (text only, 7 days); Live Vision "ne değişti?".
+- **Translation and documents**: signs read and translated on the phone with Apple Translation (downloaded languages, system download sheet), cloud fallback; in Translation mode Live Vision also translates readable foreign text; "bu belgeyi özetle", "fişi kaydet", "bu ay ne harcadım?" (text kept, never the photo; reminders only after a yes).
+- **Dealer SuperMode**: NHTSA vPIC decode, Transport Canada recalls (never "no recalls"; manufacturer VIN pages), tire size and DOT age, warning lights (no diagnosis), equipment with provenance, walk-around areas, condition report, service handoff, lot spot, part numbers, damage severity only when said, photos linked to fresh damage notes, photo director hints, dealer morning briefing, AutoLoom Media adapter interface (never automatic).
+- **Daily life**: parking spot with a linked Ray-Ban photo ("park yerimi fotoğrafla kaydet"), music through the system player and the user's library, the user's own Shortcuts after a tap (Home scenes), user routines of safe steps, opt-in morning briefing notification.
+- **Remote Assist** on the same Wi-Fi with a room code (tap to start, red bar, "paylaşımı durdur", stops in the background, after 15 minutes, after wrong codes or when hot).
+- **MCP skills**: Streamable HTTP client, servers added only in Settings (https, Keychain token), per-tool policy, the receiving service shown before every call, destructive tools need a tap.
+- **Interface**: Liquid Glass floating controls with a material fallback, context chips (vehicle, sharing, offline), command palette, activity timeline, visual memory gallery, vehicle SuperMode sections, translation, documents, routines, skills, privacy dashboard, performance screen.
+- **Performance**: thermal guard (critical heat stops Live Vision and sharing, never a recording), sharing frame rate halves when hot.
+- **CI**: builds continue after the first failing file; voice evaluation accuracy on the run page; screenshots with launch logs and crash reports.
+- Tests: `AutoLoomActionCatalogTests`, `AutoLoomJarvisExpansionTests`, `AutoLoomAppleIntelligenceTests`, `AutoLoomVisualMemoryTests`, `AutoLoomDealerSuperModeTests`, `AutoLoomDocumentsTranslationTests`, `AutoLoomMusicRoutinesTests`, `AutoLoomRemoteAssistTests`, `AutoLoomSkillsTests`, `AutoLoomShortcutTests`, `AutoLoomVoiceEvaluationTests`.
+
+### Fixed
+- CI screenshots: the simulator app crashed at launch because the test build keeps `MWDATMockDevice.framework` beside the app; it is now copied in.
+- Command Lab showed "(text: …)" for single labelled parameters.
+
+### Privacy
+- Vision prompts never identify people from faces.
+- Documents keep text only; visual memory photos only when allowed; the Scene Timeline is text only and off by default.
+- Nothing is shared or sent to a skill, a shortcut or AutoLoom Media without the user's own words and, where it leaves the phone, a tap.
+
 ## [AutoLoom Jarvis v1.4 — multi-agent, Ray-Ban media, reliable notes] — branch `autoloom-glasses-jarvis-v1`
 
 Final CI run [36523415778](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36523415778) on `f38bcad`: iOS 263/265 (2 skipped), Rust 8/8; tag `baseline-f38bcad-jarvis-v1.4`. Rollback tags: `rollback-f11377f-before-multi-agent`, `rollback-c2d7cfe-before-dealer`. Not device-verified.
