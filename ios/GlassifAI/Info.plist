@@ -110,7 +110,7 @@
 	<key>NSContactsUsageDescription</key>
 	<string>Only when you ask to call, message or look up someone by name: AutoLoom Media Glasses finds that contact's phone number on this iPhone. Contacts are not uploaded.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Only when you ask: your parking spot ("park yerimi kaydet"), or a visual memory when "Attach the place" is on. The place is saved on this iPhone and never tracked.</string>
+	<string>Only when you ask: your parking spot ("park yerimi kaydet"), a Dealer Mode vehicle's lot spot ("aracın yerini kaydet"), or a visual memory when "Attach the place" is on. The place is saved on this iPhone and never tracked.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>AutoLoom Media Glasses adds reminders you ask for and reads your open reminders when you ask about them.</string>
 	<key>NSRemindersUsageDescription</key>

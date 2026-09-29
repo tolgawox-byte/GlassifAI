@@ -107,11 +107,13 @@ enum LocalBrain {
     #if canImport(FoundationModels)
     if #available(iOS 26.0, *) {
       let actions = ActionCatalog.all
-        .filter { $0.route == .local && $0.risk != .blocked && !$0.keys.contains(where: { $0.hasPrefix("confirmPending") }) }
-        .prefix(60)
+        .filter {
+          $0.route == .local && $0.risk == .safe && $0.offline && !$0.keys.contains(where: { $0.hasPrefix("confirmPending") })
+        }
+        .prefix(120)
         .map { action -> String in
           let example = action.examplesTR.first.map { ActionCatalog.stripTags($0).text } ?? action.name
-          return "\(action.id): \(action.name) (\"\(example)\")"
+          return "\(action.id): \"\(example)\""
         }
         .joined(separator: "\n")
       let prompt = "Actions:\n\(actions)\n\nRequest: \(text)\nChoose the action id, or none."

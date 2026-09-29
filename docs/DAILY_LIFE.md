@@ -20,4 +20,6 @@
 | Photos and videos | "fotoğraf çek", "video kaydını başlat", "kaydı durdur" | `docs/RAYBAN_MEDIA.md` |
 | Modes | Settings → Personality → Mode | Automatic / General / Dealer / Daily life / Travel / Shopping / Translation / DIY / Accessibility; Dealer is automatic while a vehicle is active |
 
-Not in this build (**UNAVAILABLE** here): reminders at places other than home and work, receipts and expense notes, flight tracking, command chaining and "Hayır, cuma değil cumartesi" corrections, a home-screen widget, Live Activities.
+Not in this build (**UNAVAILABLE** here): reminders at places other than home and work, flight tracking, a home-screen widget, Live Activities.
+
+Added in v1.5: receipts ("fişi kaydet", "bu ay ne harcadım?", `docs/TRANSLATION_AND_DOCUMENTS.md`), several commands in one sentence and "Hayır, cuma değil cumartesi" corrections (`docs/ACTION_CATALOG.md`), music, the user's own Shortcuts and routines (`docs/VOICE_COMMANDS.md`).

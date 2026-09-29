@@ -183,6 +183,11 @@ final class RemoteAssistServer: ObservableObject {
   /// Starts sharing; returns why not when it cannot.
   func start() -> String? {
     guard !isSharing else { return nil }
+    // The camera is on when frames are arriving (Ray-Ban or iPhone).
+    guard FrameStore.shared.freshFrame(maxAge: 2.0) != nil else {
+      return L.t("Start the camera first (Ray-Ban or iPhone).", "Önce kamerayı başlat (Ray-Ban ya da iPhone).")
+    }
+    MediaResourceCoordinator.shared.note(.cameraStream, running: true)
     let decision = MediaResourceCoordinator.shared.begin(.remoteAssist)
     guard decision.allowed else {
       return decision.spoken ?? L.t("Start the camera first.", "Önce kamerayı başlat.")
@@ -218,8 +223,15 @@ final class RemoteAssistServer: ObservableObject {
     isSharing = true
     startedAt = Date()
     lastStop = nil
+    var lastFrameAt = Date()
     pump = Task { [weak self] in
       while let self, self.isSharing, !Task.isCancelled {
+        if FrameStore.shared.freshFrame(maxAge: 1.5) != nil {
+          lastFrameAt = Date()
+        } else if Date().timeIntervalSince(lastFrameAt) > 10 {
+          self.stop(.cameraStopped)
+          return
+        }
         if let startedAt = self.startedAt, Date().timeIntervalSince(startedAt) > Self.maxDuration {
           self.stop(.timeLimit)
           return

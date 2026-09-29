@@ -9,6 +9,7 @@ struct VehicleSuperSections: View {
   @ObservedObject private var store = DealerStore.shared
   @State private var working: String?
   @State private var result: String?
+  @State private var newOption = ""
   @Environment(\.openURL) private var openURL
 
   var body: some View {
@@ -37,6 +38,20 @@ struct VehicleSuperSections: View {
             Text(option.provenance.title).font(.caption2).foregroundStyle(color(option.provenance))
           }
         }
+      }
+      .onDelete { offsets in store.update(vehicleID) { $0.options?.remove(atOffsets: offsets) } }
+      // Equipment the user checked themselves ("ısıtmalı koltuk var").
+      HStack {
+        TextField(L.t("Add equipment you checked", "Kontrol ettiğin donanımı ekle"), text: $newOption)
+        Button(L.t("Add", "Ekle")) {
+          let text = newOption.trimmingCharacters(in: .whitespacesAndNewlines)
+          guard !text.isEmpty else { return }
+          store.update(vehicleID) {
+            $0.options = ($0.options ?? []) + [VehicleOption(name: L.t("Equipment", "Donanım"), value: text, provenance: .userConfirmed)]
+          }
+          newOption = ""
+        }
+        .disabled(newOption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
       if vehicle.vin != nil {
         runButton(L.t("Decode the VIN (NHTSA)", "VIN'i çöz (NHTSA)"), id: "decode", systemImage: "barcode.viewfinder") {

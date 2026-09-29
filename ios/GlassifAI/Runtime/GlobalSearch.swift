@@ -9,7 +9,7 @@ import SwiftUI
 /// sentence become filters. Nothing leaves the phone.
 struct SearchResult: Identifiable, Equatable {
   enum Kind: String, CaseIterable, Identifiable {
-    case note, task, memory, conversation, vehicle, capture, visualMemory, shopping, parking
+    case note, task, memory, conversation, vehicle, capture, visualMemory, shopping, parking, document
 
     var id: String { rawValue }
 
@@ -24,6 +24,7 @@ struct SearchResult: Identifiable, Equatable {
       case .visualMemory: L.t("Visual memory", "Görsel hafıza")
       case .shopping: L.t("Shopping list", "Alışveriş listesi")
       case .parking: L.t("Parking", "Park yeri")
+      case .document: L.t("Documents and receipts", "Belgeler ve fişler")
       }
     }
 
@@ -38,6 +39,7 @@ struct SearchResult: Identifiable, Equatable {
       case .visualMemory: "eye"
       case .shopping: "cart"
       case .parking: "parkingsign.circle"
+      case .document: "doc.text"
       }
     }
   }
@@ -153,10 +155,14 @@ enum GlobalSearch {
           text: task.title + " " + task.notes)
     }
     if memory.isEnabled {
+      let visual = VisualMemoryIndex.shared.entries
       for record in memory.memories {
-        let kind: SearchResult.Kind = record.kind == .conversationSummary ? .conversation : .memory
+        let kind: SearchResult.Kind = record.kind == .conversationSummary ? .conversation
+          : record.kind == .visual ? .visualMemory : .memory
+        // A visual memory is also found by the text and objects read in it.
+        let read = visual[record.id].map { $0.analysis.text + " " + $0.analysis.labels.joined(separator: " ") } ?? ""
         add(kind, id: record.id.uuidString, title: record.title, snippet: record.text, date: record.createdAt,
-            text: record.title + " " + record.text + " " + (record.placeName ?? ""))
+            text: record.title + " " + record.text + " " + (record.placeName ?? "") + " " + read)
       }
     }
     for vehicle in DealerStore.shared.vehicles {
@@ -183,6 +189,10 @@ enum GlobalSearch {
       add(.parking, id: spot.id.uuidString, title: spot.placeName ?? L.t("Parking spot", "Park yeri"),
           snippet: spot.note ?? "", date: spot.at,
           text: [spot.placeName ?? "", spot.note ?? "", "park parking araba car"].joined(separator: " "))
+    }
+    for document in DocumentStore.shared.records {
+      add(.document, id: document.id.uuidString, title: document.title, snippet: document.total?.text ?? String(document.text.prefix(120)),
+          date: document.at, text: document.title + " " + document.text + " " + (document.merchant ?? ""))
     }
     for extra in extraSources {
       for result in extra(query) where wants(result.kind) && inRange(result.date) { results.append(result) }

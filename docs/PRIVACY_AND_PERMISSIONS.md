@@ -35,7 +35,7 @@ Denied permissions degrade gracefully: without the camera the assistant still ta
 | Your name (About me) | In the voice instructions, so the assistant can use it | OpenAI | `UserDefaults` on this iPhone; only what you said or typed |
 | Conversation summaries (on by default; Settings → Memory → Conversation memory) | The finished conversation's turns are sent once to your ChatGPT account to write the summary; the latest summary goes into the next conversation's instructions | OpenAI | The summary only (≤ 900 characters, numbers masked), on this iPhone. **Transcripts are never stored**: the turns are kept in memory until the conversation ends, then dropped |
 | Spoken commands (the voice action bridge) | No extra transfer: the transcript is already part of the conversation | — | The action trace keeps the last 30 commands in memory only, shortened and with numbers removed |
-| Visual memories (opt-in) | The camera frame for the description, like any visual question | OpenAI | The description; a 480 px photo and the place only if you turned them on |
+| Visual memories (opt-in) | The camera frame for the description, like any visual question | OpenAI | The description and the text and objects read on the phone; a 480 px thumbnail, a 1,600 px photo and the place only if you turned them on |
 | Wake-phrase audio | **No** | — | No (on-device recognition, nothing stored) |
 | Reminders / calendar events | They go to your own Reminders and Calendar (iCloud if you use it) | Apple | In Reminders/Calendar, like any event you create |
 | Agent gateway requests (optional) | Yes, after you confirm | Your own OpenClaw gateway | Gateway token in the Keychain |

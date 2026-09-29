@@ -45,6 +45,7 @@ final class UserRoutineStore: ObservableObject {
     let excluded: Set<String> = ["action.confirm", "action.cancel", "undo.last", "help.capabilities"]
     return ActionCatalog.all.filter {
       $0.route == .local && $0.risk == .safe && $0.confirmation == .none && !excluded.contains($0.id)
+        && $0.offline && !$0.capabilities.contains(.network)
         && !$0.id.hasPrefix("conversation.") && !$0.id.hasPrefix("routine.user")
     }
   }
@@ -65,6 +66,11 @@ final class UserRoutineStore: ObservableObject {
 
   func delete(_ id: UUID) {
     routines.removeAll { $0.id == id }
+    persist()
+  }
+
+  func deleteEverything() {
+    routines.removeAll()
     persist()
   }
 

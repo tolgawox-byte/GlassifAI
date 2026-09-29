@@ -14,7 +14,7 @@ Rollback tag for this pass: `rollback-405e461-before-jarvis-expansion` (v1.4 fin
 | 3 | Research pass (Apple, Meta, public projects) | IMPLEMENTED | Apple (Foundation Models, Translation, Liquid Glass, CoreSpotlight), Meta DAT 1.0 docs, NHTSA vPIC, Transport Canada API, MCP spec |
 | 4 | DAT 1.0 timing, RayBanCapabilityMatrix | IMPLEMENTED | `RayBanCapabilityMatrix` (SDK 0.5.0 linked; DAT 1.0 items WAITING_FOR_DAT1; Gen 1 displayless, no display UI) |
 | 5 | Universal voice parity, ActionCatalog | IMPLEMENTED | 100+ `ActionDefinition`s; every example parsed by the same bridge as speech (test) |
-| 6 | ActionCatalog powers voice, agents, App Intents, UI, Command Lab, tests | IMPLEMENTED | `ActionCatalog.run`, tool schemas, `RunAutoLoomActionIntent`, Command Library/Lab, command palette |
+| 6 | ActionCatalog powers voice, agents, App Intents, UI, Command Lab, tests | PARTIAL | Voice, App Intents (`RunAutoLoomActionIntent`), Command Library/Lab, palette, routines and the on-device classifier use it; the generated tool schemas are tested but the realtime voice session still uses its own delegation tool |
 | 7 | Voice command for every important feature | IMPLEMENTED | Voice-only actions carry a stated reason |
 | 8 | Transcript → intent → parameters → permission → executor → result → speech | IMPLEMENTED | `IntentOutcome` (spoken vs reply vs said), trace log |
 | 9 | High-priority local commands | IMPLEMENTED | Deterministic test for stop, recording, photo, note, task, reminder, timer, copy, cancel, confirm |
@@ -37,7 +37,7 @@ Rollback tag for this pass: `rollback-405e461-before-jarvis-expansion` (v1.4 fin
 | 26 | Live Vision commands | IMPLEMENTED | "Ne değişti?" compares the last two notes |
 | 27 | Document intelligence | IMPLEMENTED | OCR, dates, amounts; reminder only after a yes; text kept, photo not |
 | 28 | OCR / barcode / QR local pipeline | ALREADY EXISTED + IMPLEMENTED | Code reader (v1.4); sign OCR (this pass) |
-| 29 | Live translation | IMPLEMENTED | Apple Translation with installed languages, system download sheet; cloud fallback; PHYSICAL TEST REQUIRED |
+| 29 | Live translation | PARTIAL | On request ("bu tabelayı Türkçeye çevir") on the phone with Apple Translation (downloaded languages, system sheet) or online; translation mode for speech; no continuous sign translation. PHYSICAL TEST REQUIRED |
 | 30 | Remote Assist | PARTIAL | LAN share with room code implemented; internet (WebRTC) REQUIRES_PROVIDER (signalling server) |
 | 31 | Remote Assist privacy | IMPLEMENTED | Tap-only start, red bar, stop by voice, stops in background / 15 min / wrong codes / heat |
 | 32 | MediaResourceCoordinator | IMPLEMENTED | Activities and conflicts, used by sharing and music |
@@ -50,7 +50,7 @@ Rollback tag for this pass: `rollback-405e461-before-jarvis-expansion` (v1.4 fin
 | 39 | Damage photo follow-up | IMPLEMENTED | Photo within 3 minutes of a damage note is linked to it |
 | 40 | Tire intelligence | IMPLEMENTED | Size and DOT age read exactly; no tread depth |
 | 41 | Dashboard intelligence | IMPLEMENTED | Clearly lit lights only; no diagnosis |
-| 42 | Vehicle options with provenance | IMPLEMENTED | VIN decoded / seen / confirmed / unverified |
+| 42 | Vehicle options with provenance | IMPLEMENTED | VIN decoded (vPIC) and confirmed by the user (vehicle screen); "seen" and "unverified" labels exist but nothing produces them yet |
 | 43 | Dealer photo director | IMPLEMENTED | Blur, exposure, glare, near-copies measured on the phone |
 | 44 | Photo session progress | ALREADY EXISTED | Photo checklist |
 | 45 | AutoLoom Media future adapter | IMPLEMENTED | `InventoryAdapter` interface; never automatic; share sheet today |

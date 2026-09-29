@@ -45,7 +45,7 @@ enum SignReader {
       if #available(iOS 16.0, *) { request.automaticallyDetectsLanguage = true }
       try? VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
       let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
-      return String(lines.joined(separator: "\n").prefix(1_200))
+      return String(lines.joined(separator: "\n").prefix(4_000))
     }.value
   }
 }

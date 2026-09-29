@@ -308,6 +308,12 @@ final class SkillStore: ObservableObject {
     persist()
   }
 
+  func deleteEverything() {
+    for server in servers { SkillCredentialStore.delete(server.id) }
+    servers.removeAll()
+    persist()
+  }
+
   func server(named name: String) -> SkillServer? {
     let key = MemorySearch.fold(name).filter { $0.isLetter || $0.isNumber }
     return servers.first { MemorySearch.fold($0.name).filter { $0.isLetter || $0.isNumber } == key }

@@ -75,7 +75,7 @@ Summaries appear in Memory → Conversations (all of them in "All conversations"
 
 The current view in high detail → the vision model describes what matters (text, numbers, level/spot, brand) → saved as `VISUAL_MEMORY`. Settings → Memory:
 - **Visual memories**: off by default.
-- **Keep a small photo**: off by default (480 px JPEG, SwiftData external storage).
+- **Keep the photo**: off by default. When on, a 480 px thumbnail (SwiftData external storage) and a 1,600 px photo (Application Support, complete file protection until first unlock) are kept on this iPhone; both are deleted with the memory. Text and objects read on the phone are kept for search either way (`docs/VISUAL_MEMORY.md`).
 - **Attach the place**: off by default (one location fix and a place name).
 
 Nothing is recorded continuously: a visual memory is one frame, taken when the user asks.

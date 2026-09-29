@@ -44,3 +44,7 @@ Make/model from the camera are a **visual guess** until confirmed (by a verified
 ## Screens
 
 Explore → Dealer: dashboard (today, open, ready, photos left), the active vehicle card (masked VIN, odometer, status, damage, photo progress, linked items), buttons (Read VIN, Odometer, Next vehicle, Done), every vehicle. Vehicle detail: editable identification, status, damage (swipe to delete), photo / delivery / test-drive checklists, research and drafts, export (share sheet), make active, delete.
+
+## See also: Dealer SuperMode
+
+VIN decoding (NHTSA vPIC), Canadian recalls (Transport Canada), tires and DOT dates, warning lights, the walk-around, condition report, service handoff, lot spot, part numbers, photo quality hints, the AutoLoom Media adapter and the dealer briefing are described in [DEALER_SUPERMODE.md](DEALER_SUPERMODE.md).

@@ -239,8 +239,7 @@ enum ActionCatalog {
       "conversation.end", .general, name: "End the conversation", tr: "Konuşmayı bitir",
       summary: "Ends the voice conversation.",
       examplesTR: ["Konuşmayı bitir", "Görüşürüz"], examplesEN: ["End conversation", "Goodbye"],
-      route: .conversation, localPriority: true, appIntent: "StartConversationIntent",
-      ui: "Assistant → end button", status: .physicalTestRequired),
+      route: .conversation, localPriority: true, ui: "Assistant → end button", status: .physicalTestRequired),
     ActionDefinition(
       "action.confirm", .general, name: "Confirm", tr: "Onayla",
       summary: "Yes to the action waiting for confirmation.",
@@ -385,7 +384,7 @@ enum ActionCatalog {
       summary: "Saves a visual memory of the current view (opt-in).",
       examplesTR: ["[visual] Anahtarımı buraya bıraktığımı hatırla", "[visual] Bunu hatırla"],
       examplesEN: ["[visual] Remember this"], capabilities: [.camera],
-      ui: "Memory → Visual memory", keys: ["visualMemory"]),
+      ui: "Memory → Visual memory", status: .physicalTestRequired, keys: ["visualMemory"]),
     ActionDefinition(
       "memory.findVisual", .memory, name: "Where did I see it?", tr: "Nerede görmüştüm?",
       summary: "Searches the user's own visual memories (text and objects read on the phone, place, vehicle) and shows the photo.",
@@ -496,7 +495,7 @@ enum ActionCatalog {
       "code.read", .camera, name: "Read a QR code or barcode", tr: "QR kod / barkod oku",
       summary: "Read on the phone with Vision; never opened, called or joined.",
       examplesTR: ["QR kodu oku", "Barkodu oku"], examplesEN: ["Read the QR code"], capabilities: [.camera],
-      voiceOnly: "The camera is the input; the result is shown on screen", keys: ["readCode"]),
+      voiceOnly: "The camera is the input; the result is shown on screen", status: .physicalTestRequired, keys: ["readCode"]),
   ]
 
   private static let vision: [ActionDefinition] = [
@@ -599,10 +598,10 @@ enum ActionCatalog {
       ui: "Explore → Documents and receipts", status: .working, keys: ["document.spending"]),
     ActionDefinition(
       "translation.view", .translation, name: "Translate what I see", tr: "Gördüğümü çevir",
-      summary: "Reads the text in view and translates it.",
+      summary: "Reads the text in view on the phone and translates it there when the languages are downloaded; otherwise online.",
       examplesTR: ["[camera] Bu tabelayı Türkçeye çevir", "[camera] Şunu İngilizceye çevir"],
       examplesEN: ["[camera] Translate this sign into Turkish"], parameters: [.init("language", .language, "Target language")],
-      capabilities: [.camera, .network], offline: false, ui: "Explore → Translation", keys: ["translateView"]),
+      capabilities: [.camera], ui: "Explore → Translation", status: .physicalTestRequired, keys: ["translateView"]),
     ActionDefinition(
       "research.web", .research, name: "Look it up", tr: "Araştır",
       summary: "Current information from the web, with sources on screen.",
@@ -736,9 +735,9 @@ enum ActionCatalog {
       ui: "Explore → Dealer → vehicle → Lot spot", status: .physicalTestRequired, keys: ["dealer.saveLotSpot"]),
     ActionDefinition(
       "dealer.lotFind", .dealer, name: "Find the vehicle", tr: "Araç nerede?",
-      summary: "Walking directions to the vehicle's saved spot (Apple Maps, after a tap).",
+      summary: "Walking directions to the vehicle's saved spot in Apple Maps (like “beni arabama götür”).",
       examplesTR: ["[vehicle] Araç nerede duruyor?", "[vehicle] Aracın yeri neresi?"], examplesEN: ["[vehicle] Where is this vehicle?"],
-      confirmation: .tapOnPhone, capabilities: [.dealerSession], ui: "Explore → Dealer → vehicle → Lot spot",
+      capabilities: [.dealerSession], ui: "Explore → Dealer → vehicle → Lot spot",
       keys: ["dealer.findLotSpot"]),
     ActionDefinition(
       "dealer.partNumber", .dealer, name: "Read a part number", tr: "Parça numarasını oku",
@@ -820,7 +819,7 @@ enum ActionCatalog {
       "phone.call", .phone, name: "Call", tr: "Ara",
       summary: "Finds the contact; iOS asks before the call starts.",
       examplesTR: ["Ahmet'i ara", "Annemi ara"], examplesEN: ["Call Ahmet"],
-      parameters: [.init("contact", .contact, "Who")], risk: .confirm, confirmation: .tapOnPhone,
+      parameters: [.init("contact", .contact, "Who")], risk: .strongConfirm, confirmation: .tapOnPhone,
       permissions: [.contacts], undo: .impossible, voiceOnly: "The Phone app is the UI", keys: ["call"]),
     ActionDefinition(
       "phone.message", .phone, name: "Write a message", tr: "Mesaj yaz",
@@ -847,7 +846,7 @@ enum ActionCatalog {
       "maps.inView", .navigation, name: "Directions to the address in view", tr: "Buraya yol tarifi",
       summary: "The camera reads the address; you check it and tap.", examplesTR: ["[camera] Buraya yol tarifi aç"], examplesEN: ["[camera] Get directions to this place"],
       risk: .confirm, confirmation: .tapOnPhone, capabilities: [.camera, .network], offline: false,
-      voiceOnly: "The camera is the input", keys: ["directionsInView"]),
+      voiceOnly: "The camera is the input", status: .physicalTestRequired, keys: ["directionsInView"]),
     ActionDefinition(
       "text.copy", .general, name: "Copy", tr: "Kopyala",
       summary: "Copies the last answer; says so only after the clipboard changed.",
@@ -855,7 +854,8 @@ enum ActionCatalog {
       voiceOnly: "Long-press any answer on screen to copy", keys: ["copyText"]),
     ActionDefinition(
       "text.share", .general, name: "Share", tr: "Paylaş",
-      summary: "The share sheet with the last answer.", examplesTR: ["[answer] Bunu paylaş"], examplesEN: ["[answer] Share this"], confirmation: .tapOnPhone,
+      summary: "The share sheet with the last answer.", examplesTR: ["[answer] Bunu paylaş"], examplesEN: ["[answer] Share this"],
+      risk: .strongConfirm, confirmation: .tapOnPhone,
       voiceOnly: "The share sheet is the UI", keys: ["shareText"]),
   ]
 

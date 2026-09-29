@@ -1,15 +1,47 @@
 # AutoLoom Media Glasses — capability report
 
-Branch `autoloom-glasses-jarvis-v1` (v1.4). Status meanings:
+Branch `autoloom-glasses-jarvis-v1` (v1.5, "Ultimate Jarvis" expansion). Status meanings:
 - **WORKING**: verified on the physical iPhone and Ray-Ban Meta Gen 1 by the owner, and unchanged since.
 - **PARTIAL**: works with a stated limit.
 - **EXPERIMENTAL**: implemented and covered by automated tests in CI; behaviour that depends on the AI model still needs real use.
 - **PHYSICAL TEST REQUIRED**: implemented and built in CI, but it depends on iOS, the audio hardware or the glasses in a way only the phone can confirm. `TEST_REPORT.md` has the test.
 - **UNAVAILABLE**: not possible on the current platforms or connection, or deliberately not built.
+- **WAITING FOR DAT 1.0**: needs Meta's DAT 1.0 SDK and a physical check on the glasses.
+- **REQUIRES PROVIDER**: works once the owner connects a service (an MCP server, a signalling server, an API key).
 
 Nothing is marked WORKING without a device test. Everything new since Jarvis v1 starts as EXPERIMENTAL or PHYSICAL TEST REQUIRED.
 
 This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex uses (`chatgpt.com/backend-api/codex/*`). Signing in does not unlock every feature of the ChatGPT app. No new paid service, API key or subscription is used.
+
+## Ultimate Jarvis expansion (new in v1.5)
+
+Nothing here is device-verified. Logic is unit-tested in CI (`TEST_REPORT.md`); `docs/PHYSICAL_TEST_MATRIX.md` lists the checks on the phone and glasses.
+
+| Capability | Status | Notes |
+|---|---|---|
+| ActionCatalog: one list of actions for voice, App Intents, tools, Command Library, Command Lab, command palette | **EXPERIMENTAL** | Every example goes through the same parser as speech (CI test); `docs/ACTION_CATALOG.md` |
+| Several commands in one sentence, "hayır, cumartesi" corrections, "bunu yarına taşı" | **EXPERIMENTAL** | Honest per-step results |
+| On-device brain (Apple Foundation Models): titles and tags, entities, summaries, search rewrite, offline answers | **PHYSICAL TEST REQUIRED** | Optional; only on Apple Intelligence iPhones; never replaces the cloud models |
+| Spotlight second brain and natural-language search | **PHYSICAL TEST REQUIRED** | Notes, open tasks, vehicles (masked VIN); memories only when turned on |
+| Offline mode (offline chip; notes, tasks, timers, lists, codes, on-device translation) | **EXPERIMENTAL** | |
+| Visual memories with on-device text and objects; "anahtarımı en son nerede gördüm?" | **PHYSICAL TEST REQUIRED** | Explicit only; photo only when allowed |
+| Scene Timeline | **EXPERIMENTAL** (off by default) | Text only, one line per scene, 7 days |
+| Live Vision "ne değişti?" | **PHYSICAL TEST REQUIRED** | Compares the last two scene notes |
+| Sign translation on the phone (Apple Translation) | **PHYSICAL TEST REQUIRED** | Downloaded languages only (system sheet); cloud fallback; no translation in the simulator |
+| Documents and receipts ("bu belgeyi özetle", "fişi kaydet", "bu ay ne harcadım?") | **PHYSICAL TEST REQUIRED** | Text kept, photo not; reminder only after a yes; not accounting |
+| Dealer SuperMode: vPIC VIN decode, Transport Canada recalls, tires/DOT, warning lights, walk-around, condition report, service handoff, lot spot, part numbers, photo director | **PHYSICAL TEST REQUIRED** | Never certifies, diagnoses, prices or says "no recalls"; `docs/DEALER_SUPERMODE.md` |
+| AutoLoom Media connection | **REQUIRES PROVIDER** | Interface only; never automatic; share the report instead |
+| Music (system player, own library) | **PARTIAL** | Apple Music catalogue needs MusicKit (paid developer program) |
+| Your own Shortcuts ("… kısayolunu çalıştır") for Home scenes and more | **PHYSICAL TEST REQUIRED** | Always a tap; never from camera or web content |
+| User routines and the dealer morning briefing | **EXPERIMENTAL** | Safe steps only |
+| Morning briefing notification | **EXPERIMENTAL** (off by default) | Never shows details |
+| Remote Assist on the same Wi-Fi (room code) | **PHYSICAL TEST REQUIRED** | Tap to start, red bar, "paylaşımı durdur"; not encrypted |
+| Remote Assist over the internet (WebRTC) | **REQUIRES PROVIDER** | Needs a signalling server |
+| MCP skills (Settings → Skills) | **REQUIRES PROVIDER** | Needs the owner's MCP server; every call shows the service and follows the tool's policy |
+| Liquid Glass controls, context chips, command palette, activity timeline, privacy dashboard, performance screen | **PHYSICAL TEST REQUIRED** | CI screenshots for review |
+| Thermal guard (Live Vision and sharing stop when critical; recording continues) | **EXPERIMENTAL** | |
+| Widgets, Control Center controls, Live Activities, share extension | **UNAVAILABLE** | Need extension targets that the unsigned, re-signed IPA cannot carry without extra bundle ids and App Group signing |
+| Ray-Ban voice invocation, high-resolution photos and other DAT 1.0 features | **WAITING FOR DAT 1.0** | `RayBanCapabilityMatrix`; Gen 1 has no display, so no display UI |
 
 ## Multi-agent intelligence (new in v1.4)
 
@@ -57,12 +89,12 @@ Everything is stored on this iPhone (`dealer.json` in Application Support); noth
 |---|---|---|
 | Vehicle sessions ("yeni araç", "sonraki araç", "bu araç tamam"); one active vehicle | **EXPERIMENTAL** | Explore → Dealer; notes, tasks, damage and Ray-Ban captures made while it is active link to it |
 | VIN reading ("VIN oku"): camera → 17 characters → ISO 3779 check digit | **PHYSICAL TEST REQUIRED** | Never completes a character: an unreadable one is "?", a look-alike (G/6, 8/B…) is offered as options, I/O/Q corrected and stated; saved only with 17 valid characters |
-| Make, model and year from the VIN | **UNAVAILABLE** | No VIN decoding database is connected; a camera guess is labelled "visual guess" until the user confirms |
+| Make, model and year from the VIN | **PHYSICAL TEST REQUIRED** (v1.5) | NHTSA vPIC decode; only a clean decode fills the vehicle; a camera guess stays "visual guess" until then |
 | Odometer by voice ("kilometre 45 bin 320") and by camera ("kilometreyi oku") | **EXPERIMENTAL** / camera **PHYSICAL TEST REQUIRED** | km or miles; "unclear" is not saved |
 | Damage by voice ("hasar ekle: sağ ön çamurluk çizik") with Turkish/English body zones | **EXPERIMENTAL** | Zone and kind parsed on the phone; the user's words are kept |
 | Photo (15), delivery (10) and test-drive (5) checklists; a labelled Ray-Ban photo ticks its item | **EXPERIMENTAL** | No driver's licence or customer data is stored |
 | Market research ("piyasa bak") and listing draft ("ilan hazırla") | **EXPERIMENTAL** | Through the agent router; only the vehicle's recorded facts are sent; prices are suggestions; the listing states known damage and is saved as a note |
-| Recall and parts research | **PARTIAL** | Asked in words ("bu aracın recall'u var mı?"), answered by web research; no dedicated recall database |
+| Recall and parts research | **PARTIAL** | v1.5: Transport Canada's recall database by make, model and year (never "no recalls"; the VIN itself is checked on the manufacturer's page); web research as fallback |
 | Dealer briefing, vehicle summary, export (share sheet) | **EXPERIMENTAL** | The screen shows only the VIN's last six characters |
 | Plate, customer and CRM data | **UNAVAILABLE** | Deliberately not stored; no production AutoLoom backend is connected |
 
@@ -214,7 +246,7 @@ See `docs/RAYBAN_CONNECTION.md` for the root causes and the physical test matrix
 
 | Capability | Status | Notes |
 |---|---|---|
-| Tabs: Assistant, Memory, Tasks, Settings | **PHYSICAL TEST REQUIRED** | |
+| Tabs: Assistant, Memory, Tasks, Explore, Settings | **PHYSICAL TEST REQUIRED** | |
 | Assistant screen without any technical camera text | **PHYSICAL TEST REQUIRED** | The overlay switch was removed |
 | Status words incl. "Saving" | **EXPERIMENTAL** | Unit-tested mapping |
 | v1.2: Ray-Ban status pill, "Ray-Ban Connected" confirmation, link animation, camera crossfades, paused-frame veil | **PHYSICAL TEST REQUIRED** | Driven by the connection phase; unit-tested animation mapping |
