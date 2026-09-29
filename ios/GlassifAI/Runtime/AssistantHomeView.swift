@@ -17,6 +17,7 @@ struct AssistantHomeView: View {
   @ObservedObject private var audioRoute = AudioRouteMonitor.shared
   @ObservedObject private var liveVision = LiveVisionController.shared
   @ObservedObject private var wake = WakePhraseListener.shared
+  @ObservedObject private var media = RayBanMediaCoordinator.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
@@ -52,6 +53,13 @@ struct AssistantHomeView: View {
       VStack(spacing: 10) {
         header
         chips
+        if showsCaptureControls {
+          HStack {
+            Spacer()
+            RayBanCaptureControls(media: media)
+          }
+          .transition(.opacity)
+        }
         Spacer(minLength: 8)
         conversationArea
         presenceLine
@@ -279,6 +287,9 @@ struct AssistantHomeView: View {
   @ViewBuilder
   private var chips: some View {
     HStack(spacing: 8) {
+      if showsRecordingChip {
+        RecordingChip(media: media)
+      }
       if liveVision.isActive {
         chip(
           L.t("Live Vision", "Canlı Görüş") + (liveVision.status == .describing ? " · " + L.t("looking", "bakıyor") : ""),
@@ -293,6 +304,17 @@ struct AssistantHomeView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: notice)
+  }
+
+  /// A recording is running or still being saved.
+  private var showsRecordingChip: Bool {
+    media.recordingState.isRecording || media.recordingState.isFinishing
+  }
+
+  /// Shutter and record: the Ray-Ban camera is streaming (or a recording
+  /// runs, so it can always be stopped here).
+  private var showsCaptureControls: Bool {
+    (captureSource == .glasses && glassesStream.streamingStatus == .streaming) || media.isRecording
   }
 
   private func chip(_ text: String, systemImage: String, tint: Color = .white) -> some View {

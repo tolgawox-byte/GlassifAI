@@ -40,6 +40,15 @@ struct StreamSessionView: View {
       }
       AssistantOrchestrator.shared.glassesStreamState = { stream.lastStreamState }
       AssistantOrchestrator.shared.glassesTransport = { stream.activeTransport.shortLabel }
+      // Ray-Ban photos and videos: straight from the glasses stream, never
+      // the preview; recording does not depend on the conversation.
+      let media = RayBanMediaCoordinator.shared
+      media.isStreaming = { stream.streamingStatus == .streaming }
+      media.takeStill = { timeout in await stream.captureUserPhoto(timeout: timeout) }
+      stream.isRecordingVideo = { media.isRecording }
+      let recorder = media.recorder
+      stream.frameIngestor.setSampleTap { sample in recorder.append(sample) }
+      stream.frameIngestor.setDecodedTap { buffer, time in recorder.appendDecoded(buffer, pts: time) }
       let lifecycle = GlassesLifecycleMonitor.shared
       lifecycle.isStreamRunning = { stream.isStreaming }
       lifecycle.transportLabel = { stream.activeTransport.shortLabel }
@@ -101,7 +110,10 @@ struct StreamSessionView: View {
       // is locked, and vision reads those frames, not the UI. The
       // coordinator only re-reads the SDK state and restarts what stopped.
       switch phase {
-      case .active: connection.sceneBecameActive()
+      case .active:
+        connection.sceneBecameActive()
+        // Photos saves that waited for the app (permission prompt) or failed.
+        Task { await RayBanMediaCoordinator.shared.retryPendingSaves() }
       case .inactive, .background: connection.sceneResigned()
       @unknown default: break
       }

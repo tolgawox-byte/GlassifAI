@@ -158,7 +158,12 @@ final class LiveVisionController: ObservableObject {
     case .off:
       status = .paused("camera off")
       return
-    case .glasses: source = .glasses
+    case .glasses:
+      if UIApplication.shared.applicationState == .background, !LockedScreenVision.isEnabled {
+        status = .paused("screen locked")
+        return
+      }
+      source = .glasses
     case .iPhoneCamera: source = .iPhone
     }
     let device = UIDevice.current

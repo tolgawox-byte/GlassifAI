@@ -4,10 +4,11 @@ enum AppTab: String, Hashable {
   case assistant
   case memory
   case tasks
+  case explore
   case settings
 }
 
-/// The app's four tabs: Assistant, Memory, Tasks and Settings.
+/// The app's tabs: Assistant, Memory, Tasks, Explore and Settings.
 struct AppShellView: View {
   let captureSource: CaptureSource
   @ObservedObject var glassesStream: StreamSessionViewModel
@@ -37,6 +38,9 @@ struct AppShellView: View {
       TasksTabView()
         .tabItem { Label(L.t("Tasks", "Görevler"), systemImage: "checklist") }
         .tag(AppTab.tasks)
+      ExploreTabView()
+        .tabItem { Label(L.t("Explore", "Keşfet"), systemImage: "square.grid.2x2") }
+        .tag(AppTab.explore)
       SettingsView(voice: voice, glassesStream: glassesStream, connection: connection)
         .tabItem { Label(L.t("Settings", "Ayarlar"), systemImage: "gearshape") }
         .tag(AppTab.settings)

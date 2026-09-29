@@ -112,6 +112,18 @@ enum VoiceIntent: Equatable {
   /// "Bunu paylaş": the share sheet with the text.
   case shareText(String?)
   case routine(Routine)
+  /// "Fotoğraf çek", "jantın fotoğrafını çek", "bunun fotoğrafını çek ve not
+  /// al: …": a Ray-Ban photo (never the iPhone camera). `caption` is what was
+  /// just said about the thing in view ("Sağ ön jant çizik").
+  case takePhoto(label: CaptureLabel?, note: String?, caption: String?)
+  /// "Video kaydını başlat", "kayda başla", "start recording".
+  case startRecording(note: String?)
+  /// "Videoyu durdur", "kaydı durdur", "stop recording".
+  case stopRecording
+  /// "Kayıt yapıyor musun?", "Ne kadar oldu?" while recording.
+  case recordingStatus
+  /// "Galeriye kaydet": the newest capture kept in AutoLoom goes to Photos.
+  case saveCaptureToPhotos
   /// A command without its content: ask for it ("Neyi not alayım?").
   case ask(Awaiting)
   /// LEVEL 2: the kind of request is certain; the details are left to the
@@ -155,6 +167,11 @@ enum VoiceIntent: Equatable {
     case .copyText: "copyText"
     case .shareText: "shareText"
     case .routine(let routine): "routine(\(routine.rawValue))"
+    case .takePhoto(let label, let note, _): "takePhoto(\(label?.rawValue ?? "-")\(note != nil ? "+note" : ""))"
+    case .startRecording(let note): note != nil ? "startRecording(+note)" : "startRecording"
+    case .stopRecording: "stopRecording"
+    case .recordingStatus: "recordingStatus"
+    case .saveCaptureToPhotos: "saveCaptureToPhotos"
     case .ask(let awaiting): "ask(\(awaiting.label))"
     case .classify(let kind, _): "classify(\(kind.rawValue))"
     }
@@ -179,6 +196,8 @@ struct VoiceBridgeContext {
   var recentContact: String?
   var cameraAvailable = false
   var visualMemoryAvailable = false
+  /// A Ray-Ban video recording is running ("ne kadar oldu?" asks about it).
+  var isRecording = false
   /// Addressed-only mode: act only when the user says the assistant's name.
   var addressedOnly = false
 
@@ -227,6 +246,11 @@ enum VoiceActionIntentBridge {
     if utterance.stripNearAddress(assistantName: context.assistantName) { addressed = true }
     guard !utterance.isEmpty, utterance.count <= 80 else { return nil }
 
+    // 1. Stopping a recording (and asking about it) comes first: "hayır,
+    // kaydı durdur" stops it even while a question waits. Stop speaking is
+    // handled by the voice session before this runs.
+    if let decision = recordingControl(utterance, context) { return decision }
+
     // 2. The answer to an action waiting for confirmation (it answers the
     // assistant's own question, so the name is not needed).
     if let plan = context.pendingPlan, let decision = confirmation(utterance, plan: plan, now: now) {
@@ -242,6 +266,10 @@ enum VoiceActionIntentBridge {
     }
     guard !utterance.isEmpty else { return nil }
     if context.addressedOnly && !addressed && context.awaiting == nil { return nil }
+
+    // Ray-Ban photos and recordings, before notes: "bunun fotoğrafını çek ve
+    // not al: …" is a photo with a note.
+    if let decision = media(utterance, context) { return decision }
 
     // 3–12. Explicit native actions and explicit memory, in priority order.
     // Messages come before notes: "Ahmet'e bunu yaz" is a message, "bunu
@@ -292,6 +320,10 @@ enum VoiceActionIntentBridge {
     ["bunu", "kopyala"], ["bunu", "paylas"], ["mesaj", "yaz"], ["mesaj", "at"], ["beni", "eve"],
     ["remind", "me"], ["take", "a", "note"], ["make", "a", "note"], ["note", "that"], ["remember", "that"],
     ["my", "name", "is"], ["add", "a", "task"], ["add", "to", "my", "calendar"], ["write", "down"],
+    ["fotograf", "cek"], ["foto", "cek"], ["bir", "fotograf"], ["bunun", "fotografini"], ["sunun", "fotografini"],
+    ["video", "cek"], ["video", "kaydi"], ["video", "kaydini"], ["kayda", "basla"], ["kaydi", "durdur"],
+    ["videoyu", "durdur"], ["cekimi", "bitir"], ["galeriye", "kaydet"], ["take", "a", "photo"], ["take", "a", "picture"],
+    ["start", "recording"], ["stop", "recording"], ["record", "a", "video"],
   ]
 
   /// A short confirmation ("Tamam, not aldım.", "Got it.") that "bunu"
@@ -501,7 +533,7 @@ enum VoiceActionIntentBridge {
     return best
   }
 
-  private static func notes(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+  static func notes(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
     guard let (verb, range) = noteVerb(in: u) else { return bareSave(u, context) }
     var tail = u.dropping(0..<range.upperBound)
     if otherFinalCommands.contains(where: { tail.ends(with: $0) }) { return nil }

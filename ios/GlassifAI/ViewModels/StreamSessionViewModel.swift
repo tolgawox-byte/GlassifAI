@@ -217,10 +217,21 @@ class StreamSessionViewModel: ObservableObject {
   /// a previous session can never change the current state.
   private var sessionGeneration = 0
   /// Set when HEVC produced no usable frames; the preferred transport is
-  /// skipped until the user picks a different one.
+  /// skipped until the stream stops. HEVC is tried once more at the next
+  /// start (raw pauses when the phone locks), then raw stays for the run.
   private var fallbackFrom: GlassesVideoTransport?
+  private var fallbackCount = 0
+  static let maxTransportFallbacks = 2
   private var watchdogTask: Task<Void, Never>?
   private var startWatchdogTask: Task<Void, Never>?
+  private var stallTask: Task<Void, Never>?
+  private var streamingSince: Date?
+  private var decoderRestartsSinceImage = 0
+  private var lastDecoderRestartAt: Date?
+  private var stallStreamRestarts: [Date] = []
+  /// Set by the media coordinator: a video recording is running (the stall
+  /// monitor never restarts its stream).
+  var isRecordingVideo: @MainActor () -> Bool = { false }
   /// The last stream error was a stream failure (not glasses off, folded,
   /// or missing permission), which is what an unsupported codec looks like.
   private var lastErrorWasStreamFailure = false
@@ -279,6 +290,13 @@ class StreamSessionViewModel: ObservableObject {
     return preferred
   }
 
+  /// A photo the user asked for ("fotoğraf çek"): the same one-at-a-time
+  /// DAT capture as vision stills, never a preview screenshot. Nil when the
+  /// stream is not running, the SDK refuses, or nothing arrives in time.
+  func captureUserPhoto(timeout: TimeInterval) async -> StillPhoto? {
+    await captureStillForVision(timeout: timeout)
+  }
+
   /// Asks the glasses for a fresh still photo for one vision request.
   /// Returns nil when the stream is not running, the SDK refuses, or no photo
   /// arrives before the timeout.
@@ -314,6 +332,7 @@ class StreamSessionViewModel: ObservableObject {
     let profile = GlassesStreamProfile.current
     let transport = effectiveTransport
     frameIngestor.configure(legacyPreview: AssistantPreferences.usesLegacyPreview)
+    frameIngestor.applyDecoderPreference()
     if fallbackFrom != nil, fallbackFrom != GlassesVideoTransport.preferred {
       // The user picked another transport; a new attempt starts clean.
       fallbackFrom = nil
@@ -457,7 +476,9 @@ class StreamSessionViewModel: ObservableObject {
     guard let deviceSelector, activeTransport == .hevc else { return }
     NSLog("[Stream] HEVC transport fallback to raw: %@", reason)
     fallbackFrom = .hevc
-    transportNote = "Switched to raw automatically: \(reason)"
+    fallbackCount += 1
+    transportNote = "Switched to raw automatically: \(reason). Raw pauses while the phone is locked"
+      + (fallbackCount < Self.maxTransportFallbacks ? "; HEVC is tried again at the next start." : ".")
     isSwitchingTransport = true
     defer { isSwitchingTransport = false }
     await streamSession?.stop()
@@ -572,7 +593,18 @@ class StreamSessionViewModel: ObservableObject {
       frameIngestor.resetFirstFrame()
       stillPhotos.cancel()
       watchdogTask?.cancel()
+      stallTask?.cancel()
+      streamingSince = nil
       streamingStatus = .stopped
+      if !isSwitchingTransport {
+        // A recording ends with its stream; what was recorded is saved.
+        RayBanMediaCoordinator.shared.streamStopped()
+      }
+      if fallbackFrom != nil, fallbackCount < Self.maxTransportFallbacks, !isSwitchingTransport {
+        // A raw fallback lasts for one stream: the next start tries HEVC,
+        // which keeps vision working with the phone locked.
+        fallbackFrom = nil
+      }
     case .waitingForDevice, .starting, .stopping, .paused:
       streamingStatus = .waiting
     case .streaming:
@@ -581,7 +613,67 @@ class StreamSessionViewModel: ObservableObject {
       glassesIssue = nil
       startWatchdogTask?.cancel()
       lastErrorWasStreamFailure = false
-      if !wasStreaming { armTransportWatchdog() }
+      if !wasStreaming {
+        armTransportWatchdog()
+        armStallMonitor()
+      }
+    }
+  }
+
+  // MARK: Fresh-frame monitor
+
+  /// Every 2 s while streaming: if no fresh Ray-Ban image reaches the store,
+  /// rebuild the decoder or (on screen) restart the stream, within the
+  /// limits of `RayBanStallPolicy`.
+  private func armStallMonitor() {
+    stallTask?.cancel()
+    streamingSince = Date()
+    decoderRestartsSinceImage = 0
+    let generation = sessionGeneration
+    stallTask = Task { @MainActor [weak self] in
+      while !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        guard let self, !Task.isCancelled, self.sessionGeneration == generation else { return }
+        await self.checkForStall()
+      }
+    }
+  }
+
+  private func checkForStall() async {
+    let metrics = FrameStore.shared.snapshot()
+    if (metrics.lastGlassesFrameAgeMs ?? Int.max) < 1_000 { decoderRestartsSinceImage = 0 }
+    let now = Date()
+    stallStreamRestarts.removeAll { now.timeIntervalSince($0) >= RayBanStallPolicy.streamRestartWindow }
+    let input = RayBanStallPolicy.Input(
+      streaming: streamingStatus == .streaming,
+      hevc: activeTransport == .hevc,
+      background: UIApplication.shared.applicationState == .background,
+      recording: isRecordingVideo(),
+      streamingFor: streamingSince.map { now.timeIntervalSince($0) } ?? 0,
+      lastSampleAgeMs: metrics.lastSampleAgeMs,
+      lastImageAgeMs: metrics.lastGlassesFrameAgeMs,
+      keyframeWaitMs: metrics.keyframeWaitMs,
+      decoderRestarts: decoderRestartsSinceImage,
+      lastDecoderRestartAt: lastDecoderRestartAt,
+      streamRestarts: stallStreamRestarts,
+      now: now)
+    switch RayBanStallPolicy.decide(input) {
+    case .none:
+      return
+    case .restartDecoder(let swapMode):
+      decoderRestartsSinceImage += 1
+      lastDecoderRestartAt = now
+      frameIngestor.restartDecoder(swapMode: swapMode)
+      let text = swapMode ? "decoder rebuilt in the other mode" : "decoder rebuilt"
+      FrameStore.shared.recordRecovery(text)
+      NSLog("[Stream] stall recovery: %@", text)
+    case .restartStream(let reason):
+      stallStreamRestarts.append(now)
+      FrameStore.shared.recordRecovery("stream restarted (\(reason))")
+      NSLog("[Stream] stall recovery: restarting the stream (%@)", reason)
+      stallTask?.cancel()
+      // The connection coordinator starts it again after a short backoff.
+      await streamSession?.stop()
     }
   }
 

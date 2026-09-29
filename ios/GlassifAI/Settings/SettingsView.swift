@@ -449,6 +449,13 @@ struct CameraSettingsView: View {
   @AppStorage(VisionAssistPreferences.textAssistKey) private var textDetailAssist = true
   @AppStorage(VisionAssistPreferences.upscaleKey) private var upscaleForReading = true
   @AppStorage(LiveVisionPolicy.maxMinutesKey) private var liveVisionMinutes = LiveVisionPolicy.defaultMaxMinutes
+  @AppStorage(LockedScreenVision.defaultsKey) private var lockedScreenVision = true
+  @AppStorage(CaptureSaveMode.defaultsKey) private var captureSaveMode = CaptureSaveMode.always.rawValue
+  @AppStorage(GlassesDecoderMode.defaultsKey) private var decoderModeRaw = GlassesDecoderMode.software.rawValue
+
+  private var lockedVisionSupported: Bool {
+    LockedScreenVision.isSupported(transport: GlassesVideoTransport(rawValue: transportRaw) ?? .hevc)
+  }
 
   var body: some View {
     Form {
@@ -497,6 +504,32 @@ struct CameraSettingsView: View {
         Picker(L.t("Vision image", "Görüntü kaynağı"), selection: $glassesVisionCapture) {
           ForEach(GlassesVisionCaptureMode.allCases) { Text($0.label).tag($0.rawValue) }
         }
+      }
+      Section(
+        header: Text(L.t("Screen locked", "Ekran kilitli")),
+        footer: Text(lockedVisionSupported
+          ? L.t(
+            "With HEVC the Ray-Ban camera keeps streaming while the iPhone is locked, and the assistant keeps seeing through the glasses (their frames, never the phone's screen). If no fresh frame arrives, the glasses take a still photo. Physical test required.",
+            "HEVC ile Ray-Ban kamerası iPhone kilitliyken de yayına devam eder ve asistan gözlükten görmeye devam eder (gözlüğün kareleri, asla telefon ekranı değil). Yeni kare gelmezse gözlük fotoğraf çeker. Fiziksel test gerekir.")
+          : L.t(
+            "Not available with the raw transport: Meta pauses raw streaming while the app is in the background. Choose HEVC above.",
+            "Ham aktarımda kullanılamaz: Meta, uygulama arka plandayken ham yayını duraklatır. Yukarıdan HEVC seçin."))) {
+        Toggle(L.t("Continue vision with the screen locked", "Ekran kilitliyken görmeye devam et"), isOn: $lockedScreenVision)
+          .disabled(!lockedVisionSupported)
+        Picker(L.t("Video decoder", "Video çözücü"), selection: $decoderModeRaw) {
+          ForEach(GlassesDecoderMode.allCases) { Text($0.label).tag($0.rawValue) }
+        }
+      }
+      Section(
+        header: Text(L.t("Ray-Ban photos and videos", "Ray-Ban fotoğraf ve videoları")),
+        footer: Text(L.t(
+          "Photos and videos come only from the Ray-Ban camera, never from the iPhone camera or the screen. Photos access is add-only: AutoLoom can add to your library but not see it. Nothing is uploaded. Videos are video only: DAT 0.5 gives no Ray-Ban camera audio, and the conversation uses the microphone.",
+          "Fotoğraf ve videolar yalnızca Ray-Ban kamerasından gelir; asla iPhone kamerasından veya ekrandan değil. Fotoğraflar izni yalnızca eklemedir: AutoLoom arşivinize ekleyebilir ama göremez. Hiçbir şey yüklenmez. Videolar yalnızca görüntüdür: DAT 0.5 Ray-Ban kamerasından ses vermez ve mikrofonu konuşma kullanır."))) {
+        Picker(L.t("Save captures", "Çekimleri kaydet"), selection: $captureSaveMode) {
+          ForEach(CaptureSaveMode.allCases) { Text($0.label).tag($0.rawValue) }
+        }
+        LabeledContent(L.t("Video audio", "Video sesi"), value: L.t("Video only", "Yalnızca görüntü"))
+        NavigationLink(L.t("Captures", "Çekimler")) { CapturesView() }
       }
     }
     .navigationTitle(L.t("Camera & Ray-Ban", "Kamera ve Ray-Ban"))

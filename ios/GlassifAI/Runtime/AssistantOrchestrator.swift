@@ -1199,7 +1199,9 @@ final class AssistantOrchestrator: ObservableObject {
   /// - Ray-Ban: the best of the last few video frames (sharp, well exposed,
   ///   fresh, and showing the same scene as the newest frame), or a still
   ///   photo when video stalls or when chosen in Settings. Never the iPhone
-  ///   camera, a preview screenshot, or an older image.
+  ///   camera, a preview screenshot, or an older image. With the phone
+  ///   locked the same decoded glasses frames are used; when none is fresh
+  ///   the glasses take a still photo (JPEG, processed on the CPU).
   /// - iPhone: the freshest camera frame.
   private func prepareVisionImage(
     taskID: UUID,
@@ -1226,6 +1228,11 @@ final class AssistantOrchestrator: ObservableObject {
       let selection = await selectFrame(source: .iPhone, fallback: frame, detail: detail)
       return try await buildVideoAttachment(selection, taskID: taskID, detail: detail, useCPU: background)
     case .glasses:
+      if background, !LockedScreenVision.isEnabled {
+        throw VisionUnavailable(
+          reason: "vision with the screen locked is off",
+          speakable: LockedScreenVision.offReason + " Tell the user briefly and do not describe any earlier image.")
+      }
       let mode = GlassesVisionCaptureMode.current
       var triedPhoto = false
       if mode.prefersPhoto(for: detail), !background {
@@ -1238,7 +1245,10 @@ final class AssistantOrchestrator: ObservableObject {
         return try await buildVideoAttachment(selection, taskID: taskID, detail: detail, useCPU: background)
       }
       try Task.checkCancellation()
-      if mode.allowsPhoto, !triedPhoto, !background,
+      // No fresh video frame (a stalled stream, or a decoder recovering while
+      // the phone is locked): the glasses' own still photo. It does not need
+      // the video decoder, so it also works in the background.
+      if mode.allowsPhoto, !triedPhoto,
          let photo = try await captureGlassesPhoto(taskID: taskID, detail: detail) {
         return photo
       }

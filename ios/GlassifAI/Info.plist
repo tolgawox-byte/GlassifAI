@@ -92,6 +92,8 @@
 	<!-- End required section for Device Access Toolkit Apps -->
 	<key>NSCameraUsageDescription</key>
 	<string>AutoLoom Media Glasses uses the iPhone camera, only when you choose it, so the assistant can answer questions about what you see.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>AutoLoom Media Glasses adds the photos and videos you take with your Ray-Ban glasses to your library. It can only add; it cannot see your photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>AutoLoom Media Glasses uses the microphone for your live voice conversation with the assistant.</string>
 	<key>NSAppTransportSecurity</key>

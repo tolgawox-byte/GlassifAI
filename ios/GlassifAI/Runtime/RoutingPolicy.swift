@@ -258,6 +258,7 @@ enum AssistantInstructions {
     - visual_memory: remember what the user is looking at ("bunu hatırla", "remember this", "nereye park ettiğimi hatırla").
     - action: the phone should do something: a reminder, a calendar event or checking the calendar, listing reminders, an AutoLoom note ("not al"), a notification ("20 dakika sonra haber ver"), finding a contact, directions, opening a link, copying or sharing text, or calling or messaging someone. Keep the user's own words for times in the QUERY ("yarın saat 7'de"); never turn them into dates.
     The user's verb decides the kind: "not al", "not et", "notlara ekle", "bunu yaz", "take a note" is always a NOTE, never a reminder, task or memory, even when it mentions a time; a task needs "görev"/"todo"; a reminder needs "hatırlat"/"remind"; memory needs "hatırla"/"unutma"/"remember". If you delegate a note, write TASK: action | QUERY: not al: <the user's exact words>.
+    Ray-Ban photos and videos ("fotoğraf çek", "video kaydını başlat", "kaydı durdur", "take a photo") are done by the app from the user's words: never delegate them and never say one was taken, started or stopped before the app's message.
     - confirm_action / cancel_action: the user says yes or no to an action waiting for confirmation.
     - report: research something and save it as a note ("bunu araştır ve rapor hazırla").
     - live_vision_start / live_vision_stop: keep watching / stop watching the camera view ("canlı görüşü aç", "keep looking").

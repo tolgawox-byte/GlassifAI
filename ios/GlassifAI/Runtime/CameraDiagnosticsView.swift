@@ -5,6 +5,7 @@ import SwiftUI
 struct CameraDiagnosticsView: View {
   var glassesStream: StreamSessionViewModel?
   @ObservedObject private var lifecycle = GlassesLifecycleMonitor.shared
+  @ObservedObject private var media = RayBanMediaCoordinator.shared
   @State private var metrics = FrameMetricsSnapshot()
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
 
@@ -13,6 +14,7 @@ struct CameraDiagnosticsView: View {
       Section("Pipeline") {
         row("State", lifecycle.state.rawValue)
         row("Vision available", lifecycle.state.allowsVision ? "yes" : "no")
+        row("Vision with the screen locked", LockedScreenVision.statusLine(transport: glassesStream?.activeTransport))
         row("Screen locked", lifecycle.screenLocked ? "yes" : "no")
         row("Transport", glassesStream?.activeTransport.shortLabel ?? "—")
         if let note = glassesStream?.transportNote { row("Transport note", note) }
@@ -28,11 +30,14 @@ struct CameraDiagnosticsView: View {
         row("Background samples / decoded / failures",
             "\(metrics.backgroundSamples) / \(metrics.backgroundDecoded) / \(metrics.backgroundFailures)")
         row("Waiting for keyframe (skipped)", "\(metrics.keyframeWaits)")
-        row("Decoder", metrics.softwareDecode ? "software (hardware refused)" : "hardware")
+        row("Decoder", metrics.softwareDecode ? "software (survives the lock screen)" : "hardware (on screen only)")
+        row("Waiting for keyframe", metrics.keyframeWaitMs.map { "\($0) ms" } ?? "no")
+        row("Recoveries", "\(metrics.recoveries) · last: \(metrics.lastRecovery)")
         row("Last decode error",
             metrics.lastDecodeError.map { "\($0), \((metrics.lastDecodeErrorAgeMs ?? 0) / 1_000) s ago" } ?? "none")
         row("Last sample", metrics.lastSampleAgeMs.map { "\($0) ms ago" } ?? "—")
         row("Last frame age", metrics.lastFrameAgeMs.map { "\($0) ms" } ?? "—")
+        row("Last Ray-Ban image", metrics.lastGlassesFrameAgeMs.map { "\($0) ms ago" } ?? "—")
         row("Frame sequence", "\(metrics.latestSequence)")
       }
       Section("Live metrics") {
@@ -53,6 +58,15 @@ struct CameraDiagnosticsView: View {
           .textSelection(.enabled)
         row("Photos requested / received / failed", "\(metrics.photosRequested) / \(metrics.photosReceived) / \(metrics.photoFailures)")
         row("Last photo", "\(metrics.lastPhotoResolution)" + (metrics.lastPhotoLatencyMs.map { " in \($0) ms" } ?? ""))
+      }
+      Section("Ray-Ban media") {
+        row("Recording state", media.recordingState.rawValue)
+        row("Recorder", "\(media.recorder.currentMode.rawValue) · dropped \(media.recorder.dropped)")
+        row("Last media event", media.lastEvent)
+        row("Photos permission (add-only)", PhotoLibrarySaver.permissionState.label)
+        row("Save captures", CaptureSaveMode.current.label)
+        row("Captures today / all", "\(CaptureLibrary.shared.records(.today).count) / \(CaptureLibrary.shared.records.count)")
+        row("Video audio", "none (DAT 0.5: no Ray-Ban camera audio)")
       }
       Section("Lifecycle transitions") {
         if lifecycle.transitions.isEmpty {

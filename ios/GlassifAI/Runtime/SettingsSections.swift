@@ -24,6 +24,7 @@ enum AppInfo {
 /// permission and its state, and deleting local data.
 struct PrivacySettingsView: View {
   @ObservedObject private var memory = MemoryStore.shared
+  @ObservedObject private var captures = CaptureLibrary.shared
   @State private var permissions: [AppPermission: PermissionState] = [:]
   @State private var confirmWipe = false
   @State private var wiped = false
@@ -60,6 +61,11 @@ struct PrivacySettingsView: View {
               "Kaydetmenizi istediğiniz \(memory.memories.count) anı ve \(memory.notes.count) not (SwiftData, yalnızca bu iPhone'da)."),
           "tray")
         privacyRow(L.t("Visual memories", "Görsel anılar"), visualSummary, "eye")
+        privacyRow(
+          L.t("Ray-Ban captures", "Ray-Ban çekimleri"),
+          L.t("\(captures.records.count) photos and videos: labels and small thumbnails. The photos and videos are in your Photos library, or in AutoLoom when kept here. Never uploaded.",
+              "\(captures.records.count) fotoğraf ve video: etiketler ve küçük önizlemeler. Fotoğraf ve videolar Fotoğraflar arşivinizde, burada tutulanlar AutoLoom'da. Asla yüklenmez."),
+          "photo.stack")
         privacyRow(
           L.t("Conversation context", "Konuşma bağlamı"),
           L.t("Kept in memory for the current app session only.",
@@ -110,8 +116,8 @@ struct PrivacySettingsView: View {
         }
       } footer: {
         Text(L.t(
-          "Deletes memories, notes, the conversation context, sources and diagnostics. Your ChatGPT sign-in stays until you disconnect it. Apple Reminders and Calendar are not touched.",
-          "Anıları, notları, konuşma bağlamını, kaynakları ve tanılamayı siler. ChatGPT oturumu siz kesene kadar kalır. Apple Anımsatıcılar ve Takvim'e dokunulmaz."))
+          "Deletes memories, notes, AutoLoom's captures list and the captures kept only in AutoLoom, the conversation context, sources and diagnostics. Your ChatGPT sign-in stays until you disconnect it. Apple Reminders, Calendar and your Photos library are not touched.",
+          "Anıları, notları, AutoLoom çekim listesini ve yalnızca AutoLoom'da tutulan çekimleri, konuşma bağlamını, kaynakları ve tanılamayı siler. ChatGPT oturumu siz kesene kadar kalır. Apple Anımsatıcılar, Takvim ve Fotoğraflar arşivinize dokunulmaz."))
       }
     }
     .navigationTitle(L.t("Privacy center", "Gizlilik merkezi"))
@@ -127,6 +133,7 @@ struct PrivacySettingsView: View {
     ) {
       Button(L.t("Delete", "Sil"), role: .destructive) {
         MemoryStore.shared.deleteEverything()
+        CaptureLibrary.shared.deleteEverything()
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()
         wiped = true

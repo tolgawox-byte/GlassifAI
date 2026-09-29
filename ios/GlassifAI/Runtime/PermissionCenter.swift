@@ -1,5 +1,6 @@
 import AVFoundation
 import Contacts
+import Photos
 import CoreLocation
 import EventKit
 import Foundation
@@ -17,6 +18,10 @@ enum AppPermission: String, CaseIterable, Identifiable {
   case contacts
   case notifications
   case location
+  /// Add-only: Ray-Ban photos and videos are added, the library is never read.
+  case photos
+  /// Meta's camera permission for the glasses (granted in Meta AI).
+  case rayBanCamera
 
   var id: String { rawValue }
 
@@ -30,6 +35,8 @@ enum AppPermission: String, CaseIterable, Identifiable {
     case .contacts: L.t("Contacts", "Kişiler")
     case .notifications: L.t("Notifications", "Bildirimler")
     case .location: L.t("Location", "Konum")
+    case .photos: L.t("Photos (add only)", "Fotoğraflar (yalnızca ekleme)")
+    case .rayBanCamera: L.t("Ray-Ban camera", "Ray-Ban kamerası")
     }
   }
 
@@ -43,6 +50,8 @@ enum AppPermission: String, CaseIterable, Identifiable {
     case .contacts: "person.crop.circle"
     case .notifications: "bell"
     case .location: "location"
+    case .photos: "photo.on.rectangle"
+    case .rayBanCamera: "eyeglasses"
     }
   }
 
@@ -67,6 +76,12 @@ enum AppPermission: String, CaseIterable, Identifiable {
       L.t("Asked the first time you ask to be notified.", "İlk kez bildirim istediğinizde sorulur.")
     case .location:
       L.t("Only if you attach places to visual memories.", "Yalnızca görsel anılara konum eklerseniz.")
+    case .photos:
+      L.t("Asked the first time a Ray-Ban photo or video is saved. AutoLoom can add, never see, your library.",
+          "İlk Ray-Ban fotoğraf veya videosu kaydedilirken sorulur. AutoLoom arşivinize ekleyebilir, göremez.")
+    case .rayBanCamera:
+      L.t("Given in Meta AI when the glasses camera starts the first time.",
+          "Gözlük kamerası ilk kez başladığında Meta AI'da verilir.")
     }
   }
 }
@@ -139,6 +154,14 @@ enum PermissionCenter {
       case .authorizedWhenInUse, .authorizedAlways: return .granted
       case .notDetermined: return .notAsked
       default: return .denied
+      }
+    case .photos:
+      return PhotoLibrarySaver.permissionState
+    case .rayBanCamera:
+      switch WearableConnectionCoordinator.shared.snapshot.permission {
+      case .granted: return .granted
+      case .denied: return .denied
+      case .unknown, .checking, .requesting: return .notAsked
       }
     }
   }

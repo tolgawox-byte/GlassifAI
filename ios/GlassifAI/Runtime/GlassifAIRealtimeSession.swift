@@ -912,8 +912,12 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     // question the app asked ("Hayır" to "Kaydedeyim mi?").
     let command = ConversationCommands.classify(
       text, assistantName: AssistantIdentity.name, assistantSpeaking: assistantWasSpeaking)
-    let skip = command == .endConversation || (command == .stopSpeaking && orchestrator.pendingAction == nil)
-    guard !isPreviewSession, !pendingHangUp, !skip, let decision = orchestrator.bridgeDecision(for: text) else {
+    // "Stop recording" while the assistant talks is also a stop word: the
+    // answer is silenced, and the recording still stops here.
+    let bridged = orchestrator.bridgeDecision(for: text)
+    let media = bridged?.intent.isMediaCommand == true
+    let skip = !media && (command == .endConversation || (command == .stopSpeaking && orchestrator.pendingAction == nil))
+    guard !isPreviewSession, !pendingHangUp, !skip, let decision = bridged else {
       finishPreHold()
       return false
     }

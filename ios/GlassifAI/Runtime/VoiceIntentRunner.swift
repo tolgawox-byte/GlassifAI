@@ -140,6 +140,11 @@ extension VoiceIntent {
     case .createEvent: "CREATE_EVENT"
     case .call: "CALL"
     case .message: "MESSAGE"
+    case .takePhoto: "TAKE_PHOTO"
+    case .startRecording: "START_RECORDING"
+    case .stopRecording: "STOP_RECORDING"
+    case .recordingStatus: "RECORDING_STATUS"
+    case .saveCaptureToPhotos: "SAVE_CAPTURE_TO_PHOTOS"
     case .ask: "ASK"
     default: traceName.uppercased()
     }
@@ -163,6 +168,17 @@ extension VoiceIntent {
     case .message: DeviceActionKind.message.rawValue
     case .directions, .nearby, .directionsInView: DeviceActionKind.openMaps.rawValue
     default: nil
+    }
+  }
+
+  /// Ray-Ban photo and recording commands. They also run when the voice
+  /// session took the words for "stop speaking" ("stop recording" while the
+  /// assistant talks), and never from a delegation or anything the camera
+  /// read: only the user's own words take photos or record.
+  var isMediaCommand: Bool {
+    switch self {
+    case .takePhoto, .startRecording, .stopRecording, .recordingStatus, .saveCaptureToPhotos: true
+    default: false
     }
   }
 
@@ -226,6 +242,7 @@ extension AssistantOrchestrator {
     bridge.cameraAvailable = camera
     bridge.visualMemoryAvailable = camera && MemoryStore.shared.isEnabled && MemoryStore.shared.visualMemoriesEnabled
     bridge.addressedOnly = AssistantPreferences.respondsOnlyWhenAddressed
+    bridge.isRecording = RayBanMediaCoordinator.shared.isRecording
     return bridge
   }
 
@@ -694,6 +711,35 @@ extension AssistantOrchestrator {
     case .routine(let routine):
       return await runRoutine(routine, traceID: traceID)
 
+    case .takePhoto(let label, let note, let caption):
+      return await takeRayBanPhoto(label: label, note: note, caption: caption, traceID: traceID)
+
+    case .startRecording(let note):
+      return await startRayBanRecording(note: note, traceID: traceID)
+
+    case .stopRecording:
+      trace.update(traceID) { $0.executor = "RayBanMediaCoordinator.stopRecording (AVAssetWriter → Photos)" }
+      let outcome = await RayBanMediaCoordinator.shared.stopRecording(reason: .user)
+      trace.update(traceID) { $0.persistence = RayBanMediaCoordinator.describe(outcome) }
+      let speech = RayBanMediaCoordinator.stopSpeech(outcome)
+      switch outcome {
+      case .saved(let records):
+        return mediaOutcome(speech, feedback: .videoSaved(inPhotos: true, parts: records.count))
+      case .kept(let records, _):
+        return mediaOutcome(speech, feedback: .videoSaved(inPhotos: false, parts: records.count))
+      case .notRecording, .empty:
+        return mediaOutcome(speech)
+      case .failed(let problem, _):
+        return mediaOutcome(speech, failed: problem, feedback: .failed(L.t("Video not finished", "Video tamamlanamadı")))
+      }
+
+    case .recordingStatus:
+      trace.update(traceID) { $0.executor = "RayBanMediaCoordinator (state)" }
+      return mediaOutcome(RayBanMediaCoordinator.shared.statusSpeech())
+
+    case .saveCaptureToPhotos:
+      return await saveLatestCaptureToPhotos(traceID: traceID)
+
     case .ask(let awaiting):
       return askQuestion(awaiting)
 
@@ -702,6 +748,131 @@ extension AssistantOrchestrator {
       let result = await runBridgeTask(kind, query: query)
       await refreshBoards()
       return IntentOutcome(spoken: result.speakable, reply: result.display ?? result.speakable, failed: result.failed)
+    }
+  }
+
+  // MARK: Ray-Ban photos and videos
+
+  /// One short sentence for the user; the app's result, never the model's.
+  private func mediaOutcome(
+    _ speech: RayBanMediaCoordinator.Speech,
+    failed: String? = nil,
+    feedback: ActionFeedback? = nil
+  ) -> IntentOutcome {
+    IntentOutcome(
+      spoken: BridgeSpeech.done("Result of the user's Ray-Ban camera command.", tr: speech.tr, en: speech.en),
+      reply: speech.localized, failed: failed, feedback: feedback, said: speech.localized)
+  }
+
+  /// A note that comes with a photo or video is saved first, whatever
+  /// happens to the capture.
+  private func saveMediaNote(_ text: String?, traceID: UUID) -> UUID? {
+    guard let text, ToolRegistry.allows(.saveNote),
+          let note = MemoryStore.shared.addNote(title: nil, content: text, source: "voice") else { return nil }
+    recentSaved = (note.content, Date(), note.id)
+    return note.id
+  }
+
+  private func takeRayBanPhoto(label: CaptureLabel?, note: String?, caption: String?, traceID: UUID) async -> IntentOutcome {
+    let trace = ActionTraceLog.shared
+    let noteID = saveMediaNote(note, traceID: traceID)
+    trace.update(traceID) {
+      $0.executor = "RayBanMediaCoordinator.takePhoto (DAT capturePhoto → Photos, add-only)"
+      $0.parsed = "label \(label?.rawValue ?? "none")" + (note == nil ? "" : (noteID == nil ? "; note NOT saved" : "; note saved"))
+    }
+    let outcome = await RayBanMediaCoordinator.shared.takePhoto(label: label, caption: note ?? caption, noteID: noteID)
+    var speech = RayBanMediaCoordinator.photoSpeech(outcome, withNote: noteID != nil)
+    if note != nil, noteID == nil {
+      speech = RayBanMediaCoordinator.Speech(tr: speech.tr + " Notu kaydedemedim.", en: speech.en + " I couldn't save the note.")
+    }
+    switch outcome {
+    case .saved:
+      trace.update(traceID) { $0.persistence = "Photos library (add-only); AutoLoom keeps the asset id and a thumbnail" }
+      return mediaOutcome(speech, feedback: .photoSaved(inPhotos: true))
+    case .kept(_, let reason):
+      trace.update(traceID) { $0.persistence = "kept in AutoLoom (\(reason.saveError ?? "setting"))" }
+      return mediaOutcome(speech, feedback: .photoSaved(inPhotos: false))
+    case .unavailable(let why):
+      if noteID != nil {
+        speech = RayBanMediaCoordinator.Speech(tr: "Notu aldım. " + speech.tr, en: "I noted it. " + speech.en)
+      }
+      return mediaOutcome(speech, failed: "photo unavailable (\(why))", feedback: .failed(L.t("No photo", "Fotoğraf çekilemedi")))
+    case .failed(let problem):
+      if noteID != nil {
+        speech = RayBanMediaCoordinator.Speech(tr: "Notu aldım. " + speech.tr, en: "I noted it. " + speech.en)
+      }
+      return mediaOutcome(speech, failed: problem, feedback: .failed(L.t("No photo", "Fotoğraf çekilemedi")))
+    }
+  }
+
+  private func startRayBanRecording(note: String?, traceID: UUID) async -> IntentOutcome {
+    let trace = ActionTraceLog.shared
+    let media = RayBanMediaCoordinator.shared
+    let noteID = saveMediaNote(note, traceID: traceID)
+    trace.update(traceID) {
+      $0.executor = "RayBanMediaCoordinator.startRecording (DAT samples → AVAssetWriter passthrough)"
+    }
+    let outcome = media.startRecording(label: nil, caption: note, noteID: noteID)
+    guard outcome == .started else {
+      var speech = RayBanMediaCoordinator.startSpeech(outcome)
+      if noteID != nil { speech = RayBanMediaCoordinator.Speech(tr: "Notu aldım. " + speech.tr, en: "I noted it. " + speech.en) }
+      let failed = outcome == .alreadyRecording ? nil : "recording not started (\(outcome))"
+      return mediaOutcome(speech, failed: failed)
+    }
+    // "Started" only once a frame was written; the first keyframe usually
+    // arrives within a second.
+    let deadline = Date().addingTimeInterval(2.5)
+    while media.recordingState == .preparing, Date() < deadline {
+      try? await Task.sleep(nanoseconds: 100_000_000)
+    }
+    let speech: RayBanMediaCoordinator.Speech
+    if media.recordingState == .recording {
+      speech = noteID != nil
+        ? RayBanMediaCoordinator.Speech(tr: "Video kaydını başlattım ve not aldım.", en: "Recording started, and I noted it.")
+        : RayBanMediaCoordinator.startSpeech(.started)
+      trace.update(traceID) { $0.persistence = "recording (\(media.recorder.currentMode.rawValue))" }
+    } else {
+      speech = RayBanMediaCoordinator.Speech(
+        tr: "Kaydı başlatıyorum; gözlükten ilk görüntüyü bekliyorum.",
+        en: "Starting the recording; waiting for the first frame from the glasses.")
+      trace.update(traceID) { $0.persistence = "armed, waiting for the first keyframe" }
+    }
+    return mediaOutcome(speech, feedback: ActionFeedback(kind: .video, title: L.t("Recording", "Kayıt yapılıyor")))
+  }
+
+  private func saveLatestCaptureToPhotos(traceID: UUID) async -> IntentOutcome {
+    let trace = ActionTraceLog.shared
+    let media = RayBanMediaCoordinator.shared
+    trace.update(traceID) { $0.executor = "PHPhotoLibrary (add-only)" }
+    guard let record = media.latestUnsaved else {
+      return mediaOutcome(RayBanMediaCoordinator.Speech(
+        tr: "Galeriye kaydedilmeyi bekleyen bir fotoğraf ya da video yok.",
+        en: "There's no photo or video waiting to be saved to Photos."))
+    }
+    switch await media.saveToPhotos(record.id) {
+    case .success:
+      trace.update(traceID) { $0.persistence = "Photos library; the app's copy removed" }
+      let speech = record.kind == .photo
+        ? RayBanMediaCoordinator.Speech(tr: "Fotoğrafı galeriye kaydettim.", en: "I saved the photo to Photos.")
+        : RayBanMediaCoordinator.Speech(tr: "Videoyu galeriye kaydettim.", en: "I saved the video to Photos.")
+      return mediaOutcome(speech, feedback: record.kind == .photo ? .photoSaved(inPhotos: true) : .videoSaved(inPhotos: true, parts: 1))
+    case .failure(let error):
+      trace.update(traceID) { $0.persistence = "not saved: \(error.reason)" }
+      let speech: RayBanMediaCoordinator.Speech
+      switch error {
+      case .permissionDenied:
+        speech = RayBanMediaCoordinator.Speech(
+          tr: "Galeri izni kapalı; iOS Ayarlar'dan izin verirsen kaydederim. Dosya AutoLoom'da duruyor.",
+          en: "Photos access is off; allow it in iOS Settings and I'll save it. The file is still in AutoLoom.")
+      case .needsPrompt:
+        speech = RayBanMediaCoordinator.Speech(
+          tr: "Galeri izni için uygulamayı açman gerekiyor; dosya AutoLoom'da duruyor.",
+          en: "Open the app to allow Photos access; the file is still in AutoLoom.")
+      case .failed:
+        speech = RayBanMediaCoordinator.Speech(
+          tr: "Galeriye kaydedemedim; dosya AutoLoom'da duruyor.", en: "I couldn't save it to Photos; the file is still in AutoLoom.")
+      }
+      return mediaOutcome(speech, failed: error.reason, feedback: .failed(L.t("Not saved to Photos", "Galeriye kaydedilemedi")))
     }
   }
 

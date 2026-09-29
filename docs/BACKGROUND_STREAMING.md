@@ -28,6 +28,25 @@ The SwiftUI preview (`LowLatencyPreviewView`) is only UI. Vision requests read `
 | 3 | VideoToolbox sessions can become invalid in the background; P-frames after a reset fail; the hardware decoder can be refused | `VideoDecoder`: waits for the next keyframe after a reset, recreates the session on `kVTInvalidSessionErr` / `kVTVideoDecoderMalfunctionErr`, and retries in software on `kVTVideoDecoderNotAvailableNowErr`; hardware again in the foreground |
 | 4 | `bluetooth-central` missing from `UIBackgroundModes` | Added. The existing `audio`, `bluetooth-peripheral` and `external-accessory` entries and `UISupportedExternalAccessoryProtocols = com.meta.ar.wearable` are kept |
 
+### v1.4 root causes (why fresh frames still stopped when the phone locked)
+
+| # | Cause (evidence) | Fix |
+|---|---|---|
+| 5 | **The hardware decoder.** Meta's own DAT sample (`VideoFrameDecoder.swift`): "Force software decoding so the session survives backgrounding. iOS tears down hardware sessions when backgrounded, and a fresh one stalls until the next keyframe." Our decoder used hardware and, after iOS invalidated it, rebuilt a **hardware** session; it switched to software only on one error code (`kVTVideoDecoderNotAvailableNowErr` from a decode), never when creating the session failed or the output callback reported errors. Samples kept arriving while locked, nothing decoded, `FrameStore` had no fresh frame. | `VideoDecoder` now uses the **software** decoder by default (`EnableHardwareAcceleratedVideoDecoder = false`, iOS 17+, exactly as Meta's sample), checks `VTDecompressionSessionCanAcceptFormatDescription` before every decode, counts failures from the call **and** from the output callback (3 in a row rebuild the session), rebuilds a vanished hardware session in software and retries its keyframe at once, rebuilds a session that accepts frames but returns no image, and tries the other mode when a session cannot be created. Settings → Camera & Ray-Ban → Video decoder can choose Hardware (on screen only). |
+| 6 | **No photo fallback while locked.** `prepareVisionImage` skipped the glasses still photo when the app was in the background (`!background`), so a decoder hiccup meant "no image". | A glasses still photo (JPEG from the glasses, processed with ImageIO on the CPU) is the fallback in the background too. It does not need the video decoder. |
+| 7 | **A raw fallback lasted the whole app run.** One HEVC problem on screen switched the transport to raw, which Meta pauses in the background, for the rest of the run. | The fallback lasts one stream: the next start tries HEVC again (at most two fallbacks per run), and the note says raw pauses when locked. |
+| 8 | **No recovery while streaming.** Nothing noticed a stream that said "streaming" but produced no fresh image. | A fresh-frame monitor (`RayBanStallPolicy`, every 2 s): samples arrive but no image → rebuild the decoder (the other mode after the first try, 5 s apart); only P-frames for 8 s, or no samples for 10 s → restart the stream, **on screen only**, at most 3 times in 10 minutes, never during a recording. With the phone locked the stream is never restarted (Meta documents that streaming continues in the background, not that a new start works); vision uses the still photo instead. |
+
+Also new: Settings → Camera & Ray-Ban → **Continue vision with the screen locked** (on by default; unavailable on the raw transport). When off, a Ray-Ban question while locked is answered honestly ("turned off in Settings") and Live Vision pauses.
+
+### Exact DAT 0.5.0 behaviour (what this build relies on)
+
+- `VideoCodec.hvc1`: compressed HEVC samples (`VideoFrame.sampleBuffer` with a data buffer, no image buffer) that keep arriving in the background. `VideoCodec.raw` pauses in the background.
+- No API to request a keyframe; a new stream starts with one.
+- `StreamSession.capturePhoto(format: .jpeg) -> Bool`, delivered on `photoDataPublisher` (in-stream photo; DAT 1.0 adds standalone `Camera.photo`).
+- No camera audio in 0.5.0 (DAT 1.x beta channels add in-stream audio); the glasses microphone is Bluetooth HFP, which Meta says must be set up before the camera stream starts.
+- Start timeout 10 s; publishers do not replay.
+
 Not added: `processing` (a `BGProcessingTask` mode that nothing in the app uses — adding it would be an unnecessary background entitlement), and the Wi-Fi keys (DAT 1.0 only).
 
 ## Lifecycle states
@@ -64,4 +83,4 @@ Settings → Developer → **Camera diagnostics**: pipeline state, screen locked
 6. Unlock the phone (D). The preview resumes; the next answer must not use a stale frame.
 7. Open Camera diagnostics and copy the transition log and counters into `TEST_REPORT.md`.
 
-Expected in diagnostics during step 4–5: state `ScreenLockedStreaming`, background samples and background decoded both rising, transport HEVC. If background samples rise but background decoded stays at 0, the decoder is the problem (note the error code). If background samples stop, iOS or the glasses stopped the stream while locked (a platform limit; note the transport).
+Expected in diagnostics during step 4–5: state `ScreenLockedStreaming`, background samples and background decoded both rising, transport HEVC, decoder **software**, recoveries 0 (or a decoder rebuild followed by decoded frames). If background samples rise but background decoded stays at 0, the decoder is the problem (note the error code). If background samples stop, iOS or the glasses stopped the stream while locked (a platform limit; note the transport).

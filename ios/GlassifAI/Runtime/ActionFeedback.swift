@@ -21,6 +21,8 @@ struct ActionFeedback: Identifiable, Equatable {
     case share
     case contact
     case forgotten
+    case photo
+    case video
     case failure
   }
 
@@ -59,6 +61,8 @@ struct ActionFeedback: Identifiable, Equatable {
     case .share: "square.and.arrow.up"
     case .contact: "person.crop.circle"
     case .forgotten: "trash"
+    case .photo: "camera.fill"
+    case .video: "video.fill"
     case .failure: "exclamationmark.triangle"
     }
   }
@@ -80,6 +84,22 @@ struct ActionFeedback: Identifiable, Equatable {
 
   static func taskAdded(due: Date?, hasTime: Bool) -> ActionFeedback {
     ActionFeedback(kind: .task, title: L.t("Task added", "Görev eklendi"), detail: due.map { when($0, hasTime: hasTime) })
+  }
+
+  /// "✓ Fotoğraf galeriye kaydedildi" only after Photos confirmed it.
+  static func photoSaved(inPhotos: Bool) -> ActionFeedback {
+    ActionFeedback(
+      kind: .photo,
+      title: inPhotos ? L.t("Photo saved to Photos", "Fotoğraf galeriye kaydedildi")
+        : L.t("Photo kept in AutoLoom", "Fotoğraf AutoLoom'da saklandı"))
+  }
+
+  static func videoSaved(inPhotos: Bool, parts: Int) -> ActionFeedback {
+    ActionFeedback(
+      kind: .video,
+      title: inPhotos ? L.t("Video saved to Photos", "Video galeriye kaydedildi")
+        : L.t("Video kept in AutoLoom", "Video AutoLoom'da saklandı"),
+      detail: parts > 1 ? L.t("\(parts) parts", "\(parts) parça") : nil)
   }
 
   static func failed(_ what: String) -> ActionFeedback {

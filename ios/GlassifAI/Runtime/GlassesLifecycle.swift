@@ -34,6 +34,101 @@ enum GlassesPipelineState: String, Equatable {
   }
 }
 
+/// Settings → Camera & Ray-Ban → "Continue vision with the screen locked".
+enum LockedScreenVision {
+  static let defaultsKey = "autoloom.vision.lockedScreen"
+
+  /// On unless the user turned it off.
+  static var isEnabled: Bool {
+    UserDefaults.standard.object(forKey: defaultsKey) as? Bool ?? true
+  }
+
+  /// Meta DAT 0.5: the HEVC (hvc1) transport keeps streaming while the app
+  /// is in the background; the default raw transport pauses.
+  static func isSupported(transport: GlassesVideoTransport?) -> Bool {
+    transport == .hevc
+  }
+
+  static func statusLine(transport: GlassesVideoTransport?) -> String {
+    guard isEnabled else { return "off (Settings)" }
+    return isSupported(transport: transport)
+      ? "on (HEVC keeps streaming; physical test required)"
+      : "unavailable on the raw transport"
+  }
+
+  /// What the voice model is told when a Ray-Ban question arrives while the
+  /// phone is locked and the setting is off.
+  static let offReason =
+    "Vision with the screen locked is turned off in Settings (Camera & Ray-Ban), so nothing can be seen until the phone is unlocked."
+}
+
+/// Bounded recovery when the Ray-Ban stream says "streaming" but no fresh
+/// image reaches the frame store. It never answers with an older frame; it
+/// only rebuilds the decoder or, on screen, restarts the stream, within
+/// limits. In the background the stream is never restarted (Meta documents
+/// that streaming continues there, not that a new start works), so a locked
+/// phone falls back to a glasses still photo instead.
+enum RayBanStallPolicy {
+  enum Action: Equatable {
+    case none
+    case restartDecoder(swapMode: Bool)
+    case restartStream(reason: String)
+  }
+
+  struct Input: Equatable {
+    var streaming: Bool
+    var hevc: Bool
+    var background: Bool
+    var recording: Bool
+    /// Time since the stream reached "streaming".
+    var streamingFor: TimeInterval
+    var lastSampleAgeMs: Int?
+    var lastImageAgeMs: Int?
+    var keyframeWaitMs: Int?
+    /// Decoder rebuilds since the last image.
+    var decoderRestarts: Int
+    var lastDecoderRestartAt: Date?
+    var streamRestarts: [Date]
+    var now: Date
+  }
+
+  /// The transport watchdog judges the first seconds of a stream.
+  static let startupGrace: TimeInterval = 10
+  static let noSamplesMs = 10_000
+  static let noImageMs = 3_000
+  static let keyframeWaitLimitMs = 8_000
+  static let decoderRestartSpacing: TimeInterval = 5
+  static let maxStreamRestarts = 3
+  static let streamRestartWindow: TimeInterval = 600
+
+  static func decide(_ input: Input) -> Action {
+    guard input.streaming, input.streamingFor >= startupGrace else { return .none }
+    let restartsInWindow = input.streamRestarts.filter { input.now.timeIntervalSince($0) < streamRestartWindow }
+    // A recording keeps its stream; a restart would cut the file.
+    let mayRestartStream = !input.background && !input.recording && restartsInWindow.count < maxStreamRestarts
+    let sampleAge = input.lastSampleAgeMs ?? Int.max
+    let imageAge = input.lastImageAgeMs ?? Int.max
+    // 1. Nothing arrives at all.
+    if sampleAge >= noSamplesMs {
+      guard mayRestartStream else { return .none }
+      return .restartStream(reason: "no Ray-Ban samples for \(noSamplesMs / 1_000) s")
+    }
+    guard sampleAge < 2_000, imageAge >= noImageMs, input.hevc else { return .none }
+    // 2. Only P-frames the decoder cannot use: a new stream starts with a
+    // keyframe (DAT 0.5 has no keyframe request).
+    if let wait = input.keyframeWaitMs {
+      guard wait >= keyframeWaitLimitMs, mayRestartStream else { return .none }
+      return .restartStream(reason: "no keyframe for \(wait / 1_000) s")
+    }
+    // 3. Samples arrive and the decoder is not waiting, yet no image comes
+    // out: rebuild it, in the other mode after the first rebuild.
+    if let last = input.lastDecoderRestartAt, input.now.timeIntervalSince(last) < decoderRestartSpacing {
+      return .none
+    }
+    return .restartDecoder(swapMode: input.decoderRestarts >= 1)
+  }
+}
+
 /// Watches the app lifecycle, the screen lock and the glasses stream, and
 /// records every change of `GlassesPipelineState` with the frame counters,
 /// so a physical lock-screen test shows exactly where frames stop.
@@ -116,7 +211,10 @@ final class GlassesLifecycleMonitor: ObservableObject {
     var detail = "\(reason ?? "frames") · \(transportLabel()) · samples \(metrics.compressedSamples + metrics.rawSamples)"
     detail += " · decoded \(metrics.decodedFrames) · bg samples \(metrics.backgroundSamples)"
     detail += " · bg decoded \(metrics.backgroundDecoded) · bg failures \(metrics.backgroundFailures)"
+    detail += " · decoder \(metrics.softwareDecode ? "software" : "hardware")"
+    if let wait = metrics.keyframeWaitMs { detail += " · keyframe wait \(wait) ms" }
     if let error = metrics.lastDecodeError { detail += " · last decode error \(error)" }
+    if metrics.recoveries > 0 { detail += " · recoveries \(metrics.recoveries) (\(metrics.lastRecovery))" }
     transitions.append(Transition(at: Date(), from: state, to: next, detail: detail))
     if transitions.count > 40 { transitions.removeFirst(transitions.count - 40) }
     NSLog("[AutoLoom] glasses pipeline %@ → %@ (%@)", state.rawValue, next.rawValue, detail)
