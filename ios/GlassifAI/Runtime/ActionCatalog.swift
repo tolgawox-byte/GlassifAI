@@ -801,6 +801,13 @@ enum ActionCatalog {
       examplesEN: ["Remember where I parked"], permissions: [.location], capabilities: [.location], undo: .supported,
       ui: "Explore → Daily → Parking", status: .physicalTestRequired, keys: ["parking.save"]),
     ActionDefinition(
+      "parking.photo", .navigation, name: "Save the spot with a photo", tr: "Park yerini fotoğrafla kaydet",
+      summary: "The parking spot and a Ray-Ban photo of it, linked.",
+      examplesTR: ["Park yerimi fotoğrafla kaydet", "Park yerini fotoğrafla kaydet"],
+      examplesEN: ["Save my parking spot with a photo"], permissions: [.location, .rayBanCamera],
+      capabilities: [.location, .rayBanCamera], undo: .supported, ui: "Explore → Daily → Parking",
+      status: .physicalTestRequired, keys: ["parking.saveWithPhoto"]),
+    ActionDefinition(
       "parking.recall", .navigation, name: "Where did I park?", tr: "Arabam nerede?",
       summary: "The saved spot, or a memory about the car.", examplesTR: ["Arabam nerede?", "Arabamı nereye park ettim?"],
       examplesEN: ["Where did I park?"], ui: "Explore → Daily → Parking", keys: ["parking.recall"]),
@@ -1008,6 +1015,7 @@ enum ActionCatalog {
     case "parking.recall": return .parking(.recall)
     case "parking.directions": return .parking(.directions)
     case "parking.clear": return .parking(.clear)
+    case "parking.photo": return .parking(.saveWithPhoto)
     case "undo.last": return .undoLast
     case "help.capabilities": return .capabilities(text("topic"))
     case "search.global": return text("query").map { .search($0) }
@@ -1204,6 +1212,7 @@ extension ParkingCommand {
     case .recall: "recall"
     case .directions: "directions"
     case .clear: "clear"
+    case .saveWithPhoto: "saveWithPhoto"
     }
   }
 }

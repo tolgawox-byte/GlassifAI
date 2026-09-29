@@ -37,7 +37,7 @@ Rollback tag for this pass: `rollback-405e461-before-jarvis-expansion` (v1.4 fin
 | 26 | Live Vision commands | IMPLEMENTED | "Ne değişti?" compares the last two notes |
 | 27 | Document intelligence | IMPLEMENTED | OCR, dates, amounts; reminder only after a yes; text kept, photo not |
 | 28 | OCR / barcode / QR local pipeline | ALREADY EXISTED + IMPLEMENTED | Code reader (v1.4); sign OCR (this pass) |
-| 29 | Live translation | PARTIAL | On request ("bu tabelayı Türkçeye çevir") on the phone with Apple Translation (downloaded languages, system sheet) or online; translation mode for speech; no continuous sign translation. PHYSICAL TEST REQUIRED |
+| 29 | Live translation | IMPLEMENTED | On request ("bu tabelayı Türkçeye çevir") on the phone with Apple Translation (downloaded languages, system sheet) or online; in Translation mode, Live Vision also translates readable foreign text in each scene note. PHYSICAL TEST REQUIRED |
 | 30 | Remote Assist | PARTIAL | LAN share with room code implemented; internet (WebRTC) REQUIRES_PROVIDER (signalling server) |
 | 31 | Remote Assist privacy | IMPLEMENTED | Tap-only start, red bar, stop by voice, stops in background / 15 min / wrong codes / heat |
 | 32 | MediaResourceCoordinator | IMPLEMENTED | Activities and conflicts, used by sharing and music |
@@ -64,7 +64,7 @@ Rollback tag for this pass: `rollback-405e461-before-jarvis-expansion` (v1.4 fin
 | 53 | Daily life supermode | PARTIAL | Pieces below |
 | 54 | Shopping list | ALREADY EXISTED | v1.4 |
 | 55 | Receipt memory | IMPLEMENTED | "Fişi kaydet", "bu ay ne harcadım?" (saved receipts only) |
-| 56 | Parking | ALREADY EXISTED | Photo option not added |
+| 56 | Parking | ALREADY EXISTED + IMPLEMENTED | "Park yerimi fotoğrafla kaydet": the spot plus a linked Ray-Ban photo (PHYSICAL TEST REQUIRED) |
 | 57 | Cooking | PARTIAL | Timers, vision and translation cover it; no recipe feature |
 | 58 | Apple Music (optional) | PARTIAL | System player + own library (MediaPlayer); catalogue needs MusicKit App Service (paid program) |
 | 59 | Smart home (optional) | IMPLEMENTED | The user's own Shortcuts after a tap; no unofficial Home access |

@@ -273,11 +273,16 @@ final class AutoLoomAgentOrchestrator: ObservableObject {
   }
 
   /// Live Vision on a specialist (Gemini when connected and chosen).
-  func describeLive(jpeg: Data, providers: [ProviderID], turkish: Bool) async throws -> String {
+  func describeLive(
+    jpeg: Data,
+    providers: [ProviderID],
+    turkish: Bool,
+    ask: String = "Describe the current view."
+  ) async throws -> String {
     let step = AgentStep(role: .liveVision, provider: providers.first ?? .chatgpt, purpose: "describe the view")
     var request = ProviderRequest(
       role: .liveVision, system: SpecialistPrompts.system(for: .liveVision, turkish: turkish),
-      messages: [ProviderMessage(text: "Describe the current view.", images: [jpeg])], timeout: 20)
+      messages: [ProviderMessage(text: ask, images: [jpeg])], timeout: 20)
     request.maxOutputTokens = 200
     let result = try await run(step, providers: providers, timeout: 20, request: request)
     return String(ResponseNormalizer.normalize(result.response.text).prefix(400))

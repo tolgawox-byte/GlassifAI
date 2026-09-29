@@ -1346,14 +1346,15 @@ final class AssistantOrchestrator: ObservableObject {
       VisionFrameEncoder.encode(pixelBuffer, detail: .fast, useCPU: background)
     }.value
     guard let encoded else { throw ResponsesError.failed("The live image could not be prepared.") }
+    let turkish = context.detectedLanguage.map { $0 == "Turkish" } ?? L.isTurkish
+    let ask = LiveVisionPolicy.request(translating: AssistantMode.effective == .translation, turkish: turkish)
     // Live Vision on a specialist (Gemini) when it leads the live-vision
     // role; ChatGPT otherwise, and whenever the specialist fails.
     let routing = ProviderRegistry.shared.routingContext()
     let specialists = Array(AgentRouter.candidates(for: .liveVision, context: routing).prefix { $0 != .chatgpt })
     if !specialists.isEmpty,
        let text = try? await AutoLoomAgentOrchestrator.shared.describeLive(
-         jpeg: encoded.jpeg, providers: specialists,
-         turkish: context.detectedLanguage.map { $0 == "Turkish" } ?? L.isTurkish),
+         jpeg: encoded.jpeg, providers: specialists, turkish: turkish, ask: ask),
        !text.isEmpty {
       return text
     }
@@ -1369,7 +1370,7 @@ final class AssistantOrchestrator: ObservableObject {
     ]
     if !imageDetailRejected { image["detail"] = "high" }
     let info = catalog.first { $0.slug == model }
-    let content: [[String: Any]] = [["type": "input_text", "text": "Describe the current view."], image]
+    let content: [[String: Any]] = [["type": "input_text", "text": ask], image]
     var request = ResponsesClient.Request(
       model: model,
       instructions: AssistantInstructions.liveView(detectedLanguage: context.detectedLanguage),

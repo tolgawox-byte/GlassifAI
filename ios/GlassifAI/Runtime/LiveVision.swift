@@ -5,6 +5,15 @@ import UIKit
 /// When Live Vision may send a new scene description. Pure functions, so the
 /// adaptive sampling can be unit tested.
 enum LiveVisionPolicy {
+  /// What each Live Vision frame is asked. In Translation mode, readable text
+  /// in another language is translated too (signs, menus), so "ne yazıyor?"
+  /// is already answered while walking.
+  static func request(translating: Bool, turkish: Bool) -> String {
+    guard translating else { return "Describe the current view." }
+    let target = turkish ? "Turkish" : "English"
+    return "Describe the current view. Translation mode is on: translate any readable text in another language into \(target), quoting the original briefly."
+  }
+
   /// Never more often than this (seconds), even when the view keeps changing.
   static let minimumInterval: TimeInterval = 6
   /// Mean thumbnail difference (0…255) that counts as "the view changed".

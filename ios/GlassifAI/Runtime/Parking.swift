@@ -9,6 +9,8 @@ struct ParkingSpot: Codable, Equatable, Identifiable {
   /// The user's own words ("B2 katı, 45 numara").
   var note: String?
   var at = Date()
+  /// The Ray-Ban photo taken with it ("park yerimi fotoğrafla kaydet").
+  var captureID: UUID?
 
   var hasLocation: Bool { latitude != nil && longitude != nil }
 
@@ -108,6 +110,8 @@ enum ParkingCommand: Equatable {
   case directions
   /// "Park yerini sil"
   case clear
+  /// "Park yerimi fotoğrafla kaydet": the spot and a Ray-Ban photo of it.
+  case saveWithPhoto
 }
 
 /// LEVEL 1 parking commands (before notes, memory and directions: "park
@@ -145,6 +149,13 @@ extension VoiceActionIntentBridge {
     }
     if firstPhrase(parkingDirectionsPhrases, in: u) != nil {
       return VoiceBridgeDecision(.parking(.directions), "parking directions")
+    }
+    let photoPhrases: [[String]] = [
+      ["park", "yerimi", "fotografla", "kaydet"], ["park", "yerini", "fotografla", "kaydet"],
+      ["save", "my", "parking", "spot", "with", "a", "photo"],
+    ]
+    if firstPhrase(photoPhrases, in: u) != nil {
+      return VoiceBridgeDecision(.parking(.saveWithPhoto), "parking save with a photo")
     }
     if u.starts(with: ["remember", "where", "i", "parked"]) {
       return VoiceBridgeDecision(.parking(.save(note: nil)), "parking save")
@@ -262,6 +273,7 @@ extension AssistantOrchestrator {
       if let place = spot.placeName { facts.append("place: \(place)") }
       if let note = spot.note { facts.append("the user's words: \(note)") }
       facts.append(spot.hasLocation ? "the exact point is saved (directions: \"arabama götür\")" : "no map location was saved")
+      if spot.captureID != nil { facts.append("a Ray-Ban photo of the spot is in Captures") }
       return IntentOutcome(
         spoken: "The user's saved parking spot — " + facts.joined(separator: "; ")
           + ". Tell them in one or two short sentences in the conversation's language; do not add anything else.",
@@ -283,6 +295,24 @@ extension AssistantOrchestrator {
       trace.update(traceID) { $0.executor = "Apple Maps (walking, to the saved point)" }
       let point = String(format: "%.6f,%.6f", spot.latitude ?? 0, spot.longitude ?? 0)
       return await openMaps(url, destination: point, label: spot.placeName ?? L.t("your car", "araban"), traceID: traceID)
+
+    case .saveWithPhoto:
+      let saved = await runParking(.save(note: nil), transcript: transcript, traceID: traceID)
+      guard saved.failed == nil else { return saved }
+      let photo = await RayBanMediaCoordinator.shared.takePhoto(
+        label: nil, caption: L.t("Parking spot", "Park yeri"), noteID: nil)
+      guard let record = photo.record, var spot = store.spot else {
+        let speech = RayBanMediaCoordinator.photoSpeech(photo)
+        return parkingOutcome(
+          tr: "Park yerini kaydettim; fotoğraf çekilemedi: " + speech.tr, en: "Parking spot saved; no photo: " + speech.en,
+          failed: "no photo")
+      }
+      spot.captureID = record.id
+      store.save(spot)
+      trace.update(traceID) { $0.persistence = "parking spot saved with a Ray-Ban photo" }
+      return parkingOutcome(
+        tr: "Park yerini fotoğrafıyla kaydettim.", en: "Parking spot saved with a photo.",
+        feedback: ActionFeedback(kind: .memory, title: L.t("Parking spot saved", "Park yeri kaydedildi"), detail: spot.placeName))
 
     case .clear:
       guard store.spot != nil else {

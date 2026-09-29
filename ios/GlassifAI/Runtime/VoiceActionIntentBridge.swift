@@ -256,6 +256,7 @@ enum VoiceIntent: Equatable {
       case .recall: "parkingRecall"
       case .directions: "parkingDirections"
       case .clear: "parkingClear"
+      case .saveWithPhoto: "parkingSaveWithPhoto"
       }
     case .ask(let awaiting): "ask(\(awaiting.label))"
     case .classify(let kind, _): "classify(\(kind.rawValue))"

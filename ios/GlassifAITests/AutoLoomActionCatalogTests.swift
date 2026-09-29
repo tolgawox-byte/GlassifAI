@@ -171,7 +171,7 @@ final class AutoLoomActionCatalogTests: XCTestCase {
       .capabilities(nil), .search("x"), .vehicleQuestion(.odometer), .correctPending(time), .graph([]),
       .ask(.note), .ask(.memory), .ask(.task), .ask(.reminderTitle), .ask(.eventTime(title: "x")),
       .timer(.start(seconds: 60, label: nil)), .timer(.cancel), .timer(.remaining), .shopping(.add(["x"])), .shopping(.read),
-      .shopping(.remove("x")), .parking(.save(note: nil)), .parking(.recall), .parking(.directions), .parking(.clear),
+      .shopping(.remove("x")), .parking(.save(note: nil)), .parking(.recall), .parking(.directions), .parking(.clear), .parking(.saveWithPhoto),
       .findVisual("x"), .findVisual(""), .whatChanged, .document(.summarize), .document(.saveReceipt), .document(.spending),
       .music(.play(nil)), .music(.play("x")), .music(.pause), .music(.next), .music(.previous), .music(.nowPlaying),
       .userRoutine("x"), .remoteAssist(start: true), .remoteAssist(start: false), .skill(server: "x", request: "y"),
