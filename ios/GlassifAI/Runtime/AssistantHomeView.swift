@@ -314,7 +314,7 @@ struct AssistantHomeView: View {
       }
       if let vehicle = dealer.active {
         let missing = vehicle.remainingPhotos.count
-        chip(vehicle.title + (missing > 0 ? " · \(missing) " + L.t("photos", "foto") : ""), systemImage: "car.fill")
+        chip(vehicle.title + (missing > 0 ? " · \(missing) " + L.t("photos left", "foto eksik") : ""), systemImage: "car.fill")
       }
       if showsRecordingChip {
         RecordingChip(media: media)

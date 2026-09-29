@@ -62,7 +62,9 @@ set -e
 
 # The voice evaluation's report (AutoLoomVoiceEvaluationTests writes it in the
 # test app's temporary folder on the simulator).
-EVAL="$(find "$HOME/Library/Developer/CoreSimulator/Devices/$UDID" -name autoloom-voice-eval.txt -mmin -60 2>/dev/null | head -n 1)"
+# Tests may run on a clone of the simulator (XCTestDevices), so look everywhere.
+EVAL="$(find "$HOME/Library/Developer/CoreSimulator/Devices" "$HOME/Library/Developer/XCTestDevices" \
+  -name autoloom-voice-eval.txt -mmin -90 2>/dev/null | head -n 1)"
 if [ -n "$EVAL" ]; then
   head -n 16 "$EVAL" | while IFS= read -r line; do echo "::notice title=Voice evaluation::${line}"; done || true
 fi

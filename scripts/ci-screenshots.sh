@@ -90,8 +90,8 @@ for screen in $SCREENS; do
     output="$(tail -c 400 "$LOGS/$screen.err.txt" 2>/dev/null | tr '\n' ' ')"
     echo "::warning title=Screenshot $screen::not running after launch — $report — stderr: ${output:-none}"
     crashed=$((crashed + 1))
-    if [ "$crashed" -ge 3 ]; then
-      echo "::warning title=Screenshots::stopped after 3 launches that did not stay up"
+    if [ "$crashed" -ge 8 ]; then
+      echo "::warning title=Screenshots::stopped after 8 launches that did not stay up"
       break
     fi
     continue
