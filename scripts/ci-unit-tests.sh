@@ -64,7 +64,7 @@ set -e
 # test app's temporary folder on the simulator).
 # Tests may run on a clone of the simulator (XCTestDevices), so look everywhere.
 EVAL="$(find "$HOME/Library/Developer/CoreSimulator/Devices" "$HOME/Library/Developer/XCTestDevices" \
-  -name autoloom-voice-eval.txt -mmin -90 2>/dev/null | head -n 1)"
+  -name autoloom-voice-eval.txt -mmin -90 2>/dev/null | head -n 1 || true)"
 if [ -n "$EVAL" ]; then
   head -n 16 "$EVAL" | while IFS= read -r line; do echo "::notice title=Voice evaluation::${line}"; done || true
 fi
