@@ -16,6 +16,10 @@ enum DealerCommand: Equatable {
   case listing
   case summary
   case briefing
+  /// "Aracı kaydet": vehicles save automatically; this confirms it.
+  case saveVehicle
+  /// "Recall kontrol et": Canadian recall research for the active vehicle.
+  case recallCheck
 
   var name: String {
     switch self {
@@ -32,6 +36,8 @@ enum DealerCommand: Equatable {
     case .listing: "listing"
     case .summary: "vehicleSummary"
     case .briefing: "dealerBriefing"
+    case .saveVehicle: "saveVehicle"
+    case .recallCheck: "recallCheck"
     }
   }
 }
@@ -65,10 +71,19 @@ extension VoiceActionIntentBridge {
     (["create", "a", "listing"], .listing), (["write", "a", "listing"], .listing),
     (["arac", "durumu"], .summary), (["bu", "aracta", "ne", "var"], .summary), (["vehicle", "summary"], .summary),
     (["bayi", "ozeti"], .briefing), (["bugun", "hangi", "araclar"], .briefing), (["dealer", "briefing"], .briefing),
+    (["bugun", "dealerde", "ne", "var"], .briefing), (["bugun", "bayide", "ne", "var"], .briefing),
+    (["kac", "foto", "kaldi"], .photoChecklist), (["kac", "fotograf", "kaldi"], .photoChecklist),
+    (["how", "many", "photos", "left"], .photoChecklist), (["vinini", "oku"], .readVIN),
+    (["araci", "kaydet"], .saveVehicle), (["arabayi", "kaydet"], .saveVehicle), (["save", "the", "vehicle"], .saveVehicle),
+    (["recall", "kontrol", "et"], .recallCheck), (["recall", "kontrolu", "yap"], .recallCheck), (["recalluna", "bak"], .recallCheck),
+    (["recalllarina", "bak"], .recallCheck), (["recall", "bak"], .recallCheck), (["recall", "var", "mi"], .recallCheck),
+    (["geri", "cagirma", "kontrol", "et"], .recallCheck), (["check", "recalls"], .recallCheck),
+    (["check", "the", "recalls"], .recallCheck), (["check", "for", "recalls"], .recallCheck),
   ]
 
   static func dealer(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
     guard u.count <= 30 else { return nil }
+    if let decision = vehicleQuestion(u, context) { return decision }
     if let decision = odometerValue(u) { return decision }
     if let decision = damage(u) { return decision }
     // Longest phrase at the earliest position.
@@ -97,7 +112,7 @@ extension VoiceActionIntentBridge {
     var tail = u.dropping(0..<best.range.upperBound)
     tail.trimLeading(mediaTailFillers.union(["simdi", "bir"]))
     // A few words may follow a research or listing command ("… Kanada'da").
-    let allowsTail = best.command == .marketResearch || best.command == .listing
+    let allowsTail = best.command == .marketResearch || best.command == .listing || best.command == .recallCheck
     guard tail.isEmpty || (allowsTail && tail.count <= 6 && !tail.containsAny(questions)) else { return nil }
     return VoiceBridgeDecision(.dealer(best.command), "dealer \"\(best.phrase.joined(separator: " "))\"")
   }

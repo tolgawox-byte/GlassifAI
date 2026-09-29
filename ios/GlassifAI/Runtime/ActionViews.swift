@@ -77,7 +77,9 @@ struct PendingActionCard: View {
       .buttonStyle(.borderedProminent)
     case .openMaps:
       Button(L.t("Open in Maps", "Haritalar'da aç")) {
-        guard let destination = plan.location, let url = DeviceActionExecutor.mapsURL(for: destination) else { return }
+        // The staged URL keeps a nearby search or walking directions.
+        guard let destination = plan.location,
+              let url = plan.url ?? DeviceActionExecutor.mapsURL(for: destination) else { return }
         openURL(url) { accepted in
           orchestrator.completeTapAction(
             accepted ? "Opened directions to \(destination)" : "Maps could not be opened",

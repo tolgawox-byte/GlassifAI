@@ -143,6 +143,18 @@ enum VoiceIntent: Equatable {
   case parking(ParkingCommand)
   /// "QR kodu oku", "barkodu oku": read on the phone, never opened.
   case readCode
+  /// "Neler yapabilirsin?": a short contextual answer and the Command Library.
+  case capabilities(String?)
+  /// "Geçen hafta Corolla ile ilgili kaydettiğim şeyi bul": the global search.
+  case search(String)
+  /// "Kaç kilometre?": a fact from the active vehicle's record.
+  case vehicleQuestion(VehicleField)
+  /// "Bunu yarına taşı": moves a task (nil title: the task just mentioned).
+  case moveTask(title: String?, time: ParsedTime)
+  /// "Hayır, cumartesi": the waiting or just-saved action gets this day/time.
+  case correctPending(ParsedTime)
+  /// Several commands in one sentence, run in order.
+  case graph([ActionGraph.Step])
   /// A command without its content: ask for it ("Neyi not alayım?").
   case ask(Awaiting)
   /// LEVEL 2: the kind of request is certain; the details are left to the
@@ -207,6 +219,12 @@ enum VoiceIntent: Equatable {
       case .remove: "shoppingRemove"
       }
     case .readCode: "readCode"
+    case .capabilities: "capabilities"
+    case .search: "search"
+    case .vehicleQuestion(let field): "vehicleQuestion(\(field.rawValue))"
+    case .moveTask: "moveTask"
+    case .correctPending: "correctPending"
+    case .graph(let steps): "graph(\(steps.count))"
     case .parking(let command):
       switch command {
       case .save: "parkingSave"
@@ -242,6 +260,10 @@ struct VoiceBridgeContext {
   var isRecording = false
   /// A timer is running ("ne kadar kaldı?" asks about it).
   var timerRunning = false
+  /// A Dealer Mode vehicle is active ("kaç kilometre?" asks about it).
+  var activeVehicle = false
+  /// An event or reminder was saved moments ago ("hayır, cumartesi" fixes it).
+  var recentTimedAction = false
   /// Addressed-only mode: act only when the user says the assistant's name.
   var addressedOnly = false
 
@@ -282,7 +304,18 @@ struct VoiceBridgeDecision: Equatable {
 /// Only the user's own words are read here. Text seen by the camera, OCR or
 /// web results never reaches this parser, so it can never trigger an action.
 enum VoiceActionIntentBridge {
+  /// One command, or several in one sentence ("süt ekle ve 10 dakika timer
+  /// kur") when every part is a command on its own.
   static func decide(_ text: String, context: VoiceBridgeContext, now: Date = Date()) -> VoiceBridgeDecision? {
+    let single = decideSingle(text, context: context, now: now)
+    if let single, single.intent.handlesCompoundItself { return single }
+    if context.pendingPlan == nil, context.awaiting == nil, let steps = ActionGraph.plan(text, context: context, now: now) {
+      return VoiceBridgeDecision(.graph(steps), "several commands in one sentence")
+    }
+    return single
+  }
+
+  static func decideSingle(_ text: String, context: VoiceBridgeContext, now: Date = Date()) -> VoiceBridgeDecision? {
     guard var utterance = Utterance(text) else { return nil }
     var addressed = utterance.stripAddress(assistantName: context.assistantName)
     // The speech recogniser spells the name its own way ("Oto lum",
@@ -298,6 +331,9 @@ enum VoiceActionIntentBridge {
     // 2. The answer to an action waiting for confirmation (it answers the
     // assistant's own question, so the name is not needed).
     if let plan = context.pendingPlan, let decision = confirmation(utterance, plan: plan, now: now) {
+      return decision
+    }
+    if context.pendingPlan == nil, context.recentTimedAction, let decision = correction(utterance, now: now) {
       return decision
     }
     if context.tasksRunning, isCancel(utterance) {
@@ -325,11 +361,13 @@ enum VoiceActionIntentBridge {
     // yaz" a note.
     let parsers: [(Utterance) -> VoiceBridgeDecision?] = [
       { profile($0) },
+      { capabilities($0) },
       { translation($0, context) },
       { messages($0, context) },
       { notes($0, context) },
       { noteQueries($0) },
       { reminders($0, context, now) },
+      { moveTask($0, now) },
       { tasks($0, context, now) },
       { dayPlan($0) },
       { calendar($0, now) },
@@ -340,6 +378,7 @@ enum VoiceActionIntentBridge {
       { directions($0, context) },
       { clipboard($0, context) },
       { memory($0, context) },
+      { globalSearch($0) },
     ]
     for parser in parsers {
       if let decision = parser(utterance) { return decision }
@@ -439,8 +478,9 @@ enum VoiceActionIntentBridge {
         if spokenHour == otherHour { return VoiceBridgeDecision(.choosePendingTime(alternative), "spoken time choice") }
       }
     }
-    // A plain no. "Hayır, cuma" corrects the request instead: the voice
-    // model plans it again.
+    // "Hayır, cuma", "cumartesi olsun": the waiting action gets that day/time.
+    if let decision = correction(u, now: now) { return decision }
+    // A plain no.
     if let first = u.keys.first, noWords.contains(first) || u.starts(with: ["gerek", "yok"]) || u.starts(with: ["never", "mind"]),
        u.count <= 3, TimePhraseParser.parse(u.text, now: now) == nil {
       return VoiceBridgeDecision(.confirmPending(false), "no to the pending action")
@@ -457,6 +497,15 @@ enum VoiceActionIntentBridge {
       return VoiceBridgeDecision(.confirmPending(true), "yes to the pending action")
     }
     return nil
+  }
+
+  /// "Hayır, cumartesi", "cumartesi olsun", "no, Saturday", "make it 4".
+  static func correction(_ u: Utterance, now: Date) -> VoiceBridgeDecision? {
+    guard u.count <= 6, let spoken = TimePhraseParser.parse(u.text, now: now) else { return nil }
+    let startsWithNo = u.keys.first.map { noWords.contains($0) } ?? false
+    guard startsWithNo || u.ends(with: ["olsun"]) || u.ends(with: ["olsun", "o", "zaman"]) || u.starts(with: ["make", "it"])
+      || u.starts(with: ["actually"]) else { return nil }
+    return VoiceBridgeDecision(.correctPending(spoken), "correction of the last timed request")
   }
 
   private static func isCancel(_ u: Utterance) -> Bool {
@@ -664,7 +713,7 @@ enum VoiceActionIntentBridge {
     guard u.count <= 10 else { return nil }
     let noteWords: Set<String> = [
       "notlarim", "notlarimi", "notlari", "notlar", "notlarimda", "notlarda", "notu", "notunu", "notumu", "notlarini",
-      "notes", "note",
+      "notum", "notes", "note",
     ]
     guard let index = u.keys.firstIndex(where: noteWords.contains) else { return nil }
     // Delete: "bu notu sil", "son notu sil", "Mercedes notunu sil", "delete this note".
@@ -685,14 +734,16 @@ enum VoiceActionIntentBridge {
     let lists: [[String]] = [
       ["notlarim", "neler"], ["notlarim", "ne"], ["notlarimi", "oku"], ["notlarimi", "goster"], ["notlarimi", "soyle"],
       ["son", "notlarim"], ["notlarimda", "ne", "var"], ["notlarda", "ne", "var"], ["what", "are", "my", "notes"],
-      ["read", "my", "notes"], ["show", "my", "notes"], ["my", "notes"],
+      ["read", "my", "notes"], ["show", "my", "notes"], ["my", "notes"], ["son", "notumu", "goster"],
+      ["son", "notumu", "oku"], ["son", "notum", "ne"], ["son", "notu", "oku"], ["show", "my", "last", "note"],
+      ["read", "my", "last", "note"],
     ]
     if lists.contains(where: { u.range(of: $0) != nil }) {
       return VoiceBridgeDecision(.listNotes, "note list question")
     }
     // "Mercedes için aldığım notları söyle", "Mercedes ile ilgili notlar",
     // "notes about the Mercedes".
-    let asks: Set<String> = ["soyle", "oku", "neler", "ne", "goster", "nedir", "var", "mi"]
+    let asks: Set<String> = ["soyle", "oku", "neler", "ne", "goster", "nedir", "var", "mi", "bul", "bulur", "musun"]
     let tailWords = u.dropping(0..<(index + 1))
     guard tailWords.isOnly(asks) else { return nil }
     var query = u.dropping(index..<u.count)
@@ -714,7 +765,7 @@ enum VoiceActionIntentBridge {
     // "test hatırlatıcısı oluştur", "bir hatırlatması kur"
     ["hatirlaticisi", "olustur"], ["hatirlaticisi", "kur"], ["hatirlaticisi", "ekle"], ["hatirlatmasi", "olustur"],
     ["hatirlatmasi", "kur"], ["animsaticisi", "olustur"], ["animsaticisi", "ekle"],
-    ["hatirlatir", "misin"], ["hatirlatabilir", "misin"],
+    ["hatirlatir", "misin"], ["hatirlatabilir", "misin"], ["uyari", "koy"], ["uyari", "kur"],
     ["hatirlatsana"], ["hatirlatin"], ["hatirlat"],
     ["set", "a", "reminder"], ["create", "a", "reminder"], ["add", "a", "reminder"], ["make", "a", "reminder"],
     ["remind", "me"],
@@ -758,6 +809,8 @@ enum VoiceActionIntentBridge {
       } else if let previous = context.recentSavedText ?? context.previousUserText, previous.count >= 3 {
         title = shortTitle(previous)
       }
+      // "Yarın 10'a uyarı koy": an alert at that time, titled as such.
+      if title == nil, time != nil, u.containsAny(["uyari"]) { title = L.t("Alert", "Uyarı") }
       guard let title else {
         // "Bir hatırlatıcı oluştur" alone: ask what to remind.
         if time == nil, u.count <= 4 {
@@ -942,6 +995,12 @@ enum VoiceActionIntentBridge {
     ]
     if u.count <= 9, lists.contains(where: { u.range(of: $0) != nil }) {
       return VoiceBridgeDecision(.listTasks, "task list question")
+    }
+    // "Bunu tamamla": the task just mentioned (resolved by the runner).
+    let thisTask: [[String]] = [["bunu", "tamamla"], ["onu", "tamamla"], ["bunu", "tamamladim"], ["mark", "it", "as", "done"],
+                                ["mark", "it", "done"], ["mark", "that", "as", "done"]]
+    if u.count <= 5, thisTask.contains(where: { u.range(of: $0) != nil }) {
+      return VoiceBridgeDecision(.completeTask(""), "complete the task just mentioned")
     }
     let completes: [[String]] = [["gorevini", "tamamla"], ["tamamlandi", "olarak", "isaretle"], ["tamamlandi", "isaretle"]]
     for ending in completes where u.ends(with: ending) {

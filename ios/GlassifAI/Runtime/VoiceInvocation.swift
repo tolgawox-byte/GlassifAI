@@ -135,10 +135,15 @@ struct CreateAutoLoomNoteIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    guard let note = MemoryStore.shared.addNote(title: noteTitle, content: content, source: "shortcut") else {
-      return .result(dialog: "The note could not be saved.")
+    // A given title is kept; otherwise the same executor as "not al: …".
+    if let noteTitle, !noteTitle.isEmpty {
+      guard let note = MemoryStore.shared.addNote(title: noteTitle, content: content, source: "shortcut") else {
+        return .result(dialog: "The note could not be saved.")
+      }
+      return .result(dialog: "Saved \"\(note.title)\" in AutoLoom.")
     }
-    return .result(dialog: "Saved \"\(note.title)\" in AutoLoom.")
+    let outcome = await ActionCatalog.run("note.create", parameters: ["text": content], transcript: content)
+    return .result(dialog: "\(outcome.said ?? outcome.reply)")
   }
 }
 
@@ -218,6 +223,11 @@ struct AutoLoomShortcuts: AppShortcutsProvider {
       phrases: ["\(.applicationName) today's briefing", "What's my day in \(.applicationName)"],
       shortTitle: "Today's Briefing",
       systemImageName: "sun.max")
+    AppShortcut(
+      intent: TakeRayBanPhotoIntent(),
+      phrases: ["Take a Ray-Ban photo with \(.applicationName)", "\(.applicationName) take a photo"],
+      shortTitle: "Ray-Ban Photo",
+      systemImageName: "camera")
     AppShortcut(
       intent: AddToShoppingListIntent(),
       phrases: ["Add to my \(.applicationName) shopping list", "\(.applicationName) shopping list"],

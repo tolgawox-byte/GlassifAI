@@ -38,7 +38,9 @@ struct GlassifAIApp: App {
       NSLog("[GlassifAI] Wearables SDK unavailable: \(error)")
     }
     self.wearables = available
-    if !AppRuntime.isUnitTestHost {
+    if ScreenshotMode.isActive {
+      MainActor.assumeIsolated { ScreenshotDemo.seed() }
+    } else if !AppRuntime.isUnitTestHost {
       // Registration, devices and the link are observed from launch, before
       // any screen, so a Meta AI callback that launches the app is handled.
       let configured = available
@@ -55,6 +57,8 @@ struct GlassifAIApp: App {
         // (no onboarding animation, no sign-in restore) so tests run on a
         // quiet simulator.
         Color.black
+      } else if ScreenshotMode.isActive {
+        ScreenshotRootView()
       } else {
         VisionRootView(wearables: wearables)
           .preferredColorScheme(.dark)

@@ -650,6 +650,49 @@ final class DeviceActionExecutor {
     }
   }
 
+  /// The event or reminder saved last, so "hayır, cumartesi" can move it.
+  struct CreatedItem: Equatable {
+    let kind: DeviceActionKind
+    let identifier: String
+    let title: String
+    let date: Date?
+    let hasTime: Bool
+    let at: Date
+  }
+
+  private(set) var lastCreated: CreatedItem?
+
+  /// Moves the item just saved; the original stays if this fails.
+  func reschedule(_ item: CreatedItem, to date: Date, hasTime: Bool) async throws -> String {
+    switch item.kind {
+    case .createEvent:
+      try await ensureEventAccess(fullAccess: true)
+      guard let event = store.calendarItem(withIdentifier: item.identifier) as? EKEvent else {
+        throw ExecutionError.failed("The event just saved could not be found.")
+      }
+      let length = event.endDate.timeIntervalSince(event.startDate)
+      event.startDate = date
+      event.endDate = date.addingTimeInterval(length > 0 ? length : 3_600)
+      try store.save(event, span: .thisEvent, commit: true)
+    case .createReminder:
+      try await ensureReminderAccess()
+      guard let reminder = store.calendarItem(withIdentifier: item.identifier) as? EKReminder else {
+        throw ExecutionError.failed("The reminder just saved could not be found.")
+      }
+      let fields: Set<Calendar.Component> = hasTime ? [.year, .month, .day, .hour, .minute] : [.year, .month, .day]
+      reminder.dueDateComponents = Calendar.current.dateComponents(fields, from: date)
+      for alarm in reminder.alarms ?? [] where alarm.absoluteDate != nil { reminder.removeAlarm(alarm) }
+      if hasTime { reminder.addAlarm(EKAlarm(absoluteDate: date)) }
+      try store.save(reminder, commit: true)
+    default:
+      throw ExecutionError.failed("Only an event or a reminder can be moved.")
+    }
+    lastCreated = CreatedItem(
+      kind: item.kind, identifier: item.identifier, title: item.title, date: date, hasTime: hasTime, at: Date())
+    return "\(item.kind == .createEvent ? "Event" : "Reminder") \"\(item.title)\" moved to "
+      + TimePhraseParser.describe(date, hasTime: hasTime, turkish: false) + "."
+  }
+
   private func createReminder(_ plan: DeviceActionPlan) async throws -> String {
     try await ensureReminderAccess()
     guard let calendar = store.defaultCalendarForNewReminders() else {
@@ -672,6 +715,9 @@ final class DeviceActionExecutor {
     guard !reminder.calendarItemIdentifier.isEmpty else {
       throw ExecutionError.failed("iOS did not confirm the reminder.")
     }
+    lastCreated = CreatedItem(
+      kind: .createReminder, identifier: reminder.calendarItemIdentifier, title: plan.title ?? "", date: plan.date,
+      hasTime: plan.hasTime, at: Date())
     let when = plan.whenText.map { " for \($0)" } ?? plan.trigger.map { " (\($0.englishLabel); Apple Reminders rings there)" } ?? ""
     return "Reminder saved in \(calendar.title)\(when): \(plan.title ?? "")."
   }
@@ -794,6 +840,9 @@ final class DeviceActionExecutor {
     guard event.eventIdentifier != nil else {
       throw ExecutionError.failed("iOS did not confirm the event.")
     }
+    lastCreated = CreatedItem(
+      kind: .createEvent, identifier: event.calendarItemIdentifier, title: plan.title ?? "", date: start, hasTime: true,
+      at: Date())
     return "Event saved in \(calendar.title): \(plan.title ?? "") on \(start.formatted(date: .abbreviated, time: .shortened))."
   }
 

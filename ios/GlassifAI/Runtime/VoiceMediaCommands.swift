@@ -172,6 +172,7 @@ extension VoiceActionIntentBridge {
     ["video", "ceker", "misin"], ["video", "cekebilir", "misin"], ["videosunu", "cek"], ["videoya", "basla"],
     ["video", "baslat"], ["video", "cek"], ["video", "kaydet"], ["kayda", "basla"], ["kayda", "gec"],
     ["kaydi", "baslat"], ["kayit", "baslat"], ["cekime", "basla"], ["cekimi", "baslat"], ["kaydetmeye", "basla"],
+    ["kayda", "gir"],
     ["cekmeye", "basla"],
     ["record", "a", "video"], ["record", "video"], ["start", "recording"], ["start", "a", "video"],
     ["start", "the", "video"], ["start", "video"], ["begin", "recording"], ["start", "filming"], ["record", "this"],

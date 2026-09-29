@@ -16,7 +16,8 @@ struct AppShellView: View {
   @ObservedObject var camera: GlassifAICamera
   @ObservedObject var connection: WearableConnectionCoordinator
 
-  @State private var tab: AppTab = .assistant
+  @State private var tab: AppTab = ScreenshotMode.initialTab ?? .assistant
+  @ObservedObject private var navigator = AppNavigator.shared
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -48,6 +49,16 @@ struct AppShellView: View {
     .tint(AutoLoomTheme.electricBlue)
     .preferredColorScheme(.dark)
     .sensoryFeedback(.selection, trigger: tab)
+    .sheet(item: $navigator.sheet) { sheet in
+      NavigationStack {
+        switch sheet {
+        case .commandLibrary(let topic): CommandLibraryView(topic: topic)
+        case .search(let text): GlobalSearchView(initialText: text)
+        case .commandLab: CommandLabView()
+        }
+      }
+      .presentationDetents([.medium, .large])
+    }
   }
 
   private var assistantTab: some View {

@@ -221,7 +221,7 @@ struct ShoppingItem: Codable, Equatable, Identifiable {
 /// The shopping list, on this iPhone only (JSON in Application Support).
 @MainActor
 final class ShoppingListStore: ObservableObject {
-  static let shared = ShoppingListStore()
+  static let shared = ShoppingListStore(directory: ScreenshotMode.storeDirectory)
 
   @Published private(set) var items: [ShoppingItem] = []
   private let fileURL: URL

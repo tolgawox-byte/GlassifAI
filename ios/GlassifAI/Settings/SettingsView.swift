@@ -87,6 +87,15 @@ struct SettingsView: View {
   var body: some View {
     NavigationStack {
       List {
+        Section {
+          NavigationLink { CommandLibraryView() } label: {
+            row(L.t("Command Library", "Komut kütüphanesi"), "text.bubble", value: "\(ActionCatalog.all.count)")
+          }
+          NavigationLink { GlobalSearchView() } label: {
+            row(L.t("Search AutoLoom", "AutoLoom'da ara"), "magnifyingglass", value: nil)
+          }
+        }
+
         Section(L.t("Assistant", "Asistan")) {
           NavigationLink { AssistantSettingsView() } label: {
             row(L.t("Name & conversation", "İsim ve konuşma"), "person.wave.2", value: AssistantIdentity.name)
@@ -172,6 +181,12 @@ struct SettingsView: View {
         Section(L.t("Developer", "Geliştirici")) {
           NavigationLink { DiagnosticsView(voice: voice, glassesStream: glassesStream) } label: {
             row(L.t("Diagnostics", "Tanılama"), "stethoscope", value: nil)
+          }
+          NavigationLink { CommandLabView() } label: {
+            row("Command Lab", "waveform.and.magnifyingglass", value: nil)
+          }
+          NavigationLink { RayBanCapabilitiesView() } label: {
+            row(L.t("Ray-Ban capabilities", "Ray-Ban yetenekleri"), "eyeglasses", value: "DAT \(RayBanCapabilityMatrix.linkedSDKVersion)")
           }
           NavigationLink { TaskTraceView(voice: voice) } label: {
             row(L.t("Action & task trace", "İşlem ve görev izi"), "list.bullet.rectangle", value: nil)

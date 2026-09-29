@@ -586,7 +586,7 @@ struct VehicleSession: Codable, Equatable, Identifiable {
 /// captures made while it is active link to it.
 @MainActor
 final class DealerStore: ObservableObject {
-  static let shared = DealerStore()
+  static let shared = DealerStore(directory: ScreenshotMode.storeDirectory)
 
   @Published private(set) var vehicles: [VehicleSession] = []
   @Published private(set) var activeID: UUID?

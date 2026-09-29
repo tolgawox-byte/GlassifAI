@@ -172,6 +172,40 @@ extension AssistantOrchestrator {
         spoken: "The active vehicle in Dealer Mode (known facts only):\n\(facts)\nMissing photos: \(session.remainingPhotos.count). Summarise in two short sentences.",
         reply: facts)
 
+    case .saveVehicle:
+      guard let session = store.active else {
+        return dealerOutcome(tr: "Açık bir araç yok; önce “yeni araç” de.", en: "No open vehicle; say “new vehicle” first.")
+      }
+      trace.update(traceID) { $0.persistence = "vehicle stored on this iPhone (saved automatically)" }
+      return dealerOutcome(
+        tr: "\(session.title) kayıtlı.", en: "\(session.title) is saved.",
+        feedback: ActionFeedback(kind: .task, title: L.t("Vehicle saved", "Araç kayıtlı"), detail: session.title))
+
+    case .recallCheck:
+      guard let session = store.active, session.make != nil || session.vin != nil else {
+        return dealerOutcome(
+          tr: "Önce aracı tanımlayalım: “VIN oku” de ya da marka ve modeli söyle.",
+          en: "First identify the vehicle: say “read the VIN” or tell me the make and model.", failed: "vehicle unknown")
+      }
+      let query = """
+        Check vehicle safety recalls that apply in CANADA for this vehicle. Use Transport Canada's Motor Vehicle Safety \
+        Recalls Database first, then the manufacturer's Canadian recall lookup, then NHTSA for comparison. For each recall give \
+        the recall number, date, affected system, the source, and whether it applies to this VIN or only to the \
+        year/make/model. If only a year/make/model search was possible, say clearly that a VIN-specific check with the \
+        manufacturer or a dealer system is still needed. Never say there are no recalls: say what was searched and what was \
+        found, with the date of the search.
+        \(session.factSheet(turkish: false))
+        """
+      let result = await runBridgeTask(.webSearch, query: query)
+      if result.failed == nil, let display = result.display {
+        store.update(session.id) { $0.research.append(ResearchEntry(kind: .recall, summary: String(display.prefix(1_500)))) }
+        trace.update(traceID) { $0.persistence = "recall research saved on the vehicle" }
+      }
+      return IntentOutcome(
+        spoken: result.speakable
+          + "\nIf the search was by year, make and model only, say that a VIN-specific check is still needed. Never say there are no recalls.",
+        reply: result.display ?? result.speakable, failed: result.failed)
+
     case .briefing:
       let today = store.today()
       let open = store.openVehicles

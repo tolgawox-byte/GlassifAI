@@ -131,7 +131,7 @@ struct CaptureRecord: Codable, Identifiable, Equatable {
 /// is kept in AutoLoom. Nothing is uploaded anywhere.
 @MainActor
 final class CaptureLibrary: ObservableObject {
-  static let shared = CaptureLibrary()
+  static let shared = CaptureLibrary(directory: ScreenshotMode.storeDirectory)
 
   enum Filter: String, CaseIterable, Identifiable {
     case today

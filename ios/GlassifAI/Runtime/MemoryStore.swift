@@ -503,7 +503,7 @@ struct ConversationSummary: Equatable {
 /// Stored on this iPhone with SwiftData; never synced.
 @MainActor
 final class MemoryStore: ObservableObject {
-  static let shared = MemoryStore()
+  static let shared = MemoryStore(inMemory: ScreenshotMode.isActive)
 
   static let enabledKey = "autoloom.memory.v2.enabled"
   static let visualEnabledKey = "autoloom.memory.visual.enabled"

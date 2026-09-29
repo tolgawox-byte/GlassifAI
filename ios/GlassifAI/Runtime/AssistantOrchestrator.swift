@@ -981,6 +981,23 @@ final class AssistantOrchestrator: ObservableObject {
     }
   }
 
+  /// "Hayır, cumartesi": the waiting action gets the corrected day or time
+  /// (a new day keeps the time of day) and is staged again; nothing else
+  /// about it changes. Nil when nothing is waiting.
+  func correctPendingAction(to time: ParsedTime) async -> ActionStageResult? {
+    guard let pending = pendingAction, !pending.isExpired else { return nil }
+    var plan = pending.plan
+    let merged = CorrectionMerge.merge(original: plan.date, originalHasTime: plan.hasTime, correction: time)
+    if let start = plan.date, let end = plan.endDate {
+      plan.endDate = merged.date.addingTimeInterval(end.timeIntervalSince(start))
+    }
+    plan.date = merged.date
+    plan.hasTime = merged.hasTime
+    plan.alternativeDate = nil
+    pendingAction = nil
+    return await stage(plan)
+  }
+
   /// A yes by voice or a tap on Save. Actions that leave the app are never
   /// confirmed by voice.
   func confirmPendingAction(byVoice: Bool) async -> String {

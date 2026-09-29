@@ -15,10 +15,10 @@ struct CreateAutoLoomTaskIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    guard let task = MemoryStore.shared.addTask(title: taskTitle, dueAt: due, dueHasTime: due != nil, source: "shortcut") else {
-      return .result(dialog: "The task could not be saved.")
-    }
-    return .result(dialog: "Added \"\(task.title)\" to AutoLoom tasks.")
+    var parameters = ["title": taskTitle]
+    if let due { parameters["dueISO"] = ISO8601DateFormatter().string(from: due) }
+    let outcome = await ActionCatalog.run("task.create", parameters: parameters, transcript: taskTitle)
+    return .result(dialog: "\(outcome.said ?? outcome.reply)")
   }
 }
 
@@ -33,13 +33,8 @@ struct RememberInAutoLoomIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    guard MemoryStore.shared.isEnabled else {
-      return .result(dialog: "Memory is turned off in AutoLoom.")
-    }
-    guard let record = MemoryStore.shared.remember(text, source: "shortcut") else {
-      return .result(dialog: "It could not be saved.")
-    }
-    return .result(dialog: "Remembered: \(record.text)")
+    let outcome = await ActionCatalog.run("memory.save", parameters: ["text": text], transcript: text)
+    return .result(dialog: "\(outcome.said ?? outcome.reply)")
   }
 }
 
@@ -51,8 +46,8 @@ struct StartDealerSessionIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    DealerStore.shared.start()
-    return .result(dialog: "New vehicle started. Say “VIN oku” to read the VIN.")
+    let outcome = await ActionCatalog.run("dealer.start")
+    return .result(dialog: "\(outcome.said ?? outcome.reply)")
   }
 }
 
@@ -64,8 +59,9 @@ struct TodaysBriefingIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    let outcome = await AssistantOrchestrator.shared.runVoiceIntent(
-      VoiceBridgeDecision(.dayPlan(.today), "shortcut"), transcript: "Today's briefing")
+    // The briefing (calendar, reminders, tasks, weather when web search is
+    // on), the same as saying "günün özeti".
+    let outcome = await ActionCatalog.run("routine.briefing", transcript: "Today's briefing")
     return .result(dialog: "\(String(outcome.reply.prefix(600)))")
   }
 }
@@ -81,8 +77,7 @@ struct AddToShoppingListIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    let added = ShoppingListStore.shared.add(ShoppingListStore.split(items))
-    guard !added.isEmpty else { return .result(dialog: "Those are already on the list.") }
-    return .result(dialog: "Added \(added.map(\.text).joined(separator: ", ")).")
+    let outcome = await ActionCatalog.run("shopping.add", parameters: ["items": items], transcript: items)
+    return .result(dialog: "\(outcome.said ?? outcome.reply)")
   }
 }

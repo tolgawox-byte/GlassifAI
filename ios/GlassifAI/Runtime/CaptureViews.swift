@@ -61,10 +61,8 @@ struct RayBanCaptureControls: View {
   var body: some View {
     VStack(spacing: 12) {
       Button {
-        Task {
-          let outcome = await media.takePhoto(label: nil, caption: nil, noteID: nil)
-          report(photo: outcome)
-        }
+        // The same executor, trace and feedback as saying "fotoğraf çek".
+        Task { _ = await ActionCatalog.run("camera.photo") }
       } label: {
         Image(systemName: "camera.fill")
           .font(.system(size: 17, weight: .semibold))
@@ -78,20 +76,10 @@ struct RayBanCaptureControls: View {
       .accessibilityLabel(L.t("Take a Ray-Ban photo", "Ray-Ban ile fotoğraf çek"))
 
       Button {
+        // The same executor as "video kaydını başlat" / "kaydı durdur".
         Task {
-          if media.isRecording {
-            let outcome = await media.stopRecording(reason: .user)
-            let speech = RayBanMediaCoordinator.stopSpeech(outcome)
-            switch outcome {
-            case .saved(let records): orchestrator.postFeedback(.videoSaved(inPhotos: true, parts: records.count))
-            case .kept(let records, _): orchestrator.postFeedback(.videoSaved(inPhotos: false, parts: records.count))
-            case .failed: orchestrator.postFeedback(.failed(speech.localized))
-            case .empty, .notRecording: orchestrator.postNotice(speech.localized)
-            }
-          } else {
-            let outcome = media.startRecording(label: nil, caption: nil, noteID: nil)
-            if outcome != .started { orchestrator.postNotice(RayBanMediaCoordinator.startSpeech(outcome).localized) }
-          }
+          let outcome = await ActionCatalog.run(media.isRecording ? "camera.recordStop" : "camera.recordStart")
+          if outcome.failed != nil, outcome.feedback == nil { orchestrator.postNotice(outcome.said ?? outcome.reply) }
         }
       } label: {
         ZStack {
@@ -119,14 +107,6 @@ struct RayBanCaptureControls: View {
     }
   }
 
-  private func report(photo outcome: RayBanMediaCoordinator.PhotoOutcome) {
-    switch outcome {
-    case .saved: orchestrator.postFeedback(.photoSaved(inPhotos: true))
-    case .kept: orchestrator.postFeedback(.photoSaved(inPhotos: false))
-    case .unavailable, .failed:
-      orchestrator.postFeedback(.failed(RayBanMediaCoordinator.photoSpeech(outcome).localized))
-    }
-  }
 }
 
 /// Explore → Captures: Ray-Ban photos and videos, today, for the dealer

@@ -35,7 +35,7 @@ enum ParkingFix: Equatable {
 /// The location is read once, when the user asks; never tracked.
 @MainActor
 final class ParkingStore: ObservableObject {
-  static let shared = ParkingStore()
+  static let shared = ParkingStore(directory: ScreenshotMode.storeDirectory)
 
   @Published private(set) var spot: ParkingSpot?
   private let fileURL: URL

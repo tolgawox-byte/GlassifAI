@@ -154,6 +154,12 @@ extension VoiceIntent {
     case .undoLast: "UNDO"
     case .shopping: "SHOPPING_LIST"
     case .parking: "PARKING"
+    case .capabilities: "CAPABILITIES"
+    case .search: "SEARCH"
+    case .vehicleQuestion: "VEHICLE_QUESTION"
+    case .moveTask: "MOVE_TASK"
+    case .correctPending: "CORRECT_PENDING"
+    case .graph: "ACTION_GRAPH"
     case .readCode: "READ_CODE"
     case .ask: "ASK"
     default: traceName.uppercased()
@@ -254,6 +260,8 @@ extension AssistantOrchestrator {
     bridge.addressedOnly = AssistantPreferences.respondsOnlyWhenAddressed
     bridge.isRecording = RayBanMediaCoordinator.shared.isRecording
     bridge.timerRunning = TimerCenter.shared.isRunning
+    bridge.activeVehicle = DealerStore.shared.active != nil
+    bridge.recentTimedAction = DeviceActionExecutor.shared.lastCreated.map { Date().timeIntervalSince($0.at) < 180 } ?? false
     return bridge
   }
 
@@ -481,6 +489,7 @@ extension AssistantOrchestrator {
         reply: lines)
 
     case .deleteNote(let query):
+      guard ToolRegistry.allows(.deleteNote) else { return toolOff(.deleteNote) }
       trace.update(traceID) { $0.executor = "AutoLoom Notes (delete needs a yes)" }
       let target: NoteRecord?
       if let query {
@@ -603,6 +612,7 @@ extension AssistantOrchestrator {
 
     case .forgetMemory(let query):
       guard store.isEnabled else { return memoryOff() }
+      guard ToolRegistry.allows(.forgetMemory) else { return toolOff(.forgetMemory) }
       trace.update(traceID) { $0.executor = "memory (needs a yes)" }
       let hits = store.search(query, limit: 3, includeNotes: false, includeTasks: false)
       guard let best = hits.first, case .memory(let record) = best.item else {
@@ -693,7 +703,13 @@ extension AssistantOrchestrator {
       trace.update(traceID) { $0.executor = "AutoLoom Tasks" }
       let words = MemorySearch.tokens(query)
       let open = store.tasks.filter { !$0.completed }
-      let scored = open.map { ($0, MemorySearch.lexicalScore(query: words, document: MemorySearch.tokens($0.title))) }
+      // "Bunu tamamla": the task just talked about.
+      var scored: [(TaskItem, Double)] = []
+      if words.isEmpty {
+        if let recent = recentTask(in: open) { scored = [(recent, 1.0)] }
+      } else {
+        scored = open.map { ($0, MemorySearch.lexicalScore(query: words, document: MemorySearch.tokens($0.title))) }
+      }
       guard let best = scored.max(by: { $0.1 < $1.1 }), best.1 >= 0.5 else {
         return IntentOutcome(
           spoken: "No open AutoLoom task matches \"\(query)\". Tell the user; Apple Reminders can be completed in the Tasks tab.",
@@ -806,6 +822,24 @@ extension AssistantOrchestrator {
 
     case .readCode:
       return await runCodeReading(traceID: traceID)
+
+    case .capabilities(let topic):
+      return runCapabilities(topic: topic, traceID: traceID)
+
+    case .search(let text):
+      return runGlobalSearch(text, traceID: traceID)
+
+    case .vehicleQuestion(let field):
+      return await answerVehicleQuestion(field, transcript: transcript, traceID: traceID)
+
+    case .moveTask(let title, let time):
+      return moveTask(title: title, time: time, traceID: traceID)
+
+    case .correctPending(let time):
+      return await correctLast(time, traceID: traceID)
+
+    case .graph(let steps):
+      return await runGraph(steps, traceID: traceID)
 
     case .ask(let awaiting):
       return askQuestion(awaiting)
@@ -1534,6 +1568,7 @@ extension AssistantOrchestrator {
     }
     var plan = DeviceActionPlan(kind: .openMaps)
     plan.location = place
+    plan.url = url
     _ = await stage(plan)
     ActionTraceLog.shared.update(traceID) { $0.result = "waiting for a tap on the phone" }
     return IntentOutcome(
@@ -1555,6 +1590,7 @@ extension AssistantOrchestrator {
     }
     var plan = DeviceActionPlan(kind: .openMaps)
     plan.location = destination
+    plan.url = url
     _ = await stage(plan)
     ActionTraceLog.shared.update(traceID) { $0.result = "waiting for a tap on the phone" }
     return IntentOutcome(

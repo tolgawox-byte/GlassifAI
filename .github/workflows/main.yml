@@ -15,6 +15,10 @@ concurrency:
 jobs:
   build:
     runs-on: xcode-27
+    # contents: write only to publish UI screenshots to the ci-screenshots
+    # branch (never to the code branches).
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -112,6 +116,35 @@ jobs:
         run: |
           chmod +x ./scripts/ci-unit-tests.sh
           ./scripts/ci-unit-tests.sh
+
+      # Screenshots of the main screens (demo data, throwaway stores), pushed
+      # to the ci-screenshots branch as run-<id>/<screen>.png for UI review
+      # from a machine without Xcode. A normal push, never a force push; the
+      # branch does not trigger this workflow.
+      - name: UI screenshots (Simulator)
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          chmod +x ./scripts/ci-screenshots.sh
+          ./scripts/ci-screenshots.sh
+          ls screenshots/*.png >/dev/null 2>&1 || exit 0
+          RUN_DIR="run-${GITHUB_RUN_ID}-${GITHUB_SHA::7}"
+          SHOTS="$RUNNER_TEMP/shots"
+          if git fetch -q origin ci-screenshots 2>/dev/null; then
+            git worktree add -q "$SHOTS" FETCH_HEAD
+            git -C "$SHOTS" switch -q -c ci-screenshots
+          else
+            git worktree add -q --detach "$SHOTS"
+            git -C "$SHOTS" switch -q --orphan ci-screenshots
+          fi
+          mkdir -p "$SHOTS/$RUN_DIR"
+          cp screenshots/*.png "$SHOTS/$RUN_DIR/"
+          git -C "$SHOTS" add "$RUN_DIR"
+          git -C "$SHOTS" -c user.name="autoloom-ci" -c user.email="autoloom-ci@users.noreply.github.com" \
+            commit -q -m "Screenshots ${RUN_DIR} [skip ci]"
+          git -C "$SHOTS" push -q origin ci-screenshots
+          echo "::notice title=Screenshots published::branch ci-screenshots, folder ${RUN_DIR}"
 
       - name: Native bridge unit tests (host)
         run: |
