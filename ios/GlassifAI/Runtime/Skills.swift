@@ -428,7 +428,6 @@ extension AssistantOrchestrator {
     do {
       _ = try await client.initialize()
       let result = try await client.callTool(call.tool, arguments: arguments)
-      lastActionResult = result.text
       let origin = "the MCP skill \(server.name) (\(server.host))"
       if result.isError {
         return "The skill reported an error:\n" + UntrustedContent.wrap(String(result.text.prefix(1_500)), origin: origin)

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UserNotifications
 
 // MARK: Model
 
@@ -192,6 +193,7 @@ struct RoutinesView: View {
       } header: {
         Text(L.t("Built in", "Hazır"))
       }
+      ProactiveSection()
       Section {
         if store.routines.isEmpty {
           Text(L.t("Make your own: a name and a few steps, then say “<name> rutinini başlat”.",
@@ -285,6 +287,80 @@ struct RoutineEditor: View {
         }
         .disabled(routine.name.trimmingCharacters(in: .whitespaces).isEmpty || routine.steps.isEmpty)
       }
+    }
+  }
+}
+
+// MARK: Proactive (opt-in): the morning briefing notification
+
+/// Off by default. When on, one local notification a day at the chosen time
+/// says the briefing is ready — never the details (tasks, events, vehicles
+/// stay on the phone until the user asks: "günün özeti", "bayi özeti").
+enum MorningBriefingNotification {
+  static let enabledKey = "autoloom.proactive.morningBriefing"
+  static let minutesKey = "autoloom.proactive.morningMinutes"
+  static let identifier = "autoloom.morningBriefing"
+
+  /// Minutes after midnight (default 08:00).
+  static var minutes: Int {
+    get { UserDefaults.standard.object(forKey: minutesKey) as? Int ?? 8 * 60 }
+    set { UserDefaults.standard.set(newValue, forKey: minutesKey) }
+  }
+
+  /// True when the notification is scheduled.
+  @discardableResult
+  static func apply(enabled: Bool) async -> Bool {
+    let center = UNUserNotificationCenter.current()
+    center.removePendingNotificationRequests(withIdentifiers: [identifier])
+    guard enabled else { return false }
+    guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return false }
+    let content = UNMutableNotificationContent()
+    content.title = L.t("Good morning", "Günaydın")
+    content.body = L.t("Your briefing is ready. Say “daily briefing” or “dealer briefing”.",
+                       "Brifingin hazır. “Günün özeti” ya da “bayi özeti” de.")
+    content.sound = .default
+    var time = DateComponents()
+    time.hour = minutes / 60
+    time.minute = minutes % 60
+    let request = UNNotificationRequest(
+      identifier: identifier, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: time, repeats: true))
+    return (try? await center.add(request)) != nil
+  }
+}
+
+/// Explore → Routines → Proactive.
+struct ProactiveSection: View {
+  @AppStorage(MorningBriefingNotification.enabledKey) private var enabled = false
+  @State private var time = Calendar.current.date(
+    bySettingHour: MorningBriefingNotification.minutes / 60, minute: MorningBriefingNotification.minutes % 60, second: 0, of: Date())
+    ?? Date()
+  @State private var problem: String?
+
+  var body: some View {
+    Section {
+      Toggle(L.t("Morning briefing notification", "Sabah brifingi bildirimi"), isOn: $enabled)
+        .onChange(of: enabled) { _, on in reschedule(on) }
+      DatePicker(L.t("Time", "Saat"), selection: $time, displayedComponents: .hourAndMinute)
+        .disabled(!enabled)
+        .onChange(of: time) { _, value in
+          let parts = Calendar.current.dateComponents([.hour, .minute], from: value)
+          MorningBriefingNotification.minutes = (parts.hour ?? 8) * 60 + (parts.minute ?? 0)
+          reschedule(enabled)
+        }
+      if let problem { Text(problem).font(.caption).foregroundStyle(.orange) }
+    } header: {
+      Text(L.t("Proactive", "Proaktif"))
+    } footer: {
+      Text(L.t(
+        "Off by default. One notification a day that the briefing is ready — it never shows your tasks, events or vehicles.",
+        "Varsayılan olarak kapalı. Günde bir bildirim: brifing hazır. Görevlerini, etkinliklerini ya da araçlarını asla göstermez."))
+    }
+  }
+
+  private func reschedule(_ on: Bool) {
+    Task { @MainActor in
+      let scheduled = await MorningBriefingNotification.apply(enabled: on)
+      problem = on && !scheduled ? L.t("Notifications are off for AutoLoom in iOS Settings.", "iOS Ayarlar'da AutoLoom bildirimleri kapalı.") : nil
     }
   }
 }
