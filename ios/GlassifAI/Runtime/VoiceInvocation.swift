@@ -198,6 +198,31 @@ struct AutoLoomShortcuts: AppShortcutsProvider {
       ],
       shortTitle: "Live Vision",
       systemImageName: "eye")
+    AppShortcut(
+      intent: CreateAutoLoomTaskIntent(),
+      phrases: ["New \(.applicationName) task", "Add a task in \(.applicationName)"],
+      shortTitle: "New Task",
+      systemImageName: "checklist")
+    AppShortcut(
+      intent: RememberInAutoLoomIntent(),
+      phrases: ["Remember this in \(.applicationName)", "\(.applicationName) remember this"],
+      shortTitle: "Remember This",
+      systemImageName: "brain")
+    AppShortcut(
+      intent: StartDealerSessionIntent(),
+      phrases: ["Start a dealer session in \(.applicationName)", "New vehicle in \(.applicationName)"],
+      shortTitle: "Dealer Session",
+      systemImageName: "car")
+    AppShortcut(
+      intent: TodaysBriefingIntent(),
+      phrases: ["\(.applicationName) today's briefing", "What's my day in \(.applicationName)"],
+      shortTitle: "Today's Briefing",
+      systemImageName: "sun.max")
+    AppShortcut(
+      intent: AddToShoppingListIntent(),
+      phrases: ["Add to my \(.applicationName) shopping list", "\(.applicationName) shopping list"],
+      shortTitle: "Shopping List",
+      systemImageName: "cart")
   }
 }
 

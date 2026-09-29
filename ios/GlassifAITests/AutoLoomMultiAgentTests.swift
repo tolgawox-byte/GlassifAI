@@ -36,6 +36,15 @@ final class MockProvider: AIProvider, @unchecked Sendable {
   }
 }
 
+/// CI builds the test host unsigned (`CODE_SIGNING_ALLOWED=NO`), and an
+/// unsigned simulator app has no Keychain entitlement (errSecMissingEntitlement).
+/// The Keychain tests then skip with that reason; on a signed build they run.
+private func keychainAvailable() -> Bool {
+  let service = "com.autoloom.providers.probe.\(UUID().uuidString)"
+  defer { ProviderCredentialStore.delete(.claude, service: service) }
+  return ProviderCredentialStore.save("probe", for: .claude, service: service)
+}
+
 private func reply(_ text: String, model: String = "mock-model", sources: [ProviderSource] = []) -> ProviderResponse {
   ProviderResponse(text: text, model: model, sources: sources, latencyMs: 3)
 }
@@ -323,11 +332,14 @@ final class AutoLoomAgentTeamTests: XCTestCase {
     XCTAssertTrue(ResultFusion.fuse([low, high], subject: nil, disagreement: true, turkish: true).contains("farklı rakamlar"))
   }
 
-  func testConnectingKeepsTheKeyOnlyWhenItWorks() async {
+  func testConnectingKeepsTheKeyOnlyWhenItWorks() async throws {
     let registry = registry([.claude: MockProvider(.claude) { _, _ in reply("ok") }])
     let refused = await registry.connect(.claude, key: "bad-key")
     XCTAssertEqual(refused, .failure(.invalidCredentials))
     XCTAssertFalse(registry.isConnected(.claude), "a refused key is not kept")
+    guard keychainAvailable() else {
+      throw XCTSkip("No Keychain in the unsigned simulator build; the key storage is covered on the phone.")
+    }
     let accepted = await registry.connect(.claude, key: "  sk-ant-test-1234  ")
     guard case .success = accepted else { return XCTFail("\(accepted)") }
     XCTAssertTrue(registry.isConnected(.claude))
@@ -523,7 +535,10 @@ final class AutoLoomProviderAdapterTests: XCTestCase {
     XCTAssertTrue(ProviderError.invalidCredentials.needsUser)
   }
 
-  func testKeysLiveInTheKeychainOnly() {
+  func testKeysLiveInTheKeychainOnly() throws {
+    guard keychainAvailable() else {
+      throw XCTSkip("No Keychain in the unsigned simulator build; the key storage is covered on the phone.")
+    }
     let service = "com.autoloom.providers.test.\(UUID().uuidString)"
     XCTAssertNil(ProviderCredentialStore.load(.perplexity, service: service))
     XCTAssertTrue(ProviderCredentialStore.save(" pplx-abc-7890 ", for: .perplexity, service: service))

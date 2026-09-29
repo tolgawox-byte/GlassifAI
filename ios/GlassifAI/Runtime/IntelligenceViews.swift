@@ -384,9 +384,19 @@ struct PersonalitySettingsView: View {
   @AppStorage(JarvisAddress.defaultsKey) private var addressRaw = JarvisAddress.sir.rawValue
   @AppStorage(JarvisAddress.customKey) private var customAddress = ""
   @AppStorage(GreetingStyle.defaultsKey) private var greetingRaw = GreetingStyle.normal.rawValue
+  @AppStorage(AssistantMode.defaultsKey) private var modeRaw = AssistantMode.automatic.rawValue
 
   var body: some View {
     Form {
+      Section {
+        Picker(L.t("Mode", "Mod"), selection: $modeRaw) {
+          ForEach(AssistantMode.allCases) { Text($0.label).tag($0.rawValue) }
+        }
+      } footer: {
+        Text(L.t(
+          "Automatic: Dealer while a vehicle is active, otherwise General. A mode only shapes how the assistant answers; it applies from the next conversation.",
+          "Otomatik: bir araç aktifken Bayi, değilse Genel. Mod yalnızca asistanın yanıt biçimini etkiler; bir sonraki konuşmadan itibaren geçerlidir."))
+      }
       Section {
         Toggle(L.t("Jarvis Style", "Jarvis tarzı"), isOn: Binding(
           get: { jarvisStyle },

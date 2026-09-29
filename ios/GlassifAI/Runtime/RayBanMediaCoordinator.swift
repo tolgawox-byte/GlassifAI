@@ -112,7 +112,10 @@ final class RayBanMediaCoordinator: ObservableObject {
   var isStreaming: @MainActor () -> Bool = { false }
   var takeStill: @MainActor (TimeInterval) async -> StillPhoto? = { _ in nil }
   /// The active dealer vehicle, if any (linked to new captures).
-  var activeVehicleSessionID: @MainActor () -> UUID? = { nil }
+  var activeVehicleSessionID: @MainActor () -> UUID? = { DealerStore.shared.active?.id }
+  /// Called with every capture saved (Dealer Mode links it to the vehicle
+  /// and ticks its photo checklist).
+  var captureSaved: @MainActor (CaptureRecord) -> Void = { record in DealerStore.shared.linkCapture(record) }
   /// Tells the user about something they did not just ask for (a recording
   /// that stopped itself); spoken in the conversation or shown as a notice.
   var announce: @MainActor (Speech) -> Void = { speech in
@@ -170,6 +173,7 @@ final class RayBanMediaCoordinator: ObservableObject {
         record.photoAssetID = try await PhotoLibrarySaver.savePhoto(jpeg)
         record.storage = .photos
         library.add(record, thumbnail: thumbnail)
+        captureSaved(record)
         lastEvent = "photo saved to Photos"
         return .saved(record)
       } catch {
@@ -193,6 +197,7 @@ final class RayBanMediaCoordinator: ObservableObject {
     record.storage = .appOnly
     record.saveError = reason.saveError
     library.add(record, thumbnail: thumbnail)
+    captureSaved(record)
     lastEvent = "photo kept in AutoLoom (\(reason.saveError ?? "setting"))"
     return .kept(record, reason)
   }
@@ -391,6 +396,7 @@ final class RayBanMediaCoordinator: ObservableObject {
           record.storage = .photos
           try? FileManager.default.removeItem(at: segment.url)
           library.add(record, thumbnail: recordingThumbnail)
+          captureSaved(record)
           saved.append(record)
           continue
         } catch {
@@ -409,6 +415,7 @@ final class RayBanMediaCoordinator: ObservableObject {
       record.storage = .appOnly
       if record.saveError == nil { record.saveError = keptReason?.saveError }
       library.add(record, thumbnail: recordingThumbnail)
+      captureSaved(record)
       kept.append(record)
     }
     if let failure {

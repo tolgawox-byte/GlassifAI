@@ -90,3 +90,9 @@ AutoLoom tasks and Apple Reminders together:
 ## Not supported
 
 Email, purchases, payments, deleting the user's data (except the app's own memories, tasks and the user's reminders in the Tasks tab, all with confirmation), posting publicly, code or deployment changes, and deleting calendar events by voice.
+
+## The Local Agent (multi-agent, v1.4)
+
+In the multi-agent layer these tools are the **Local Agent** (`LocalProvider`, strategy LOCAL): notes, memory, tasks, reminders, calendar, contacts, maps, clipboard, Photos, OCR, semantic search, time parsing, intent routing and timers. The native executor always performs device actions — no model (ChatGPT, Claude, Gemini, Perplexity, OpenRouter) ever creates a reminder or sends anything; models may only help interpret words. Local actions work offline; when the phone is offline, cloud questions get an honest "the phone is offline" answer while these tools keep working. Every local command also appears in Settings → Intelligence → Routing diagnostics (intent only).
+
+Ray-Ban photos and videos ("fotoğraf çek", "video kaydını başlat", "kaydı durdur", "galeriye kaydet") are local commands too; see `RAYBAN_MEDIA.md`.

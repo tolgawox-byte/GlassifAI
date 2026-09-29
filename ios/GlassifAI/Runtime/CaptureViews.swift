@@ -327,10 +327,41 @@ struct CapturesView: View {
 struct ExploreTabView: View {
   @ObservedObject private var library = CaptureLibrary.shared
   @ObservedObject private var media = RayBanMediaCoordinator.shared
+  @ObservedObject private var dealer = DealerStore.shared
+  @ObservedObject private var shopping = ShoppingListStore.shared
 
   var body: some View {
     NavigationStack {
       List {
+        Section {
+          NavigationLink {
+            DealerHomeView()
+          } label: {
+            HStack {
+              Label(L.t("Dealer", "Bayi"), systemImage: "car.2")
+              Spacer()
+              Text(dealer.active?.title ?? L.t("No active vehicle", "Aktif araç yok"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+          }
+        } footer: {
+          Text(L.t("Vehicle sessions: VIN, odometer, damage, photo and delivery checklists, market research, listings.",
+                   "Araç oturumları: VIN, kilometre, hasar, fotoğraf ve teslim listeleri, piyasa araştırması, ilan."))
+        }
+        Section(L.t("Daily", "Günlük")) {
+          NavigationLink {
+            ShoppingListView()
+          } label: {
+            HStack {
+              Label(L.t("Shopping list", "Alışveriş listesi"), systemImage: "cart")
+              Spacer()
+              Text("\(shopping.open.count)").font(.footnote).foregroundStyle(.secondary)
+            }
+          }
+        }
+        TimersSection()
         Section {
           NavigationLink {
             CapturesView()

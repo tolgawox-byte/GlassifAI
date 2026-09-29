@@ -148,6 +148,10 @@ extension VoiceIntent {
     case .stopRecording: "STOP_RECORDING"
     case .recordingStatus: "RECORDING_STATUS"
     case .saveCaptureToPhotos: "SAVE_CAPTURE_TO_PHOTOS"
+    case .dealer(let command): "DEALER_" + command.name.uppercased()
+    case .timer: "TIMER"
+    case .undoLast: "UNDO"
+    case .shopping: "SHOPPING_LIST"
     case .ask: "ASK"
     default: traceName.uppercased()
     }
@@ -246,6 +250,7 @@ extension AssistantOrchestrator {
     bridge.visualMemoryAvailable = camera && MemoryStore.shared.isEnabled && MemoryStore.shared.visualMemoriesEnabled
     bridge.addressedOnly = AssistantPreferences.respondsOnlyWhenAddressed
     bridge.isRecording = RayBanMediaCoordinator.shared.isRecording
+    bridge.timerRunning = TimerCenter.shared.isRunning
     return bridge
   }
 
@@ -416,6 +421,16 @@ extension AssistantOrchestrator {
           feedback: .failed(L.t("Note not saved", "Notu kaydedemedim")), said: "Notu kaydedemedim.")
       }
       recentSaved = (note.content, Date(), note.id)
+      let noteID = note.id
+      LocalUndo.shared.record(kind: "note", english: "note removed", turkish: "not silindi") {
+        guard let saved = MemoryStore.shared.notes.first(where: { $0.id == noteID }) else { return false }
+        MemoryStore.shared.deleteNote(saved)
+        return true
+      }
+      if let vehicle = DealerStore.shared.active {
+        DealerStore.shared.update(vehicle.id) { $0.noteIDs.append(note.id) }
+        trace.update(traceID) { $0.parsed += " · linked to the active vehicle" }
+      }
       let saved = store.notes.contains { $0.id == note.id }
       trace.update(traceID) {
         $0.persistence = (store.isPersistent ? "saved on this iPhone" : "saved in a temporary store") +
@@ -496,6 +511,12 @@ extension AssistantOrchestrator {
           feedback: .failed(L.t("Not remembered", "Hafızaya kaydedilemedi")))
       }
       recentSaved = (record.text, Date(), nil)
+      let memoryID = record.id
+      LocalUndo.shared.record(kind: "memory", english: "memory removed", turkish: "hafızadan silindi") {
+        guard let saved = MemoryStore.shared.memories.first(where: { $0.id == memoryID }) else { return false }
+        MemoryStore.shared.delete(saved)
+        return true
+      }
       trace.update(traceID) { $0.parsed = "\(record.kind.rawValue) · \(record.category.rawValue)" }
       return IntentOutcome(
         spoken: BridgeSpeech.done(
@@ -748,6 +769,30 @@ extension AssistantOrchestrator {
 
     case .saveCaptureToPhotos:
       return await saveLatestCaptureToPhotos(traceID: traceID)
+
+    case .dealer(let command):
+      return await runDealer(command, transcript: transcript, traceID: traceID)
+
+    case .timer(let command):
+      return await runTimer(command, traceID: traceID)
+
+    case .undoLast:
+      trace.update(traceID) { $0.executor = "LocalUndo (local actions only)" }
+      guard let entry = LocalUndo.shared.popAndRun() else {
+        return IntentOutcome(
+          spoken: BridgeSpeech.done("There is nothing the app can undo (calls and messages are never undone).",
+                                    tr: "Geri alınacak bir şey yok.", en: "There's nothing to undo."),
+          reply: L.t("Nothing to undo.", "Geri alınacak bir şey yok."), said: L.t("There's nothing to undo.", "Geri alınacak bir şey yok."))
+      }
+      trace.update(traceID) { $0.persistence = "undone: \(entry.kind)" }
+      return IntentOutcome(
+        spoken: BridgeSpeech.done("The app undid the last local action.", tr: "Geri aldım: \(entry.turkish).", en: "Undone: \(entry.english)."),
+        reply: L.t("Undone: \(entry.english)", "Geri alındı: \(entry.turkish)"),
+        feedback: ActionFeedback(kind: .forgotten, title: L.t("Undone", "Geri alındı"), detail: L.t(entry.english, entry.turkish)),
+        said: L.t("Undone: \(entry.english).", "Geri aldım: \(entry.turkish)."))
+
+    case .shopping(let command):
+      return runShopping(command, traceID: traceID)
 
     case .ask(let awaiting):
       return askQuestion(awaiting)
@@ -1066,6 +1111,16 @@ extension AssistantOrchestrator {
       trace.update(traceID) { $0.persistence = "task saved; linked to the note just saved" }
     }
     recentSaved = (task.title, Date(), nil)
+    let taskID = task.id
+    LocalUndo.shared.record(kind: "task", english: "task removed", turkish: "görev silindi") {
+      guard let saved = MemoryStore.shared.tasks.first(where: { $0.id == taskID }) else { return false }
+      MemoryStore.shared.deleteTask(saved)
+      return true
+    }
+    if let vehicle = DealerStore.shared.active {
+      // A task made while a vehicle is active belongs to it.
+      DealerStore.shared.update(vehicle.id) { $0.taskIDs.append(task.id) }
+    }
     var due = ""
     if let date = task.dueAt {
       due = " due " + TimePhraseParser.describe(date, hasTime: task.dueHasTime, turkish: false)
@@ -1518,6 +1573,9 @@ extension AssistantOrchestrator {
   /// reminders from the phone; nothing is invented.
   private func runRoutine(_ routine: VoiceIntent.Routine, traceID: UUID) async -> IntentOutcome {
     let store = MemoryStore.shared
+    if routine == .eveningReview || routine == .weeklyReview {
+      return review(days: routine == .weeklyReview ? 7 : 1, traceID: traceID)
+    }
     var parts: [String] = []
     let today = store.todayTasks()
     parts.append(today.isEmpty
@@ -1568,6 +1626,35 @@ extension AssistantOrchestrator {
   }
 
   // MARK: Helpers
+
+  /// "Bugün ne yaptım?": counted from what is on the phone, nothing guessed.
+  private func review(days: Int, traceID: UUID) -> IntentOutcome {
+    let store = MemoryStore.shared
+    let calendar = Calendar.current
+    let start = days <= 1 ? calendar.startOfDay(for: Date()) : Date().addingTimeInterval(-Double(days) * 86_400)
+    let notes = store.notes.filter { $0.createdAt >= start }
+    let done = store.tasks.filter { ($0.completedAt ?? .distantPast) >= start }
+    let added = store.tasks.filter { $0.createdAt >= start && !$0.completed }
+    let memories = store.memories.filter { $0.createdAt >= start }
+    let captures = CaptureLibrary.shared.records.filter { $0.createdAt >= start }
+    let vehicles = DealerStore.shared.vehicles.filter { $0.updatedAt >= start }
+    var lines = [
+      "Period: " + (days <= 1 ? "today" : "the last \(days) days"),
+      "Notes saved: \(notes.count)" + (notes.isEmpty ? "" : " (" + notes.prefix(4).map(\.title).joined(separator: "; ") + ")"),
+      "Tasks done: \(done.count)" + (done.isEmpty ? "" : " (" + done.prefix(4).map(\.title).joined(separator: "; ") + ")"),
+      "Tasks added and still open: \(added.count)",
+      "Memories saved: \(memories.count)",
+      "Ray-Ban photos and videos: \(captures.count)",
+    ]
+    if !vehicles.isEmpty {
+      lines.append("Vehicles worked on: \(vehicles.count) (" + vehicles.prefix(4).map(\.title).joined(separator: "; ") + ")")
+    }
+    ActionTraceLog.shared.update(traceID) { $0.executor = "AutoLoom notes, tasks, memory, captures, vehicles (read)" }
+    return IntentOutcome(
+      spoken: "What the user did, from what is stored on this iPhone:\n" + lines.joined(separator: "\n")
+        + "\nSummarise it in two or three short, warm sentences; mention only these facts.",
+      reply: lines.joined(separator: "\n"))
+  }
 
   private func refreshBoards() async {
     await RemindersBoard.shared.load()

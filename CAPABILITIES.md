@@ -11,6 +11,44 @@ Nothing is marked WORKING without a device test. Everything new in Jarvis v1 and
 
 This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex uses (`chatgpt.com/backend-api/codex/*`). Signing in does not unlock every feature of the ChatGPT app. No new paid service, API key or subscription is used.
 
+## Multi-agent intelligence (new in v1.4)
+
+Nothing here is device-verified. With only ChatGPT + Local connected, requests take the same path as v1.3.
+
+| Capability | Status | Notes |
+|---|---|---|
+| Agent orchestrator (roles, plans, LOCAL / FAST / SPECIALIST / TEAM) | **EXPERIMENTAL** | Unit-tested routing examples; `docs/AGENT_ARCHITECTURE.md`, `docs/AGENT_ROUTING.md` |
+| ChatGPT provider (account sign-in, no API billing) | **WORKING** | The existing path, unchanged; also the compatible fallback for every cloud role |
+| Local agent (notes, memory, tasks, reminders, calendar, contacts, maps, clipboard, Photos, OCR) | **WORKING** / as listed below | Always local; works offline |
+| Claude (Anthropic API key) | **NOT CONNECTED** | Adapter unit-tested (request, reply, models, errors); needs the owner's key |
+| Gemini (Google AI Studio API key) | **NOT CONNECTED** | Adapter unit-tested; Live Vision via Flash frames, not the streaming Live API |
+| Perplexity (API key) | **NOT CONNECTED** | Adapter unit-tested; sources with titles and dates |
+| OpenRouter (API key) | **NOT CONNECTED** | Adapter unit-tested; models discovered from its API |
+| OpenClaw | **PARTIAL** (optional, unchanged) | Existing gateway, now also a provider card |
+| Fallback, circuit breaker, rate-limit pause, timeouts, cancellation | **EXPERIMENTAL** | Unit-tested with simulated failures |
+| Team mode and result fusion (disagreements stated) | **EXPERIMENTAL** | Unit-tested; real quality needs connected specialists |
+| Provider settings (cost notice, Keychain keys, test, disconnect, pins, cost preference, diagnostics) | **EXPERIMENTAL** | Keys only in the Keychain (this device only) |
+| Response normalizer (one voice, no provider names, no reasoning traces; speech without markdown/URLs) | **EXPERIMENTAL** | Unit-tested |
+| Jarvis Style intensity and form of address; persona confirmations and greeting | **PHYSICAL TEST REQUIRED** | How it sounds needs real conversations; wording unit-tested |
+| Gemini Live (streaming) API | **UNAVAILABLE** | Not implemented; periodic frames are used instead |
+
+## Ray-Ban photos, videos and locked-screen vision (new in v1.4)
+
+| Capability | Status | Notes |
+|---|---|---|
+| Vision with the phone locked (software decoder, bounded recovery, still-photo fallback) | **PHYSICAL TEST REQUIRED** | Root causes and DAT 0.5 behaviour in `docs/BACKGROUND_STREAMING.md` |
+| "Fotoğraf çek" → Ray-Ban photo → Photos (add-only) | **PHYSICAL TEST REQUIRED** | Never the iPhone camera; kept in AutoLoom when Photos declines |
+| "Video kaydını başlat" / "kaydı durdur" → HEVC passthrough → Photos | **PHYSICAL TEST REQUIRED** | Unit-tested writer on the simulator; video only (no audio on DAT 0.5) |
+| Recording with the phone locked | **PHYSICAL TEST REQUIRED** | Depends on the glasses stream continuing while locked |
+| Captures list, dealer labels, photo + note | **EXPERIMENTAL** | `docs/RAYBAN_MEDIA.md` |
+
+## Spoken notes (v1.4 fix)
+
+| Capability | Status | Notes |
+|---|---|---|
+| Note verbs anywhere in the sentence; the user's verb decides (note vs task/reminder/memory) | **PHYSICAL TEST REQUIRED** | Unit-tested (Turkish, English, contextual "bunu not et", "kaydet") |
+| Note search, list and delete (delete waits for a yes) | **EXPERIMENTAL** | |
+
 ## Voice-first actions (new in v1.3)
 
 Nothing in this section is device-verified. The physical test plan (TESTs 1–8) is in `TEST_REPORT.md`.

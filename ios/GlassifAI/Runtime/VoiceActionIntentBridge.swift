@@ -55,6 +55,10 @@ enum VoiceIntent: Equatable {
     case startWork
     /// "Günün özeti": calendar, reminders and tasks.
     case briefing
+    /// "Bugün ne yaptım?": what was saved, done and captured today.
+    case eveningReview
+    /// "Bu hafta ne yaptım?": the same for the last seven days.
+    case weeklyReview
   }
 
   /// Yes or no to an action waiting for confirmation.
@@ -124,6 +128,15 @@ enum VoiceIntent: Equatable {
   case recordingStatus
   /// "Galeriye kaydet": the newest capture kept in AutoLoom goes to Photos.
   case saveCaptureToPhotos
+  /// Dealer Mode ("Yeni araç", "VIN oku", "hasar ekle: …", "Bu araç tamam").
+  case dealer(DealerCommand)
+  /// "10 dakika timer kur", "timerı durdur", "ne kadar kaldı?".
+  case timer(TimerCommand)
+  /// "Son yaptığını geri al": undoes the last local action (never a call
+  /// or a message).
+  case undoLast
+  /// "Alışveriş listesine süt ekle", "alışveriş listemde ne var?".
+  case shopping(ShoppingCommand)
   /// A command without its content: ask for it ("Neyi not alayım?").
   case ask(Awaiting)
   /// LEVEL 2: the kind of request is certain; the details are left to the
@@ -172,6 +185,20 @@ enum VoiceIntent: Equatable {
     case .stopRecording: "stopRecording"
     case .recordingStatus: "recordingStatus"
     case .saveCaptureToPhotos: "saveCaptureToPhotos"
+    case .dealer(let command): "dealer(\(command.name))"
+    case .undoLast: "undoLast"
+    case .timer(let command):
+      switch command {
+      case .start: "timerStart"
+      case .cancel: "timerCancel"
+      case .remaining: "timerRemaining"
+      }
+    case .shopping(let command):
+      switch command {
+      case .add: "shoppingAdd"
+      case .read: "shoppingRead"
+      case .remove: "shoppingRemove"
+      }
     case .ask(let awaiting): "ask(\(awaiting.label))"
     case .classify(let kind, _): "classify(\(kind.rawValue))"
     }
@@ -198,6 +225,8 @@ struct VoiceBridgeContext {
   var visualMemoryAvailable = false
   /// A Ray-Ban video recording is running ("ne kadar oldu?" asks about it).
   var isRecording = false
+  /// A timer is running ("ne kadar kaldı?" asks about it).
+  var timerRunning = false
   /// Addressed-only mode: act only when the user says the assistant's name.
   var addressedOnly = false
 
@@ -270,6 +299,11 @@ enum VoiceActionIntentBridge {
     // Ray-Ban photos and recordings, before notes: "bunun fotoğrafını çek ve
     // not al: …" is a photo with a note.
     if let decision = media(utterance, context) { return decision }
+    // Dealer Mode commands ("VIN oku", "hasar ekle: …", "Bu araç tamam").
+    if let decision = dealer(utterance, context) { return decision }
+    // Timers and the shopping list.
+    if let decision = daily(utterance, context) { return decision }
+    if isUndo(utterance) { return VoiceBridgeDecision(.undoLast, "undo") }
 
     // 3–12. Explicit native actions and explicit memory, in priority order.
     // Messages come before notes: "Ahmet'e bunu yaz" is a message, "bunu
@@ -302,6 +336,19 @@ enum VoiceActionIntentBridge {
     return nil
   }
 
+  /// "Son yaptığını geri al", "bunu geri al", "undo that".
+  static func isUndo(_ u: Utterance) -> Bool {
+    guard u.count <= 6 else { return false }
+    let phrases: [[String]] = [
+      ["son", "yaptigini", "geri", "al"], ["sonuncuyu", "geri", "al"], ["bunu", "geri", "al"], ["onu", "geri", "al"],
+      ["geri", "al"], ["undo", "that"], ["undo", "the", "last", "one"], ["undo"],
+    ]
+    guard let phrase = phrases.first(where: { u.range(of: $0) != nil }), let range = u.range(of: phrase) else { return false }
+    let fillers: Set<String> = ["son", "yaptigin", "lutfen", "please", "hemen", "sunu", "the", "last", "thing"]
+    let outside = Array(u.keys[0..<range.lowerBound]) + Array(u.keys[range.upperBound...])
+    return outside.allSatisfy(fillers.contains)
+  }
+
   /// Whether a partial transcript already starts with a command, so the
   /// voice model's own reply can be held back before the turn ends.
   static func looksLikeCommandStart(_ partial: String, assistantName: String) -> Bool {
@@ -324,6 +371,9 @@ enum VoiceActionIntentBridge {
     ["video", "cek"], ["video", "kaydi"], ["video", "kaydini"], ["kayda", "basla"], ["kaydi", "durdur"],
     ["videoyu", "durdur"], ["cekimi", "bitir"], ["galeriye", "kaydet"], ["take", "a", "photo"], ["take", "a", "picture"],
     ["start", "recording"], ["stop", "recording"], ["record", "a", "video"],
+    ["yeni", "arac"], ["vin", "oku"], ["hasar", "ekle"], ["kilometre"], ["bu", "arac", "tamam"], ["sonraki", "arac"],
+    ["ilan", "hazirla"], ["piyasa", "bak"], ["foto", "checklist"], ["alisveris", "listesine"], ["alisveris", "listeme"],
+    ["timer"], ["zamanlayici"],
   ]
 
   /// A short confirmation ("Tamam, not aldım.", "Got it.") that "bunu"
@@ -891,6 +941,20 @@ enum VoiceActionIntentBridge {
     ]
     if briefing.contains(where: { u.range(of: $0) != nil }) {
       return VoiceBridgeDecision(.routine(.briefing), "routine: briefing")
+    }
+    let evening: [[String]] = [
+      ["bugun", "ne", "yaptim"], ["bugun", "neler", "yaptim"], ["gun", "sonu", "ozeti"], ["gunu", "degerlendir"],
+      ["what", "did", "i", "do", "today"], ["evening", "review"], ["end", "of", "day", "summary"],
+    ]
+    if evening.contains(where: { u.range(of: $0) != nil }) {
+      return VoiceBridgeDecision(.routine(.eveningReview), "routine: evening review")
+    }
+    let weekly: [[String]] = [
+      ["bu", "hafta", "ne", "yaptim"], ["bu", "hafta", "neler", "yaptim"], ["haftalik", "ozet"], ["haftami", "ozetle"],
+      ["weekly", "review"], ["what", "did", "i", "do", "this", "week"],
+    ]
+    if weekly.contains(where: { u.range(of: $0) != nil }) {
+      return VoiceBridgeDecision(.routine(.weeklyReview), "routine: weekly review")
     }
     return nil
   }

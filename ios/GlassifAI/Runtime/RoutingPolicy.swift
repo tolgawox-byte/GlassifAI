@@ -223,7 +223,8 @@ enum AssistantInstructions {
     profileName: String? = nil,
     recentConversation: String? = nil,
     jarvisStyle: Bool = JarvisStyle.isEnabled,
-    smartMemory: Bool = false
+    smartMemory: Bool = false,
+    mode: AssistantMode = .general
   ) -> String {
     let detail = AssistantPreferences.prefersDetailedAnswers
       ? "The user prefers fuller answers: up to about six sentences unless they ask for brevity."
@@ -305,6 +306,9 @@ enum AssistantInstructions {
     }
     if jarvisStyle {
       text += "\n\n" + JarvisStyle.instructions(profileName: profileName)
+    }
+    if let line = mode.instructionLine {
+      text += "\n\n" + line
     }
     return text
   }

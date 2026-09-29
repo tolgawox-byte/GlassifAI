@@ -2,6 +2,29 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [AutoLoom Jarvis v1.4 — multi-agent, Ray-Ban media, reliable notes] — branch `autoloom-glasses-jarvis-v1`
+
+Rollback tag: `rollback-f11377f-before-multi-agent` (before the multi-agent layer). Not device-verified.
+
+### Added
+- **Multi-agent orchestrator**: logical agents (chat, vision, live vision, research, reasoning, coding, actions, memory, dealer, translation, documents, planning, external), `AgentPlan`, `AgentRouter` (LOCAL / FAST / SPECIALIST / TEAM), cost preferences (Balanced, Best quality, Lower cost, Local first), per-role pins, automatic routing, offline handling.
+- **Providers**: ChatGPT (existing account), Local, Claude, Gemini, Perplexity, OpenRouter (official APIs, keys in the Keychain), OpenClaw (existing gateway); model discovery with a capability matrix; Test connection; circuit breaker, rate-limit pause, bounded fallback, timeouts, cancellation; routing diagnostics without content.
+- **Team mode and result fusion**: see-then-research, parallel research questions, one answer with merged sources and stated disagreements.
+- **One voice**: response normalizer (no provider names, no `<think>` traces; speech without markdown, tables or URLs), entity context across agents.
+- **Jarvis Style**: intensity (Subtle / Balanced / Full), form of address (None / My name / Sir – Efendim / Custom), persona confirmations ("Not aldım efendim."), greeting ("Bağlantı hazır. Sizi dinliyorum efendim."); Settings → Personality and Settings → Intelligence.
+- **Ray-Ban photos and videos**: "fotoğraf çek", "video kaydını başlat", "kaydı durdur", "kayıt yapıyor musun?", "galeriye kaydet"; add-only Photos saving, Captures (Explore tab), recording chip, shutter and record buttons, dealer labels, photo + note.
+- **Locked-screen vision**: software VideoToolbox decoder by default, bounded fresh-frame recovery, still-photo fallback in the background, "Continue vision with the screen locked".
+- Tests: `AutoLoomMultiAgentTests`, `AutoLoomRayBanMediaTests`, `AutoLoomNoteReliabilityTests`.
+
+### Fixed
+- Spoken notes: note verbs are found anywhere in the sentence (a misheard name or "benim için" before "not al" hid the command); the user's verb beats time words; delegations that did something else never stand in for the note.
+- A tool's level in Settings is its main action's (Notes saves directly; deleting a note still waits for a yes).
+- Background vision stopped when the phone locked: iOS tears down hardware decoder sessions; the app rebuilt hardware sessions and never switched to software.
+
+### Privacy
+- Provider keys only in the Keychain (this device only), never logged or shown; each provider gets the minimum context; research providers never get images; nothing paid is enabled without a cost notice and the user's confirmation.
+- Ray-Ban captures: add-only Photos access; nothing uploaded; the Captures list keeps labels and small thumbnails.
+
 ## [AutoLoom Jarvis v1.3 — voice-first actions] — branch `autoloom-glasses-jarvis-v1`
 
 Rollback tag: `rollback-e79fd85-before-voice-first`. Not device-verified; physical TESTs 1–8 are in `TEST_REPORT.md`.

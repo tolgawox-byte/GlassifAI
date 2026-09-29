@@ -134,6 +134,8 @@ struct PrivacySettingsView: View {
       Button(L.t("Delete", "Sil"), role: .destructive) {
         MemoryStore.shared.deleteEverything()
         CaptureLibrary.shared.deleteEverything()
+        DealerStore.shared.deleteEverything()
+        ShoppingListStore.shared.deleteEverything()
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()
         wiped = true

@@ -128,6 +128,10 @@ if passed:
     print("::notice title=Passed iOS tests (" + str(len(passed)) + ")::" + "; ".join(passed))
 if failed:
     print("::error title=Failed iOS tests (" + str(len(failed)) + ")::" + "; ".join(failed))
+# The assertion messages, so a failure can be fixed from the run page.
+for failure in (summary.get("testFailures") or [])[:25]:
+    text = " ".join(str(failure.get("failureText", "")).split())[:900]
+    print("::error title=Failure " + str(failure.get("testName", "?")) + "::" + text)
 if not cases:
     # A green step must mean tests actually ran.
     print("::error title=iOS unit tests::No test cases found in the result bundle")

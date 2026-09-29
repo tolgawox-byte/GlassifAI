@@ -19,6 +19,7 @@ struct AssistantHomeView: View {
   @ObservedObject private var wake = WakePhraseListener.shared
   @ObservedObject private var media = RayBanMediaCoordinator.shared
   @ObservedObject private var agents = AutoLoomAgentOrchestrator.shared
+  @ObservedObject private var timers = TimerCenter.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
@@ -290,6 +291,9 @@ struct AssistantHomeView: View {
     HStack(spacing: 8) {
       if showsRecordingChip {
         RecordingChip(media: media)
+      }
+      if let timer = timers.timers.first {
+        TimerChip(timer: timer)
       }
       if agents.activeSpecialists > 1 {
         chip(L.t("\(agents.activeSpecialists) specialists working", "\(agents.activeSpecialists) uzman çalışıyor"), systemImage: "person.3")

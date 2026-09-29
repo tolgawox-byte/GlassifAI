@@ -74,3 +74,18 @@ Vision requests send `detail: "high"`, as Codex does by default; Codex never sen
 - ChatGPT chat history and ChatGPT memory. Requests use `store: false`.
 - ChatGPT Work, custom GPTs, connectors, and Codex cloud tasks.
 - Choosing the realtime voice model from a list; the one verified model is used.
+
+## Other providers (multi-agent, v1.4)
+
+ChatGPT's catalog above is one provider among several. Each connected provider lists its own models (Claude `GET /v1/models`, Gemini `GET /v1beta/models`, OpenRouter `GET /api/v1/models`; Perplexity publishes a fixed Sonar list and has no endpoint), and every model is stored with the same capability matrix:
+
+| Capability | Meaning | Sources |
+|---|---|---|
+| text | Answers in text | all |
+| vision | Reads images | ChatGPT catalog `input_modalities`, every Claude model, Gemini 1.5+, OpenRouter `input_modalities` |
+| liveVision | Suited to frequent frames | ChatGPT vision models, Gemini Flash / `bidiGenerateContent` |
+| reasoning | Extended reasoning | ChatGPT `supported_reasoning_levels`, Claude 3.7+, Gemini 2.5+/thinking, OpenRouter `reasoning` parameter, Sonar Reasoning |
+| web | Built-in web search | ChatGPT hosted search, Gemini 2+ grounding, Perplexity, OpenRouter `web` plugin |
+| tools, code, longContext (≥ 200k tokens), audio | as named | per provider metadata |
+
+The router (`docs/AGENT_ROUTING.md`) uses the matrix to decide which connected provider may take a role. `ProviderModelChoice` then picks one listed model for the role and the Quality/Cost setting (`docs/PROVIDERS.md`). ChatGPT's own per-job model choice below is unchanged.

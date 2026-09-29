@@ -106,3 +106,11 @@ On first launch `memory.json` and `notes.json` from earlier builds are imported 
 | M6 | Memory tab: pin, edit, search "kapı", Clear all | Works; confirmation shown; notes and tasks remain | |
 | M7 | Visual memory on, look at a parking sign: "bunu hatırla" | Description with the readable text saved; photo/place only if enabled | |
 | N1 | "Jarvis, not al: cuma Mercedes gelecek." | Memory → Notes shows it at once; one answer, "Tamam, not aldım." | |
+
+## The Memory Agent (multi-agent, v1.4)
+
+AutoLoom memory stays the source of truth on the phone, independent of any provider:
+
+- Memory requests ("Geçen gün ne konuşmuştuk?", "hatırla…", "unut…") are routed to the **local Memory Agent** (strategy LOCAL); no cloud agent searches or owns memory.
+- Before any agent is called, only what the request needs is retrieved: at most five relevant items (`MemoryStore.relevantItems`), the recent conversation summary, and the current entities (vehicle, product, person, place, document; 30 minutes). The whole database, contacts and notes are never sent to Claude, Gemini, Perplexity or OpenRouter.
+- Providers never learn the conversation on their own: the orchestrator owns the conversation state and gives each call the minimum context.
