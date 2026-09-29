@@ -528,6 +528,22 @@ enum ActionCatalog {
       examplesTR: ["[live] Ne değişti?", "[live] Bir şey değişti mi?"], examplesEN: ["[live] What changed?"],
       capabilities: [.camera], ui: "Assistant → Live Vision chip", status: .physicalTestRequired, keys: ["whatChanged"]),
     ActionDefinition(
+      "document.summarize", .vision, name: "Summarise a document", tr: "Belgeyi özetle",
+      summary: "Reads the document on the phone (text only kept), finds dates and amounts; a reminder only after your yes.",
+      examplesTR: ["Bu belgeyi özetle", "Bu belgede ne var?"], examplesEN: ["Summarize this document"],
+      capabilities: [.camera], ui: "Explore → Documents and receipts", status: .physicalTestRequired,
+      keys: ["document.summarize"]),
+    ActionDefinition(
+      "document.receipt", .vision, name: "Save a receipt", tr: "Fişi kaydet",
+      summary: "Store, total and date read on the phone; the photo is not kept.",
+      examplesTR: ["Fişi kaydet", "Bu faturayı kaydet"], examplesEN: ["Save this receipt"], capabilities: [.camera],
+      ui: "Explore → Documents and receipts", status: .physicalTestRequired, keys: ["document.saveReceipt"]),
+    ActionDefinition(
+      "document.spending", .vision, name: "This month's receipts", tr: "Bu ayki fişler",
+      summary: "The total of the receipts you saved this month, per currency; not accounting.",
+      examplesTR: ["Bu ay ne harcadım?"], examplesEN: ["How much did I spend this month?"],
+      ui: "Explore → Documents and receipts", status: .working, keys: ["document.spending"]),
+    ActionDefinition(
       "translation.view", .translation, name: "Translate what I see", tr: "Gördüğümü çevir",
       summary: "Reads the text in view and translates it.",
       examplesTR: ["[camera] Bu tabelayı Türkçeye çevir", "[camera] Şunu İngilizceye çevir"],
@@ -862,6 +878,9 @@ enum ActionCatalog {
     case "memory.list": return .listMemories
     case "memory.findVisual": return .findVisual(text("what") ?? "")
     case "vision.whatChanged": return .whatChanged
+    case "document.summarize": return .document(.summarize)
+    case "document.receipt": return .document(.saveReceipt)
+    case "document.spending": return .document(.spending)
     case "task.create":
       guard let title = text("title") else { return .ask(.task) }
       var due = time("due")
@@ -1078,6 +1097,7 @@ extension VoiceIntent {
     case .vehicleQuestion: "vehicleQuestion"
     case .findVisual: "findVisual"
     case .whatChanged: "whatChanged"
+    case .document(let command): "document." + command.key
     case .correctPending: "correctPending"
     case .graph: "graph"
     case .ask(let awaiting): "ask." + awaiting.label

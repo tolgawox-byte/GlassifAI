@@ -159,6 +159,7 @@ extension VoiceIntent {
     case .vehicleQuestion: "VEHICLE_QUESTION"
     case .findVisual: "FIND_VISUAL"
     case .whatChanged: "WHAT_CHANGED"
+    case .document: "DOCUMENT"
     case .moveTask: "MOVE_TASK"
     case .correctPending: "CORRECT_PENDING"
     case .graph: "ACTION_GRAPH"
@@ -731,6 +732,8 @@ extension AssistantOrchestrator {
       return await runDayPlan(range, traceID: traceID)
 
     case .translateView(let language):
+      // Read and translated on the phone when the languages are downloaded.
+      if let local = await translateViewOnDevice(language, traceID: traceID) { return local }
       trace.update(traceID) { $0.executor = "camera (high detail) + OCR + vision model" }
       let result = await runBridgeTask(
         .vision,
@@ -841,6 +844,9 @@ extension AssistantOrchestrator {
 
     case .whatChanged:
       return whatChanged(traceID: traceID)
+
+    case .document(let command):
+      return await runDocument(command, traceID: traceID)
 
     case .moveTask(let title, let time):
       return moveTask(title: title, time: time, traceID: traceID)

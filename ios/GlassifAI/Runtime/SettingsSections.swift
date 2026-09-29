@@ -155,6 +155,7 @@ struct PrivacySettingsView: View {
         ParkingStore.shared.clear()
         VisualMemoryIndex.shared.deleteEverything()
         SceneTimeline.shared.deleteEverything()
+        DocumentStore.shared.deleteEverything()
         Task { await SpotlightIndexer.shared.removeAll() }
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()

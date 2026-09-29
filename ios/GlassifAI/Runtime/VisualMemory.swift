@@ -204,10 +204,10 @@ enum VisualMemorySearch {
 @MainActor
 final class SceneTimeline: ObservableObject {
   static let shared = SceneTimeline(directory: ScreenshotMode.storeDirectory)
-  static let enabledKey = "autoloom.sceneTimeline.enabled"
-  static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
-  static let retention: TimeInterval = 7 * 86_400
-  static let minimumGap: TimeInterval = 120
+  nonisolated static let enabledKey = "autoloom.sceneTimeline.enabled"
+  nonisolated static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+  nonisolated static let retention: TimeInterval = 7 * 86_400
+  nonisolated static let minimumGap: TimeInterval = 120
 
   struct Entry: Codable, Equatable, Identifiable {
     var id = UUID()

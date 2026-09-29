@@ -85,6 +85,7 @@ jobs:
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGN_IDENTITY="" \
               AUTOLOOM_COMMIT_SHA="${GITHUB_SHA::12}" \
+              -IDEBuildingContinueBuildingAfterErrors=YES \
               build > "build-$configuration.log" 2>&1 || status=$?
             tail -n 3 "build-$configuration.log"
             if [ "$status" -ne 0 ]; then

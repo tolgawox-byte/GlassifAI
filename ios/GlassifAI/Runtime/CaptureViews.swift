@@ -342,6 +342,23 @@ struct ExploreTabView: View {
           }
           ParkingRow()
         }
+        Section(L.t("See and understand", "Gör ve anla")) {
+          NavigationLink {
+            TranslationView()
+          } label: {
+            Label(L.t("Translation", "Çeviri"), systemImage: "character.bubble")
+          }
+          NavigationLink {
+            DocumentsView()
+          } label: {
+            Label(L.t("Documents and receipts", "Belgeler ve fişler"), systemImage: "doc.text.viewfinder")
+          }
+          NavigationLink {
+            VisualMemoryGallery()
+          } label: {
+            Label(L.t("Visual memory", "Görsel hafıza"), systemImage: "eye")
+          }
+        }
         TimersSection()
         Section {
           NavigationLink {

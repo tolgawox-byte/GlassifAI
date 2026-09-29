@@ -170,7 +170,7 @@ final class AutoLoomActionCatalogTests: XCTestCase {
       .ask(.note), .ask(.memory), .ask(.task), .ask(.reminderTitle), .ask(.eventTime(title: "x")),
       .timer(.start(seconds: 60, label: nil)), .timer(.cancel), .timer(.remaining), .shopping(.add(["x"])), .shopping(.read),
       .shopping(.remove("x")), .parking(.save(note: nil)), .parking(.recall), .parking(.directions), .parking(.clear),
-      .findVisual("x"), .findVisual(""), .whatChanged,
+      .findVisual("x"), .findVisual(""), .whatChanged, .document(.summarize), .document(.saveReceipt), .document(.spending),
     ]
     let dealer: [DealerCommand] = [
       .startVehicle, .nextVehicle, .finishVehicle, .readVIN, .readOdometer, .setOdometer(1, .km), .addDamage("x"),

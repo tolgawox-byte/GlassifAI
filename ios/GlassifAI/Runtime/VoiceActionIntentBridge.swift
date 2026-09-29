@@ -154,6 +154,8 @@ enum VoiceIntent: Equatable {
   case findVisual(String)
   /// "Ne değişti?" while Live Vision runs: its last two scene notes.
   case whatChanged
+  /// "Bu belgeyi özetle", "fişi kaydet", "bu ay ne harcadım?".
+  case document(DocumentCommand)
   /// "Bunu yarına taşı": moves a task (nil title: the task just mentioned).
   case moveTask(title: String?, time: ParsedTime)
   /// "Hayır, cumartesi": the waiting or just-saved action gets this day/time.
@@ -229,6 +231,7 @@ enum VoiceIntent: Equatable {
     case .vehicleQuestion(let field): "vehicleQuestion(\(field.rawValue))"
     case .findVisual: "findVisual"
     case .whatChanged: "whatChanged"
+    case .document(let command): "document(\(command.key))"
     case .moveTask: "moveTask"
     case .correctPending: "correctPending"
     case .graph(let steps): "graph(\(steps.count))"
@@ -372,6 +375,7 @@ enum VoiceActionIntentBridge {
       { profile($0) },
       { capabilities($0) },
       { whatChanged($0, context) },
+      { documents($0) },
       { translation($0, context) },
       { messages($0, context) },
       { notes($0, context) },

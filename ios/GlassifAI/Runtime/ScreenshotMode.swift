@@ -97,6 +97,11 @@ enum ScreenshotDemo {
       latitude: 40.9903, longitude: 29.0292, placeName: "Kadıköy Otoparkı", note: "B2 katı, 45 numara"))
 
     seedVisualMemories(vehicleID: vehicle.id)
+    let receipt = DocumentExtractor.record(
+      from: "MIGROS\nKadıköy\n28.09.2026 18:42\nSüt 34,90\nEkmek 12,50\nTOPLAM 47,40 TL", kind: .receipt)
+    DocumentStore.shared.add(receipt)
+    DocumentStore.shared.add(DocumentExtractor.record(
+      from: "Sigorta poliçesi yenileme bildirimi\nSon ödeme tarihi: 15.10.2026\nTutar: 4.250,00 TL", kind: .document))
 
     let timers = TimerCenter.shared
     timers.scheduleNotification = { _ in false }
@@ -164,6 +169,8 @@ struct ScreenshotRootView: View {
       case "visualmemory": NavigationStack { VisualMemoryGallery() }
       case "memorysettings": NavigationStack { MemorySettingsView() }
       case "raybancaps": NavigationStack { RayBanCapabilitiesView() }
+      case "translation": NavigationStack { TranslationView() }
+      case "documents": NavigationStack { DocumentsView() }
       default: StreamSessionView(wearables: nil)
       }
     }
