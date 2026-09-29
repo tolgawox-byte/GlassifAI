@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import Vision
 import XCTest
 
 @testable import GlassifAI
@@ -81,13 +82,49 @@ final class AutoLoomDailyLifeTests: XCTestCase {
     XCTAssertTrue(names.contains { $0.hasPrefix("shopping-unreadable-") }, "\(names)")
   }
 
+  func testATimerCenterStartsReportsAndCancels() async {
+    let center = TimerCenter()
+    center.scheduleNotification = { _ in false }
+    var removed: [String] = []
+    center.removeNotifications = { removed += $0 }
+    let result = await center.start(seconds: 420, label: "Yumurta")
+    XCTAssertFalse(result.notificationScheduled)
+    XCTAssertEqual(center.timers.count, 1)
+    XCTAssertEqual(center.timers.first?.remaining() ?? 0, 420, accuracy: 2)
+    XCTAssertEqual(center.cancel()?.label, "Yumurta")
+    XCTAssertTrue(center.timers.isEmpty)
+    XCTAssertEqual(removed, [result.timer.notificationID], "its notification is removed too")
+    XCTAssertNil(center.cancel(), "nothing left to cancel")
+  }
+
+  func testTheSharedTimerTheScreenShowsCancels() async {
+    let center = TimerCenter.shared
+    let saved = center.scheduleNotification
+    let savedRemove = center.removeNotifications
+    center.scheduleNotification = { _ in false }
+    center.removeNotifications = { _ in }
+    defer {
+      center.cancelAll()
+      center.scheduleNotification = saved
+      center.removeNotifications = savedRemove
+    }
+    let result = await center.start(seconds: 300, label: nil)
+    // The assistant screen shows the countdown chip meanwhile.
+    try? await Task.sleep(nanoseconds: 1_500_000_000)
+    XCTAssertEqual(center.cancel(id: result.timer.id)?.id, result.timer.id)
+    XCTAssertTrue(center.timers.isEmpty)
+  }
+
   func testTimersRunCancelAndReport() async throws {
     let center = TimerCenter.shared
     let saved = center.scheduleNotification
+    let savedRemove = center.removeNotifications
     center.scheduleNotification = { _ in false }
+    center.removeNotifications = { _ in }
     defer {
-      center.scheduleNotification = saved
       center.cancelAll()
+      center.scheduleNotification = saved
+      center.removeNotifications = savedRemove
     }
     let orchestrator = AssistantOrchestrator.shared
     let started = await orchestrator.runVoiceIntent(
@@ -179,12 +216,23 @@ final class AutoLoomDailyLifeTests: XCTestCase {
 
   func testAQRCodeIsReadOnThePhone() throws {
     let url = "https://www.example.com/menu?table=4"
-    let codes: [CodeReader.Code]
+    let image = try qrImage(url)
+    var codes: [CodeReader.Code]
     do {
-      codes = try CodeReader.read(cgImage: try qrImage(url))
+      codes = try CodeReader.read(cgImage: image)
+      #if targetEnvironment(simulator)
+      // The current barcode model needs the Neural Engine and finds nothing
+      // in the simulator; the first revision runs on the CPU.
+      if codes.isEmpty { codes = try CodeReader.read(cgImage: image, revision: VNDetectBarcodesRequestRevision1) }
+      #endif
     } catch {
       throw XCTSkip("Vision's barcode reader is not available in this simulator: \(error)")
     }
+    #if targetEnvironment(simulator)
+    if codes.isEmpty {
+      throw XCTSkip("Vision finds no barcodes in this simulator; physical test L7 covers reading on the phone.")
+    }
+    #endif
     XCTAssertEqual(codes.first?.payload, url)
     XCTAssertEqual(codes.first?.symbology, "QR")
     XCTAssertEqual(codes.first.map(CodeReader.classify), .web(host: "example.com", url: url))

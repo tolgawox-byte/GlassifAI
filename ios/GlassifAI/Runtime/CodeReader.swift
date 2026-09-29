@@ -25,8 +25,9 @@ enum CodeReader {
     case text(String)
   }
 
-  static func read(cgImage: CGImage) throws -> [Code] {
+  static func read(cgImage: CGImage, revision: Int? = nil) throws -> [Code] {
     let request = VNDetectBarcodesRequest()
+    if let revision { request.revision = revision }
     try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
     var codes: [Code] = []
     for observation in request.results ?? [] {

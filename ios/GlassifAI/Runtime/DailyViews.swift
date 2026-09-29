@@ -7,7 +7,9 @@ struct TimerChip: View {
   var body: some View {
     HStack(spacing: 6) {
       Image(systemName: "timer")
-      TimelineView(.periodic(from: .now, by: 1)) { context in
+      // A fixed start (the timer's own), like the recording chip: the
+      // schedule does not restart each time the screen above redraws.
+      TimelineView(.periodic(from: timer.endsAt.addingTimeInterval(-timer.duration), by: 1)) { context in
         Text(RecordingChip.clock(timer.remaining(now: context.date)))
           .monospacedDigit()
       }

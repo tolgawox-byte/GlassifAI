@@ -3,7 +3,7 @@
 | Provider | Connection | Default role | Status |
 |---|---|---|---|
 | ChatGPT | The existing ChatGPT account sign-in (Codex endpoints). No API billing. | Voice, conversation, vision, web, reasoning — everything by default | **WORKING** (unchanged path) |
-| Local | Built in | Notes, memory, tasks, reminders, calendar, contacts, maps, clipboard, Photos, OCR, time parsing, intent routing | **WORKING** (unchanged path) |
+| Local | Built in | Notes, memory, tasks, reminders, calendar, contacts, maps, clipboard, Photos, OCR, timers, shopping list, parking, QR codes, Dealer Mode, time parsing, intent routing | Each tool as listed in `CAPABILITIES.md` (unit-tested; most need the physical test) |
 | Claude | Anthropic API key (Messages API) | Reasoning, coding, long documents | **NOT CONNECTED** until the user adds a key · unit-tested adapter |
 | Gemini | Google AI Studio API key (Generative Language API) | Live vision (Flash), optional vision/translation, grounded research fallback | **NOT CONNECTED** · unit-tested adapter |
 | Perplexity | Perplexity API key (Sonar) | Research with sources | **NOT CONNECTED** · unit-tested adapter |

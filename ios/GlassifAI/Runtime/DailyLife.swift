@@ -40,6 +40,12 @@ final class TimerCenter: ObservableObject {
     await TimerCenter.scheduleSystemNotification(for: timer)
   }
 
+  /// Removes pending notifications (tests replace it: no system service).
+  var removeNotifications: @MainActor ([String]) -> Void = { identifiers in
+    guard !identifiers.isEmpty else { return }
+    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+  }
+
   @discardableResult
   func start(seconds: TimeInterval, label: String?) async -> (timer: AssistantTimer, notificationScheduled: Bool) {
     let id = "autoloom.timer.\(UUID().uuidString)"
@@ -57,7 +63,7 @@ final class TimerCenter: ObservableObject {
     let match = label.flatMap { wanted in timers.first { $0.label?.localizedCaseInsensitiveContains(wanted) == true } }
     guard let timer = match ?? timers.first else { return nil }
     timers.removeAll { $0.id == timer.id }
-    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [timer.notificationID])
+    removeNotifications([timer.notificationID])
     return timer
   }
 
@@ -65,12 +71,12 @@ final class TimerCenter: ObservableObject {
   func cancel(id: UUID) -> AssistantTimer? {
     guard let timer = timers.first(where: { $0.id == id }) else { return nil }
     timers.removeAll { $0.id == id }
-    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [timer.notificationID])
+    removeNotifications([timer.notificationID])
     return timer
   }
 
   func cancelAll() {
-    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: timers.map(\.notificationID))
+    removeNotifications(timers.map(\.notificationID))
     timers.removeAll()
   }
 
