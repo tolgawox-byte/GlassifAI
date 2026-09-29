@@ -86,14 +86,17 @@ enum RequestAnalyzer {
     "continuously", "surekli bak",
   ]
   static let webTerms = [
-    "hava durumu", "hava nasil", "haber", "guncel", "fiyat", "kac para", "kaca", "piyasa", "borsa", "doviz", "kur ",
-    "mac skoru", "skor", "acik mi", "recall", "geri cagirma", "arastir", "internette", "webde", "weather", "news",
-    "latest", "current price", "price", "market", "stock", "score", "research", "look up", "search the web",
+    "hava durumu", "hava nasil", "haberler", "son haber", "son dakika", "gundem", "guncel", "fiyat", "kac para",
+    "kaca ", "piyasa", "borsa", "doviz", "kur ", "mac skoru", "skor", "acik mi", "recall", "geri cagirma", "arastir",
+    "internette", "webde", "weather", "news", "latest", "current price", "price", "market value", "stock market",
+    "on the market", "stock", "score", "research", "look up", "search the web",
   ]
   static let codeTerms = [
-    "kod", "hata veriyor", "hata aliyorum", "derleme", "derlenmiyor", "compile", "compiler", "exception",
-    "stack trace", "stacktrace", "swift", "python", "javascript", "typescript", "kotlin", "sql", "regex", "bug",
-    "crash", "xcode", "github", "script", "code", "function", "fonksiyon", "null pointer", "segfault",
+    "kod ", "kodu", "kodda", "kodun", "kodum", "kodlar", "kodla", "hata veriyor", "hata aliyorum", "derleme",
+    "derlenmiyor", "compile", "compiler", "exception", "stack trace", "stacktrace", "swiftui", "swift kod",
+    "swift code", "swift dili", "in swift", "python", "javascript", "typescript", "kotlin", "sql", "regex", "bug ",
+    "bugs ", "buggy", "crash", "xcode", "github", "script", "code ", "coding", "function", "fonksiyon",
+    "null pointer", "segfault",
   ]
   static let documentTerms = [
     "belge", "dokuman", "pdf", "sozlesme", "rapor", "sayfalik", "makale", "kilavuz", "document", "contract",
@@ -113,7 +116,7 @@ enum RequestAnalyzer {
 
   /// Research questions of one request, one per kind of fact.
   static let facetGroups: [(name: String, terms: [String])] = [
-    ("price", ["fiyat", "piyasa", "deger", "kac para", "price", "market", "value", "worth"]),
+    ("price", ["fiyat", "piyasa", "deger", "kac para", "price", "market value", "value", "worth"]),
     ("recall", ["recall", "geri cagirma", "geri cagir"]),
     ("known issues", ["sorun", "ariza", "kronik", "problem", "issues", "reliability", "known problems"]),
     ("specifications", ["ozellik", "donanim", "teknik ozellik", "specs", "specifications", "features"]),

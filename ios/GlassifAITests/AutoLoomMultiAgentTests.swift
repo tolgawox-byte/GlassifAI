@@ -172,6 +172,19 @@ final class AutoLoomRoutingTests: XCTestCase {
     XCTAssertTrue(agent.requiresConfirmation)
   }
 
+  func testTurkishWordsAreNotEnglishKeywords() {
+    for text in ["Bugün hava nasıl?", "Bugünkü planım ne?", "Taylor Swift kimdir?"] {
+      XCTAssertFalse(RequestAnalyzer.analyze(text, kind: nil).needsCode, text)
+    }
+    for text in ["Bana haber ver", "Marketten ne almam lazım?", "Haberim yok"] {
+      XCTAssertFalse(RequestAnalyzer.analyze(text, kind: nil).needsWeb, text)
+    }
+    XCTAssertTrue(RequestAnalyzer.analyze("Bu kodda bug var", kind: nil).needsCode)
+    XCTAssertTrue(RequestAnalyzer.analyze("SwiftUI view neden çizilmiyor?", kind: nil).needsCode)
+    XCTAssertTrue(RequestAnalyzer.analyze("Son dakika haberleri", kind: nil).needsWeb)
+    XCTAssertTrue(RequestAnalyzer.analyze("What's the market value of this car?", kind: nil).needsWeb)
+  }
+
   func testAPlanSummaryHasNoContent() {
     let result = plan("Ahmet'in adresi Kadıköy 5, bunu araştır", kind: .webSearch, routing([.perplexity]))
     XCTAssertFalse(result.summary.contains("Ahmet"))
