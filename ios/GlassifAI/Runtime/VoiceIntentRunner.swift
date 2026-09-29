@@ -1605,6 +1605,8 @@ extension AssistantOrchestrator {
         spoken: "The user is starting work. " + parts.joined(separator: "\n") +
           "\nGive a short, friendly start-of-day summary: the next event first, then what is due today. Two to four sentences.",
         reply: parts.joined(separator: "\n"))
+    case .eveningReview, .weeklyReview:
+      return review(days: routine == .weeklyReview ? 7 : 1, traceID: traceID)
     case .briefing:
       // Weather only from a real web search, and only when web search is on
       // and the user's city is set (Settings); never invented.
