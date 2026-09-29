@@ -66,7 +66,17 @@ extension AssistantOrchestrator {
         }
         trace.update(traceID) { $0.persistence = "VIN saved on the vehicle" + (check.status == .valid ? " (verified)" : " (check digit mismatch)") }
       }
-      return dealerOutcome(tr: check.spoken(turkish: true), en: check.spoken(turkish: false), failed: check.isUsable ? nil : "VIN incomplete")
+      // A verified VIN is decoded right away (NHTSA vPIC, about 0.3 s).
+      var decoded = ("", "")
+      if check.status == .valid, let decode = try? await VPICClient.decode(check.normalized) {
+        applyDecode(decode, to: session.id)
+        if decode.quality == .clean, let name = store.vehicle(session.id)?.title {
+          decoded = (" VIN'den çözüldü: \(name).", " Decoded from the VIN: \(name).")
+        }
+      }
+      return dealerOutcome(
+        tr: check.spoken(turkish: true) + decoded.0, en: check.spoken(turkish: false) + decoded.1,
+        failed: check.isUsable ? nil : "VIN incomplete")
 
     case .readOdometer:
       let session = store.active ?? store.start()
@@ -92,7 +102,9 @@ extension AssistantOrchestrator {
           tr: "Hasarı söyler misin? Örneğin: sağ ön çamurluk çizik.", en: "What's the damage? For example: right front fender scratch.")
       }
       let session = store.active ?? store.start()
-      let finding = DamageFinding(zone: BodyZone.parse(text), kind: DamageFinding.kind(in: text), text: text)
+      let finding = DamageFinding(
+        zone: BodyZone.parse(text), kind: DamageFinding.kind(in: text), text: text, severity: DamageSeverity.parse(text),
+        source: "spoken")
       store.update(session.id) { $0.damage.append(finding) }
       let findingID = finding.id
       let vehicleID = session.id
@@ -181,7 +193,31 @@ extension AssistantOrchestrator {
         tr: "\(session.title) kayıtlı.", en: "\(session.title) is saved.",
         feedback: ActionFeedback(kind: .task, title: L.t("Vehicle saved", "Araç kayıtlı"), detail: session.title))
 
+    case .decodeVIN:
+      return await decodeVIN(traceID: traceID)
+    case .readTire(let position):
+      return await readTire(position, traceID: traceID)
+    case .readDashboard:
+      return await readDashboard(traceID: traceID)
+    case .conditionReport:
+      return conditionReport(traceID: traceID)
+    case .serviceHandoff:
+      return serviceHandoff(traceID: traceID)
+    case .saveLotSpot:
+      return await saveLotSpot(transcript: transcript, traceID: traceID)
+    case .findLotSpot:
+      return await findLotSpot(traceID: traceID)
+    case .readPartNumber:
+      return await readPartNumber(traceID: traceID)
+    case .areaClear(let area):
+      return markAreaClear(area, traceID: traceID)
+    case .exportVehicle:
+      return await exportVehicle(traceID: traceID)
+
     case .recallCheck:
+      if let session = store.active, let outcome = await checkRecallsOfficially(session.id, traceID: traceID) {
+        return outcome
+      }
       guard let session = store.active, session.make != nil || session.vin != nil else {
         return dealerOutcome(
           tr: "Önce aracı tanımlayalım: “VIN oku” de ya da marka ve modeli söyle.",
@@ -238,7 +274,7 @@ extension AssistantOrchestrator {
       feedback: ActionFeedback(kind: .note, title: L.t("Odometer saved", "Kilometre kaydedildi"), detail: reading.text))
   }
 
-  private func dealerOutcome(tr: String, en: String, failed: String? = nil, feedback: ActionFeedback? = nil) -> IntentOutcome {
+  func dealerOutcome(tr: String, en: String, failed: String? = nil, feedback: ActionFeedback? = nil) -> IntentOutcome {
     IntentOutcome(
       spoken: BridgeSpeech.done("Result of the user's Dealer Mode command.", tr: tr, en: en),
       reply: L.t(en, tr), failed: failed, feedback: feedback, said: L.t(en, tr))

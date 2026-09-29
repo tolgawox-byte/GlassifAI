@@ -117,6 +117,8 @@ struct CaptureRecord: Codable, Identifiable, Equatable {
   var storage: CaptureStorage = .appOnly
   /// Why the Photos save did not happen (for "Save again").
   var saveError: String?
+  /// Dealer photos: blur, exposure, glare and near-copy hints (phone only).
+  var quality: PhotoQuality?
 
   /// Kept in the app only because the Photos save failed or waits.
   var needsPhotosSave: Bool {

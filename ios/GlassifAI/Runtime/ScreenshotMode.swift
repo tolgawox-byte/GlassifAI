@@ -96,10 +96,50 @@ enum ScreenshotDemo {
     ParkingStore.shared.save(ParkingSpot(
       latitude: 40.9903, longitude: 29.0292, placeName: "Kadıköy Otoparkı", note: "B2 katı, 45 numara"))
 
+    seedVisualMemories(vehicleID: vehicle.id)
+
     let timers = TimerCenter.shared
     timers.scheduleNotification = { _ in false }
     timers.removeNotifications = { _ in }
     Task { _ = await timers.start(seconds: 7 * 60, label: "Yumurta") }
+  }
+}
+
+extension ScreenshotDemo {
+  /// Two visual memories with drawn stand-in photos (no camera in the
+  /// simulator) and a few Scene Timeline lines.
+  static func seedVisualMemories(vehicleID: UUID) {
+    let memory = MemoryStore.shared
+    memory.visualMemoriesEnabled = true
+    memory.saveVisualPhotos = true
+    let samples: [(text: String, place: String, labels: [String], colors: [UIColor], vehicle: Bool)] = [
+      ("Anahtarlık mutfak tezgâhında, kahve makinesinin yanında.", "Ev", ["key", "kitchen", "countertop"],
+       [.systemTeal, .systemIndigo], false),
+      ("Civic'in sağ ön jantında çizik; lastik 215/55R16.", "Bayi otoparkı", ["wheel", "tire", "car"],
+       [.systemGray, .systemBlue], true),
+    ]
+    for sample in samples {
+      let size = CGSize(width: 480, height: 360)
+      let image = UIGraphicsImageRenderer(size: size).image { context in
+        let colors = sample.colors.map(\.cgColor) as CFArray
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+          context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
+        }
+      }
+      guard let jpeg = image.jpegData(compressionQuality: 0.8),
+            let record = memory.remember(
+              sample.text, kind: .visual, source: "visual",
+              location: MemoryLocation(latitude: 40.99, longitude: 29.03, placeName: sample.place), thumbnail: jpeg)
+      else { continue }
+      VisualMemoryIndex.shared.record(
+        record.id, analysis: VisualAnalysis.Result(text: "", labels: sample.labels),
+        vehicleID: sample.vehicle ? vehicleID : nil, image: jpeg)
+    }
+    UserDefaults.standard.set(true, forKey: SceneTimeline.enabledKey)
+    let now = Date()
+    for (minutes, line) in [(95, "Bayi ofisi, masada evraklar"), (70, "Otopark, beyaz Honda Civic"), (40, "Servis girişi, iki araç sırada")] {
+      SceneTimeline.shared.note(line, now: now.addingTimeInterval(-Double(minutes) * 60), enabled: true)
+    }
   }
 }
 
@@ -119,6 +159,11 @@ struct ScreenshotRootView: View {
       case "captures": NavigationStack { CapturesView() }
       case "commands": NavigationStack { CommandLibraryView() }
       case "commandlab": NavigationStack { CommandLabView() }
+      case "search": NavigationStack { GlobalSearchView(initialText: "Corolla") }
+      case "privacy": NavigationStack { PrivacySettingsView() }
+      case "visualmemory": NavigationStack { VisualMemoryGallery() }
+      case "memorysettings": NavigationStack { MemorySettingsView() }
+      case "raybancaps": NavigationStack { RayBanCapabilitiesView() }
       default: StreamSessionView(wearables: nil)
       }
     }

@@ -4,13 +4,16 @@ import SwiftUI
 /// category, with examples to say. Voice is primary; parameterless actions
 /// can also run from here (the same executor as speech).
 struct CommandLibraryView: View {
+  /// The category to open with ("dealer" after "bayide neler yapabilirsin?").
+  let topic: String?
   @State private var text = ""
   @State private var category: ActionDefinition.Category?
   @State private var running: String?
   @State private var result: String?
+  @State private var appliedTopic = false
 
   init(topic: String? = nil) {
-    _category = State(initialValue: topic.flatMap(ActionDefinition.Category.init(rawValue:)))
+    self.topic = topic
   }
 
   private var entries: [ActionDefinition] {
@@ -51,6 +54,11 @@ struct CommandLibraryView: View {
     }
     .searchable(text: $text, prompt: L.t("Find a command", "Komut ara"))
     .navigationTitle(L.t("Command Library", "Komut kütüphanesi"))
+    .onAppear {
+      guard !appliedTopic else { return }
+      appliedTopic = true
+      category = topic.flatMap(ActionDefinition.Category.init(rawValue:))
+    }
   }
 
   private func chip(_ value: ActionDefinition.Category?, _ title: String, _ icon: String) -> some View {
@@ -262,6 +270,26 @@ struct CommandLabView: View {
   static func parameters(of intent: VoiceIntent) -> String {
     let mirror = Mirror(reflecting: intent)
     guard let child = mirror.children.first else { return "—" }
-    return String(describing: child.value)
+    return describe(child.value)
+  }
+
+  /// "süt al" for one value; "title: Toplantı · time: …" for several;
+  /// optionals without a value are left out.
+  private static func describe(_ value: Any) -> String {
+    let mirror = Mirror(reflecting: value)
+    switch mirror.displayStyle {
+    case .tuple:
+      let parts = mirror.children.compactMap { child -> String? in
+        let text = describe(child.value)
+        guard text != "—" else { return nil }
+        return mirror.children.count == 1 ? text : "\(child.label ?? "_"): \(text)"
+      }
+      return parts.isEmpty ? "—" : parts.joined(separator: " · ")
+    case .optional:
+      guard let wrapped = mirror.children.first else { return "—" }
+      return describe(wrapped.value)
+    default:
+      return String(describing: value)
+    }
   }
 }

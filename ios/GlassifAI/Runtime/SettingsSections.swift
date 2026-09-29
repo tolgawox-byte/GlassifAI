@@ -25,6 +25,8 @@ enum AppInfo {
 struct PrivacySettingsView: View {
   @ObservedObject private var memory = MemoryStore.shared
   @ObservedObject private var captures = CaptureLibrary.shared
+  @AppStorage(SpotlightIndexer.enabledKey) private var spotlight = true
+  @AppStorage(SpotlightIndexer.memoriesKey) private var spotlightMemories = false
   @State private var permissions: [AppPermission: PermissionState] = [:]
   @State private var confirmWipe = false
   @State private var wiped = false
@@ -54,6 +56,20 @@ struct PrivacySettingsView: View {
           L.t("ChatGPT sign-in tokens stay in this iPhone's Keychain and are sent only to OpenAI.",
               "ChatGPT oturum anahtarları bu iPhone'un Anahtar Zinciri'nde kalır ve yalnızca OpenAI'ye gider."), "key")
       }
+      Section {
+        Toggle(L.t("Show in iOS Spotlight", "iOS Spotlight'ta göster"), isOn: $spotlight)
+        Toggle(L.t("Include memories", "Anıları da ekle"), isOn: $spotlightMemories)
+          .disabled(!spotlight)
+      } header: {
+        Text("Spotlight")
+      } footer: {
+        Text(L.t(
+          "Notes, open tasks and vehicles appear in iPhone search (on this iPhone only; nothing while it is locked). Vehicles show only the VIN's last six characters. Memories stay out unless you turn them on.",
+          "Notlar, açık görevler ve araçlar iPhone aramasında görünür (yalnız bu iPhone'da; kilitliyken hiçbiri). Araçlarda yalnız VIN'in son altı hanesi görünür. Anılar siz açmadıkça eklenmez."))
+      }
+      .onChange(of: spotlight) { _, _ in SpotlightIndexer.shared.scheduleReindex(after: 0.2) }
+      .onChange(of: spotlightMemories) { _, _ in SpotlightIndexer.shared.scheduleReindex(after: 0.2) }
+
       Section(L.t("What is stored on this iPhone", "Bu iPhone'da ne saklanır")) {
         privacyRow(
           L.t("Memories and notes", "Anılar ve notlar"),
@@ -137,6 +153,9 @@ struct PrivacySettingsView: View {
         DealerStore.shared.deleteEverything()
         ShoppingListStore.shared.deleteEverything()
         ParkingStore.shared.clear()
+        VisualMemoryIndex.shared.deleteEverything()
+        SceneTimeline.shared.deleteEverything()
+        Task { await SpotlightIndexer.shared.removeAll() }
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()
         wiped = true

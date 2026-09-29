@@ -10,12 +10,15 @@ final class AppNavigator: ObservableObject {
     case commandLibrary(topic: String?)
     case search(String)
     case commandLab
+    /// One visual memory with its photo, or the gallery (nil).
+    case visualMemory(UUID?)
 
     var id: String {
       switch self {
       case .commandLibrary(let topic): "commands-\(topic ?? "all")"
       case .search(let text): "search-\(text)"
       case .commandLab: "commandlab"
+      case .visualMemory(let id): "visual-\(id?.uuidString ?? "all")"
       }
     }
   }
@@ -48,9 +51,22 @@ extension AssistantOrchestrator {
 
   // MARK: Global search
 
-  func runGlobalSearch(_ text: String, traceID: UUID) -> IntentOutcome {
-    let query = GlobalSearch.parse(text)
-    let results = GlobalSearch.run(query)
+  func runGlobalSearch(_ text: String, traceID: UUID) async -> IntentOutcome {
+    var query = GlobalSearch.parse(text)
+    var results = await GlobalSearch.runWithSpotlight(query)
+    if results.isEmpty, let rewritten = await LocalBrain.rewriteSearch(query.text) {
+      // Other words for the same thing, made on the phone.
+      query.text = rewritten
+      results = await GlobalSearch.runWithSpotlight(query)
+    }
+    #if canImport(FoundationModels)
+    if results.isEmpty, #available(iOS 27.0, *), let answer = await LocalBrain.answerFromMyData(text) {
+      ActionTraceLog.shared.update(traceID) { $0.executor = "On-device model + Spotlight (iOS 27)" }
+      return IntentOutcome(
+        spoken: "From the user's own AutoLoom items, found on this iPhone: \(answer)\nSay it briefly; if it does not answer the question, say nothing was found.",
+        reply: answer)
+    }
+    #endif
     ActionTraceLog.shared.update(traceID) {
       $0.executor = "GlobalSearch (on this iPhone)"
       $0.parsed = "\(results.count) results" + (query.kinds.map { " · " + $0.map(\.rawValue).sorted().joined(separator: ",") } ?? "")

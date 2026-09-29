@@ -180,6 +180,7 @@ struct VehicleDetailView: View {
           }
           .onDelete { offsets in store.update(vehicleID) { $0.damage.remove(atOffsets: offsets) } }
         }
+        VehicleSuperSections(vehicleID: vehicleID)
         checklistSection(L.t("Photo checklist", "Fotoğraf listesi"), \.photoChecklist)
         checklistSection(L.t("Delivery checklist", "Teslim listesi"), \.deliveryChecklist)
         checklistSection(L.t("Test drive", "Test sürüşü"), \.testDriveChecklist)

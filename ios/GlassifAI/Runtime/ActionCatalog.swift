@@ -353,7 +353,7 @@ enum ActionCatalog {
       ui: "Memory → Search", keys: ["searchNotes"]),
     ActionDefinition(
       "note.delete", .memory, name: "Delete a note", tr: "Notu sil",
-      summary: "Deletes the note just saved (or the newest) after a yes.", examplesTR: ["Bu notu sil"],
+      summary: "Deletes the note just saved (or the newest) after a yes.", examplesTR: ["Bu notu sil", "Son notu sil"],
       risk: .confirm, confirmation: .always, ui: "Memory → Notes → swipe", keys: ["deleteNote"]),
     ActionDefinition(
       "memory.save", .memory, name: "Remember this", tr: "Bunu hatırla",
@@ -386,6 +386,15 @@ enum ActionCatalog {
       examplesTR: ["[visual] Anahtarımı buraya bıraktığımı hatırla", "[visual] Bunu hatırla"],
       examplesEN: ["[visual] Remember this"], capabilities: [.camera],
       ui: "Memory → Visual memory", keys: ["visualMemory"]),
+    ActionDefinition(
+      "memory.findVisual", .memory, name: "Where did I see it?", tr: "Nerede görmüştüm?",
+      summary: "Searches the user's own visual memories (text and objects read on the phone, place, vehicle) and shows the photo.",
+      examplesTR: [
+        "Anahtarımı en son nerede gördüm?", "Cüzdanımı nerede görmüştüm?", "Bugün neler gördüm?", "Görsel anılarımı göster",
+      ],
+      examplesEN: ["Where did I last see my keys?", "What did I see today?"],
+      parameters: [.init("what", .text, required: false, "What to find")],
+      ui: "Memory → Visual memory", status: .working, keys: ["findVisual"], quick: true),
   ]
 
   private static let tasks: [ActionDefinition] = [
@@ -431,7 +440,7 @@ enum ActionCatalog {
       status: .physicalTestRequired, keys: ["locationReminder"]),
     ActionDefinition(
       "notification.schedule", .tasks, name: "Notify me", tr: "Haber ver",
-      summary: "A local notification at a time.", examplesTR: ["20 dakika sonra bana haber ver"],
+      summary: "A local notification at a time.", examplesTR: ["20 dakika sonra bana haber ver"], examplesEN: ["Notify me in 20 minutes"],
       permissions: [.notifications], undo: .notSupported, voiceOnly: "Timers and reminders cover it on screen",
       keys: ["notify"]),
     ActionDefinition(
@@ -514,6 +523,11 @@ enum ActionCatalog {
       summary: "Ends Live Vision.", examplesTR: ["Canlı görüşü kapat"], examplesEN: ["Stop watching"],
       route: .delegation("live_vision_stop"), ui: "Assistant → Live Vision chip"),
     ActionDefinition(
+      "vision.whatChanged", .vision, name: "What changed?", tr: "Ne değişti?",
+      summary: "While Live Vision watches: the last two scene notes, compared. Never a guess from an old frame.",
+      examplesTR: ["[live] Ne değişti?", "[live] Bir şey değişti mi?"], examplesEN: ["[live] What changed?"],
+      capabilities: [.camera], ui: "Assistant → Live Vision chip", status: .physicalTestRequired, keys: ["whatChanged"]),
+    ActionDefinition(
       "translation.view", .translation, name: "Translate what I see", tr: "Gördüğümü çevir",
       summary: "Reads the text in view and translates it.",
       examplesTR: ["[camera] Bu tabelayı Türkçeye çevir", "[camera] Şunu İngilizceye çevir"],
@@ -579,7 +593,10 @@ enum ActionCatalog {
     ActionDefinition(
       "dealer.damage", .dealer, name: "Add damage", tr: "Hasar ekle",
       summary: "Zone and kind from your words (Turkish or English), linked to the vehicle.",
-      examplesTR: ["Hasar ekle: sağ ön çamurluk çizik", "Hasar: ön cam çatlak"], examplesEN: ["Add damage: rear bumper scratch"],
+      examplesTR: [
+        "Hasar ekle: sağ ön çamurluk çizik", "Hasar: ön cam çatlak", "[vehicle] Sağ ön jant çizik, not et",
+      ],
+      examplesEN: ["Add damage: rear bumper scratch"],
       parameters: [.init("damage", .text, "Where and what")], undo: .supported, ui: "Explore → Dealer → vehicle → Damage",
       keys: ["dealer.addDamage"]),
     ActionDefinition(
@@ -612,6 +629,64 @@ enum ActionCatalog {
       summary: "Today's vehicles, open ones, missing photos and damage notes.",
       examplesTR: ["Bayi özeti", "Bugün dealerde ne var?"], examplesEN: ["Dealer briefing"],
       ui: "Explore → Dealer", keys: ["dealer.dealerBriefing"]),
+    ActionDefinition(
+      "dealer.decodeVIN", .dealer, name: "Decode the VIN", tr: "VIN'i çöz",
+      summary: "NHTSA vPIC decode (keyless); only a clean decode fills the vehicle, equipment marked VIN decoded.",
+      examplesTR: ["VIN'i çöz", "VIN'i çözümle"], examplesEN: ["Decode the VIN"],
+      capabilities: [.network, .dealerSession], offline: false, ui: "Explore → Dealer → vehicle → Decode VIN",
+      status: .working, keys: ["dealer.decodeVIN"]),
+    ActionDefinition(
+      "dealer.readTire", .dealer, name: "Read the tire", tr: "Lastiği oku",
+      summary: "Size and DOT date from the sidewall, copied exactly; tread depth is never estimated.",
+      examplesTR: ["Lastiği oku", "[vehicle] Sağ ön lastiği oku"], examplesEN: ["Read the tire"],
+      parameters: [.init("position", .text, required: false, "Which tire")],
+      capabilities: [.camera, .network], offline: false, ui: "Explore → Dealer → vehicle → Tires",
+      status: .physicalTestRequired, keys: ["dealer.readTire"]),
+    ActionDefinition(
+      "dealer.dashboard", .dealer, name: "Warning lights", tr: "Uyarı ışıkları",
+      summary: "The lights clearly lit on the cluster, by name and colour; no diagnosis.",
+      examplesTR: ["Uyarı ışıklarına bak", "Gösterge paneline bak"], examplesEN: ["Check the warning lights"],
+      capabilities: [.camera, .network], offline: false, ui: "Explore → Dealer → vehicle → Warning lights",
+      status: .physicalTestRequired, keys: ["dealer.readDashboard"]),
+    ActionDefinition(
+      "dealer.conditionReport", .dealer, name: "Condition report", tr: "Kondisyon raporu",
+      summary: "Damage, tires, lights, checked and unchecked areas, photos; saved as a note. Not a safety inspection.",
+      examplesTR: ["Kondisyon raporu", "Hasar raporu hazırla"], examplesEN: ["Condition report"],
+      ui: "Explore → Dealer → vehicle → Condition report", status: .working, keys: ["dealer.conditionReport"]),
+    ActionDefinition(
+      "dealer.serviceHandoff", .dealer, name: "Service handoff", tr: "Servis notu",
+      summary: "A note for the service department: VIN, odometer, lights, damage, tires, recalls to verify, open tasks.",
+      examplesTR: ["Servis notu hazırla", "Servise devret"], examplesEN: ["Service handoff"],
+      ui: "Explore → Dealer → vehicle → Service handoff", status: .working, keys: ["dealer.serviceHandoff"]),
+    ActionDefinition(
+      "dealer.lotSave", .dealer, name: "Save the vehicle's spot", tr: "Aracın yerini kaydet",
+      summary: "One location fix for where the vehicle stands on the lot.",
+      examplesTR: ["[vehicle] Aracın yerini kaydet"], examplesEN: ["[vehicle] Save the vehicle location"],
+      permissions: [.location], capabilities: [.location, .dealerSession], undo: .supported,
+      ui: "Explore → Dealer → vehicle → Lot spot", status: .physicalTestRequired, keys: ["dealer.saveLotSpot"]),
+    ActionDefinition(
+      "dealer.lotFind", .dealer, name: "Find the vehicle", tr: "Araç nerede?",
+      summary: "Walking directions to the vehicle's saved spot (Apple Maps, after a tap).",
+      examplesTR: ["[vehicle] Araç nerede duruyor?", "[vehicle] Aracın yeri neresi?"], examplesEN: ["[vehicle] Where is this vehicle?"],
+      confirmation: .tapOnPhone, capabilities: [.dealerSession], ui: "Explore → Dealer → vehicle → Lot spot",
+      keys: ["dealer.findLotSpot"]),
+    ActionDefinition(
+      "dealer.partNumber", .dealer, name: "Read a part number", tr: "Parça numarasını oku",
+      summary: "The part number copied exactly (? for unclear characters), saved to the vehicle's research.",
+      examplesTR: ["Parça numarasını oku"], examplesEN: ["Read the part number"],
+      capabilities: [.camera, .network], offline: false, ui: "Explore → Dealer → vehicle → Research",
+      status: .physicalTestRequired, keys: ["dealer.readPartNumber"]),
+    ActionDefinition(
+      "dealer.areaClear", .dealer, name: "Area checked", tr: "Bölge temiz",
+      summary: "Marks one area of the walk-around as checked with no damage.",
+      examplesTR: ["[vehicle] Sol taraf temiz", "[vehicle] Ön taraf hasarsız"], examplesEN: ["[vehicle] Interior is clean"],
+      parameters: [.init("area", .text, "front, rear, left, right, roof, interior, underbody, wheels, engine bay")],
+      undo: .supported, ui: "Explore → Dealer → vehicle → Condition report", status: .working, keys: ["dealer.areaClear"]),
+    ActionDefinition(
+      "dealer.export", .dealer, name: "Share the vehicle record", tr: "Aracı dışa aktar",
+      summary: "The condition report through the share sheet; AutoLoom Media is never connected automatically.",
+      examplesTR: ["Aracı dışa aktar"], examplesEN: ["Export the vehicle"], confirmation: .tapOnPhone,
+      voiceOnly: "The share sheet is the UI", status: .working, keys: ["dealer.exportVehicle"]),
     ActionDefinition(
       "dealer.vehicleQuestion", .dealer, name: "Ask about the vehicle", tr: "Araç hakkında sor",
       summary: "\"Kaç kilometre?\", \"VIN'i neydi?\": answered from the active vehicle's record.",
@@ -700,7 +775,7 @@ enum ActionCatalog {
       offline: false, voiceOnly: "Apple Maps is the UI", keys: ["nearby"]),
     ActionDefinition(
       "maps.inView", .navigation, name: "Directions to the address in view", tr: "Buraya yol tarifi",
-      summary: "The camera reads the address; you check it and tap.", examplesTR: ["Buraya yol tarifi aç"],
+      summary: "The camera reads the address; you check it and tap.", examplesTR: ["[camera] Buraya yol tarifi aç"], examplesEN: ["[camera] Get directions to this place"],
       risk: .confirm, confirmation: .tapOnPhone, capabilities: [.camera, .network], offline: false,
       voiceOnly: "The camera is the input", keys: ["directionsInView"]),
     ActionDefinition(
@@ -710,7 +785,7 @@ enum ActionCatalog {
       voiceOnly: "Long-press any answer on screen to copy", keys: ["copyText"]),
     ActionDefinition(
       "text.share", .general, name: "Share", tr: "Paylaş",
-      summary: "The share sheet with the last answer.", examplesTR: ["[answer] Bunu paylaş"], confirmation: .tapOnPhone,
+      summary: "The share sheet with the last answer.", examplesTR: ["[answer] Bunu paylaş"], examplesEN: ["[answer] Share this"], confirmation: .tapOnPhone,
       voiceOnly: "The share sheet is the UI", keys: ["shareText"]),
   ]
 
@@ -785,6 +860,8 @@ enum ActionCatalog {
       guard let words = text("text") else { return VoiceIntent.ask(.memory) }
       return VoiceIntent.saveMemory(text: VoiceActionIntentBridge.capitalizedFirst(words), kind: nil)
     case "memory.list": return .listMemories
+    case "memory.findVisual": return .findVisual(text("what") ?? "")
+    case "vision.whatChanged": return .whatChanged
     case "task.create":
       guard let title = text("title") else { return .ask(.task) }
       var due = time("due")
@@ -822,6 +899,16 @@ enum ActionCatalog {
     case "dealer.listing": return .dealer(.listing)
     case "dealer.summary": return .dealer(.summary)
     case "dealer.briefing": return .dealer(.briefing)
+    case "dealer.decodeVIN": return .dealer(.decodeVIN)
+    case "dealer.readTire": return .dealer(.readTire(text("position")))
+    case "dealer.dashboard": return .dealer(.readDashboard)
+    case "dealer.conditionReport": return .dealer(.conditionReport)
+    case "dealer.serviceHandoff": return .dealer(.serviceHandoff)
+    case "dealer.lotSave": return .dealer(.saveLotSpot)
+    case "dealer.lotFind": return .dealer(.findLotSpot)
+    case "dealer.partNumber": return .dealer(.readPartNumber)
+    case "dealer.areaClear": return text("area").flatMap(VehicleArea.parse).map { .dealer(.areaClear($0.rawValue)) }
+    case "dealer.export": return .dealer(.exportVehicle)
     case "timer.start":
       guard let seconds = text("duration").flatMap({ DurationParser.seconds(in: $0) }) else { return nil }
       return .timer(.start(seconds: Int(seconds.rounded()), label: text("label")))
@@ -989,6 +1076,8 @@ extension VoiceIntent {
     case .capabilities: "capabilities"
     case .search: "search"
     case .vehicleQuestion: "vehicleQuestion"
+    case .findVisual: "findVisual"
+    case .whatChanged: "whatChanged"
     case .correctPending: "correctPending"
     case .graph: "graph"
     case .ask(let awaiting): "ask." + awaiting.label

@@ -149,6 +149,11 @@ enum VoiceIntent: Equatable {
   case search(String)
   /// "Kaç kilometre?": a fact from the active vehicle's record.
   case vehicleQuestion(VehicleField)
+  /// "Anahtarımı en son nerede gördüm?": the user's own visual memories
+  /// (empty: today's visual memories and Scene Timeline).
+  case findVisual(String)
+  /// "Ne değişti?" while Live Vision runs: its last two scene notes.
+  case whatChanged
   /// "Bunu yarına taşı": moves a task (nil title: the task just mentioned).
   case moveTask(title: String?, time: ParsedTime)
   /// "Hayır, cumartesi": the waiting or just-saved action gets this day/time.
@@ -222,6 +227,8 @@ enum VoiceIntent: Equatable {
     case .capabilities: "capabilities"
     case .search: "search"
     case .vehicleQuestion(let field): "vehicleQuestion(\(field.rawValue))"
+    case .findVisual: "findVisual"
+    case .whatChanged: "whatChanged"
     case .moveTask: "moveTask"
     case .correctPending: "correctPending"
     case .graph(let steps): "graph(\(steps.count))"
@@ -262,6 +269,8 @@ struct VoiceBridgeContext {
   var timerRunning = false
   /// A Dealer Mode vehicle is active ("kaç kilometre?" asks about it).
   var activeVehicle = false
+  /// Live Vision is watching ("ne değişti?" asks about the view).
+  var liveVisionActive = false
   /// An event or reminder was saved moments ago ("hayır, cumartesi" fixes it).
   var recentTimedAction = false
   /// Addressed-only mode: act only when the user says the assistant's name.
@@ -362,6 +371,7 @@ enum VoiceActionIntentBridge {
     let parsers: [(Utterance) -> VoiceBridgeDecision?] = [
       { profile($0) },
       { capabilities($0) },
+      { whatChanged($0, context) },
       { translation($0, context) },
       { messages($0, context) },
       { notes($0, context) },
@@ -377,6 +387,7 @@ enum VoiceActionIntentBridge {
       { contactQuestions($0) },
       { directions($0, context) },
       { clipboard($0, context) },
+      { visualRecall($0) },
       { memory($0, context) },
       { globalSearch($0) },
     ]

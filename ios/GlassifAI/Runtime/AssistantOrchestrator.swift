@@ -198,6 +198,16 @@ final class AssistantOrchestrator: ObservableObject {
     turnID += 1
     context.addTurn(.user, text)
     logConversationTurn(.user, text)
+    if LocalBrain.isReady {
+      Task { @MainActor in
+        guard let found = await LocalBrain.entities(in: text) else { return }
+        let entities = EntityContext.shared
+        if let vehicle = found.vehicle { entities.note(.vehicle, vehicle) }
+        if let person = found.person { entities.note(.person, person) }
+        if let place = found.place { entities.note(.place, place) }
+        if let product = found.product { entities.note(.product, product) }
+      }
+    }
   }
 
   func noteAssistantTurn(_ text: String) {
@@ -243,10 +253,15 @@ final class AssistantOrchestrator: ObservableObject {
       defer {
         if background != .invalid { UIApplication.shared.endBackgroundTask(background) }
       }
-      let modelSummary = await self?.summarize(turns, startedAt: startedAt)
+      // On the phone first (the transcript never leaves it), then the cloud
+      // executor, then a plain local list.
+      let transcript = turns.map { "\($0.role == .user ? "User" : "Assistant"): \($0.text)" }.joined(separator: "\n")
+      var modelSummary = await LocalBrain.conversationSummary(transcript, startedAt: startedAt)
+      let source = modelSummary == nil ? "model" : "on-device"
+      if modelSummary == nil { modelSummary = await self?.summarize(turns, startedAt: startedAt) }
       let summary = modelSummary ?? ConversationSummarizer.localSummary(turns, startedAt: startedAt)
       store.saveConversationSummary(summary)
-      NSLog("[AutoLoom] conversation summary saved (%@)", modelSummary == nil ? "local" : "model")
+      NSLog("[AutoLoom] conversation summary saved (%@)", modelSummary == nil ? "local" : source)
     }
   }
 
@@ -372,6 +387,16 @@ final class AssistantOrchestrator: ObservableObject {
         let outcome = await self.runVoiceIntent(decision, transcript: question)
         self.typedAnswer = outcome.reply
         self.context.addTurn(.assistant, outcome.reply)
+      }
+      return
+    }
+    if !NetworkStatus.shared.isOnline, LocalBrain.isReady {
+      typedQuestion = question
+      typedAnswer = nil
+      Task { @MainActor [weak self] in
+        let answer = await OfflineAssistant.handle(question)
+        self?.typedAnswer = answer
+        self?.context.addTurn(.assistant, answer)
       }
       return
     }
@@ -1253,26 +1278,55 @@ final class AssistantOrchestrator: ObservableObject {
     let store = MemoryStore.shared
     ledger.update(taskID) { $0.visionProfile = .high }
     let attachment = try await prepareVisionImage(taskID: taskID, detail: .high)
-    let result = try await callModel(
-      taskID: taskID, kind: .visualMemory, query: query, tools: [], attachment: attachment, detail: .high)
+    let jpeg = attachment.images.first?.jpeg
+    // Text and objects are read on the phone meanwhile, so the memory can be
+    // found by what was written or seen, and saved even without internet.
+    let analysisTask = Task<VisualAnalysis.Result?, Never> {
+      guard let jpeg else { return nil }
+      return await VisualAnalysis.analyze(jpeg: jpeg)
+    }
+    var description = ""
+    var cloudError: Error?
+    do {
+      let result = try await callModel(
+        taskID: taskID, kind: .visualMemory, query: query, tools: [], attachment: attachment, detail: .high)
+      description = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    } catch {
+      if Task.isCancelled { throw error }
+      cloudError = error
+    }
     try Task.checkCancellation()
-    let description = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let analysis = await analysisTask.value
+    var savedOffline = false
+    if description.isEmpty, let analysis, let local = VisualAnalysis.offlineDescription(analysis) {
+      description = local
+      savedOffline = true
+    }
     guard !description.isEmpty else {
+      if let cloudError { throw cloudError }
       return Outcome(speakable: "The view could not be described, so nothing was saved. Tell the user.", kind: .visualMemory, failed: "empty description")
     }
     var location: MemoryLocation?
     if store.attachLocation {
       location = await LocationProvider.shared.currentLocation()
     }
-    let thumbnail = store.saveVisualPhotos ? attachment.images.first.flatMap { Thumbnailer.jpeg($0.jpeg) } : nil
+    let thumbnail = store.saveVisualPhotos ? jpeg.flatMap { Thumbnailer.jpeg($0) } : nil
     guard let record = store.remember(
       String(description.prefix(600)), title: MemoryStore.defaultTitle(for: query), kind: .visual,
       source: "visual", location: location, thumbnail: thumbnail) else {
       return Outcome(speakable: "The visual memory could not be saved. Tell the user.", kind: .visualMemory, failed: "memory save failed")
     }
+    // The larger photo only when the user allowed photos with visual memories.
+    let photo = store.saveVisualPhotos ? jpeg.flatMap { Thumbnailer.jpeg($0, maxPixel: 1_600) } : nil
+    VisualMemoryIndex.shared.record(
+      record.id, analysis: analysis ?? VisualAnalysis.Result(text: "", labels: []),
+      vehicleID: DealerStore.shared.active?.id, image: photo)
     ledger.update(taskID) { $0.executedAction = "memory.visual" }
     var spoken = "Saved as a visual memory on this iPhone: \(record.text)"
     if let place = location?.placeName { spoken += " (place: \(place))" }
+    if savedOffline {
+      spoken += "\nThe online description failed, so only what the phone itself read was saved. Say that briefly."
+    }
     return Outcome(speakable: spoken + "\nConfirm briefly and naturally.", display: record.text, kind: .visualMemory)
   }
 

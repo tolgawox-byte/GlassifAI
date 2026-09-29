@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 
 enum AppTab: String, Hashable {
@@ -18,6 +19,7 @@ struct AppShellView: View {
 
   @State private var tab: AppTab = ScreenshotMode.initialTab ?? .assistant
   @ObservedObject private var navigator = AppNavigator.shared
+  @Environment(\.scenePhase) private var scenePhase
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -49,12 +51,25 @@ struct AppShellView: View {
     .tint(AutoLoomTheme.electricBlue)
     .preferredColorScheme(.dark)
     .sensoryFeedback(.selection, trigger: tab)
+    // iOS Spotlight: indexed on launch and when the app goes to the
+    // background; a tap on a result opens it here.
+    .task { SpotlightIndexer.shared.scheduleReindex(after: 5) }
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .background { SpotlightIndexer.shared.scheduleReindex(after: 0.5) }
+    }
+    .onContinueUserActivity(CSSearchableItemActionType) { activity in
+      if let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+        SpotlightIndexer.shared.open(identifier: identifier)
+      }
+    }
     .sheet(item: $navigator.sheet) { sheet in
       NavigationStack {
         switch sheet {
         case .commandLibrary(let topic): CommandLibraryView(topic: topic)
         case .search(let text): GlobalSearchView(initialText: text)
         case .commandLab: CommandLabView()
+        case .visualMemory(let id):
+          if let id { VisualMemoryDetail(recordID: id) } else { VisualMemoryGallery() }
         }
       }
       .presentationDetents([.medium, .large])

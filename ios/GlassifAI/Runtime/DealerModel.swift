@@ -367,9 +367,14 @@ struct DamageFinding: Codable, Equatable, Identifiable {
   var text: String
   var at = Date()
   var captureIDs: [UUID] = []
+  /// Said by the user ("hafif", "derin"); nil when not said — never guessed.
+  var severity: DamageSeverity?
+  /// "spoken" or "camera".
+  var source: String?
 
   func title(turkish: Bool) -> String {
-    [zone?.title(turkish: turkish), kind.title(turkish: turkish)].compactMap { $0 }.joined(separator: " ")
+    [zone?.title(turkish: turkish), kind.title(turkish: turkish), severity?.title(turkish: turkish)]
+      .compactMap { $0 }.joined(separator: " ")
   }
 
   static func kind(in text: String) -> DamageKind {
@@ -388,6 +393,27 @@ struct DamageFinding: Codable, Equatable, Identifiable {
       (.wear, ["asinma", "asinmis", "wear", "worn"]),
     ]
     return table.first { entry in entry.1.contains { folded.contains(" " + $0) } }?.0 ?? .other
+  }
+}
+
+enum DamageSeverity: String, Codable, CaseIterable {
+  case minor, moderate, severe
+
+  func title(turkish: Bool) -> String {
+    switch self {
+    case .minor: turkish ? "(hafif)" : "(minor)"
+    case .moderate: turkish ? "(orta)" : "(moderate)"
+    case .severe: turkish ? "(ağır)" : "(severe)"
+    }
+  }
+
+  /// Only words the user said; no words, no severity.
+  static func parse(_ text: String) -> DamageSeverity? {
+    let words = Set(MemorySearch.fold(text).components(separatedBy: CharacterSet.alphanumerics.inverted))
+    if !words.isDisjoint(with: ["agir", "buyuk", "derin", "ciddi", "severe", "major", "deep", "heavy"]) { return .severe }
+    if !words.isDisjoint(with: ["orta", "moderate", "medium"]) { return .moderate }
+    if !words.isDisjoint(with: ["hafif", "kucuk", "minik", "ufak", "minor", "light", "small", "slight"]) { return .minor }
+    return nil
   }
 }
 
@@ -530,6 +556,15 @@ struct VehicleSession: Codable, Equatable, Identifiable {
   var memoryIDs: [UUID] = []
   var research: [ResearchEntry] = []
   var closedAt: Date?
+  // Added later: optional, so vehicles saved by older versions still load.
+  /// Equipment with where each fact came from.
+  var options: [VehicleOption]?
+  var vinDecode: VINDecode?
+  var recallCheck: RecallCheckResult?
+  var tires: [TireReading]?
+  var lotSpot: LotSpot?
+  /// Areas walked for the condition report ("front", "left", …).
+  var inspected: [String]?
 
   var isOpen: Bool { closedAt == nil }
 
@@ -569,6 +604,18 @@ struct VehicleSession: Codable, Equatable, Identifiable {
     for note in interiorNotes { lines.append(label("İç mekan: ", "Interior: ") + note) }
     for note in mechanicalNotes { lines.append(label("Mekanik: ", "Mechanical: ") + note) }
     for light in warningLights { lines.append(label("Uyarı lambası: ", "Warning light: ") + light) }
+    for option in options ?? [] {
+      lines.append("\(option.name): \(option.value) [\(option.provenance.rawValue)]")
+    }
+    for tire in tires ?? [] {
+      let facts = [tire.size?.text, tire.dot.map { "DOT \($0.week)/\($0.year)" }].compactMap { $0 }.joined(separator: ", ")
+      if !facts.isEmpty { lines.append(label("Lastik", "Tire") + (tire.position.map { " (\($0))" } ?? "") + ": " + facts) }
+    }
+    if let recallCheck {
+      lines.append(label(
+        "Geri çağırma (Transport Canada, model yılına göre, VIN'e göre değil): ",
+        "Recalls (Transport Canada, by model year, not by VIN): ") + "\(recallCheck.safetyCampaigns.count)")
+    }
     return lines.joined(separator: "\n")
   }
 
@@ -645,6 +692,11 @@ final class DealerStore: ObservableObject {
     update(id) { session in
       if !session.captureIDs.contains(record.id) { session.captureIDs.append(record.id) }
       if let label = record.label { ticked = session.tickPhoto(for: label) }
+      // A photo within three minutes of a damage note documents that damage.
+      if record.kind == .photo,
+         let index = session.damage.lastIndex(where: { record.createdAt.timeIntervalSince($0.at) < 180 && $0.captureIDs.isEmpty }) {
+        session.damage[index].captureIDs.append(record.id)
+      }
       if session.status == .intake || session.status == .inspection { session.status = .photos }
     }
     return ticked

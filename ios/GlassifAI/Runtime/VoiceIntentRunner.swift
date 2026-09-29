@@ -157,6 +157,8 @@ extension VoiceIntent {
     case .capabilities: "CAPABILITIES"
     case .search: "SEARCH"
     case .vehicleQuestion: "VEHICLE_QUESTION"
+    case .findVisual: "FIND_VISUAL"
+    case .whatChanged: "WHAT_CHANGED"
     case .moveTask: "MOVE_TASK"
     case .correctPending: "CORRECT_PENDING"
     case .graph: "ACTION_GRAPH"
@@ -261,6 +263,7 @@ extension AssistantOrchestrator {
     bridge.isRecording = RayBanMediaCoordinator.shared.isRecording
     bridge.timerRunning = TimerCenter.shared.isRunning
     bridge.activeVehicle = DealerStore.shared.active != nil
+    bridge.liveVisionActive = LiveVisionController.shared.isActive
     bridge.recentTimedAction = DeviceActionExecutor.shared.lastCreated.map { Date().timeIntervalSince($0.at) < 180 } ?? false
     return bridge
   }
@@ -433,6 +436,7 @@ extension AssistantOrchestrator {
       }
       recentSaved = (note.content, Date(), note.id)
       let noteID = note.id
+      NoteEnricher.enrich(noteID)
       LocalUndo.shared.record(kind: "note", english: "note removed", turkish: "not silindi") {
         guard let saved = MemoryStore.shared.notes.first(where: { $0.id == noteID }) else { return false }
         MemoryStore.shared.deleteNote(saved)
@@ -827,10 +831,16 @@ extension AssistantOrchestrator {
       return runCapabilities(topic: topic, traceID: traceID)
 
     case .search(let text):
-      return runGlobalSearch(text, traceID: traceID)
+      return await runGlobalSearch(text, traceID: traceID)
 
     case .vehicleQuestion(let field):
       return await answerVehicleQuestion(field, transcript: transcript, traceID: traceID)
+
+    case .findVisual(let text):
+      return findVisual(text, traceID: traceID)
+
+    case .whatChanged:
+      return whatChanged(traceID: traceID)
 
     case .moveTask(let title, let time):
       return moveTask(title: title, time: time, traceID: traceID)
@@ -885,6 +895,9 @@ extension AssistantOrchestrator {
     var speech = RayBanMediaCoordinator.photoSpeech(outcome, withNote: noteID != nil)
     if note != nil, noteID == nil {
       speech = RayBanMediaCoordinator.Speech(tr: speech.tr + " Notu kaydedemedim.", en: speech.en + " I couldn't save the note.")
+    }
+    if let dealer = RayBanMediaCoordinator.dealerSpeech(for: outcome) {
+      speech = RayBanMediaCoordinator.Speech(tr: speech.tr + " " + dealer.tr, en: speech.en + " " + dealer.en)
     }
     switch outcome {
     case .saved:
@@ -1625,7 +1638,7 @@ extension AssistantOrchestrator {
   }
 
   /// The share sheet with the text; "shared" only when the user finishes.
-  private func prepareShare(_ text: String?, traceID: UUID) async -> IntentOutcome {
+  func prepareShare(_ text: String?, traceID: UUID) async -> IntentOutcome {
     guard AssistantPreferences.actionsEnabled else { return actionsOff() }
     guard ToolRegistry.allows(.shareText) else { return toolOff(.shareText) }
     guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

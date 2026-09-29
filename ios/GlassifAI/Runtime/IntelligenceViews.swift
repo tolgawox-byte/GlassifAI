@@ -7,6 +7,7 @@ import SwiftUI
 struct IntelligenceSettingsView: View {
   @ObservedObject private var registry = ProviderRegistry.shared
   @State private var showAdvanced = false
+  @AppStorage(LocalBrain.enabledKey) private var localBrainEnabled = true
 
   var body: some View {
     let context = registry.routingContext()
@@ -33,6 +34,17 @@ struct IntelligenceSettingsView: View {
           ? L.t("Automatic: the router picks among connected providers.", "Otomatik: yönlendirici bağlı sağlayıcılar arasından seçer.")
           : L.t("Off: ChatGPT and the phone do everything, except roles you pinned below.",
                 "Kapalı: aşağıda atadığınız roller dışında her şeyi ChatGPT ve telefon yapar.")))
+      }
+
+      Section {
+        Toggle(L.t("Use the on-device model", "Cihazdaki modeli kullan"), isOn: $localBrainEnabled)
+        LabeledContent(L.t("Apple Intelligence", "Apple Intelligence"), value: LocalBrain.statusText)
+      } header: {
+        Text(L.t("On this iPhone", "Bu iPhone'da"))
+      } footer: {
+        Text(L.t(
+          "Apple's on-device model titles and tags notes, summarises conversations, understands what you talk about and answers simply when you are offline. Nothing leaves the phone; it never replaces the connected agents for harder questions.",
+          "Apple'ın cihazdaki modeli notlara başlık ve etiket verir, konuşmaları özetler, neyden bahsettiğini anlar ve çevrimdışıyken basitçe yanıtlar. Hiçbir şey telefondan çıkmaz; zor sorularda bağlı ajanların yerini almaz."))
       }
 
       Section(L.t("Providers", "Sağlayıcılar")) {

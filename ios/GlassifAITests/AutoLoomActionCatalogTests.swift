@@ -41,6 +41,7 @@ final class AutoLoomActionCatalogTests: XCTestCase {
     if tags.contains("timer") { context.timerRunning = true }
     if tags.contains("recording") { context.isRecording = true }
     if tags.contains("vehicle") { context.activeVehicle = true }
+    if tags.contains("live") { context.liveVisionActive = true }
     if tags.contains("camera") { context.cameraAvailable = true }
     if tags.contains("visual") {
       context.cameraAvailable = true
@@ -169,10 +170,13 @@ final class AutoLoomActionCatalogTests: XCTestCase {
       .ask(.note), .ask(.memory), .ask(.task), .ask(.reminderTitle), .ask(.eventTime(title: "x")),
       .timer(.start(seconds: 60, label: nil)), .timer(.cancel), .timer(.remaining), .shopping(.add(["x"])), .shopping(.read),
       .shopping(.remove("x")), .parking(.save(note: nil)), .parking(.recall), .parking(.directions), .parking(.clear),
+      .findVisual("x"), .findVisual(""), .whatChanged,
     ]
     let dealer: [DealerCommand] = [
       .startVehicle, .nextVehicle, .finishVehicle, .readVIN, .readOdometer, .setOdometer(1, .km), .addDamage("x"),
       .photoChecklist, .deliveryChecklist, .marketResearch, .listing, .summary, .briefing, .saveVehicle, .recallCheck,
+      .decodeVIN, .readTire(nil), .readTire("sağ ön"), .readDashboard, .conditionReport, .serviceHandoff, .saveLotSpot,
+      .findLotSpot, .readPartNumber, .areaClear("left"), .exportVehicle,
     ]
     for intent in intents + dealer.map({ VoiceIntent.dealer($0) }) {
       XCTAssertNotNil(ActionCatalog.definition(for: intent), "no catalog entry for \(intent.catalogKey)")

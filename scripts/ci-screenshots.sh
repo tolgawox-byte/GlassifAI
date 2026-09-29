@@ -9,7 +9,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build-tests/Build/Products/Debug-iphonesimulator/GlassifAI.app"
 OUT="$ROOT/screenshots"
-SCREENS="${AUTOLOOM_SCREENS:-assistant memory tasks explore settings dealer vehicle shopping intelligence personality captures commands commandlab search privacy skills visualmemory translation remoteassist routines timeline performance}"
+SCREENS="${AUTOLOOM_SCREENS:-assistant memory tasks explore settings dealer vehicle shopping intelligence personality captures commands commandlab search privacy skills visualmemory memorysettings raybancaps translation remoteassist routines timeline performance}"
 
 if [ ! -d "$APP" ]; then
   echo "::warning title=Screenshots::No simulator build at build-tests/ (did the unit tests run?)"
@@ -43,15 +43,35 @@ for service in camera microphone photos-add photos location reminders calendar c
 done
 
 rm -rf "$OUT"
-mkdir -p "$OUT"
+mkdir -p "$OUT/logs"
+LOGS="$OUT/logs"
 taken=0
+crashed=0
 for screen in $SCREENS; do
   xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
-  if ! xcrun simctl launch "$UDID" "$BUNDLE" -AutoLoomScreenshot "$screen" >/dev/null 2>&1; then
-    echo "::warning title=Screenshot $screen::launch failed"
+  sleep 1
+  started="$(date +%s)"
+  # The app's own output (NSLog goes to stderr) is kept next to the screenshots.
+  if ! xcrun simctl launch --stdout="$LOGS/$screen.out.txt" --stderr="$LOGS/$screen.err.txt" \
+      "$UDID" "$BUNDLE" -AutoLoomScreenshot "$screen" >"$LOGS/$screen.launch.txt" 2>&1; then
+    echo "::warning title=Screenshot $screen::launch failed: $(tail -c 300 "$LOGS/$screen.launch.txt" | tr '\n' ' ')"
     continue
   fi
   sleep 7
+  # A launch that did not stay up: say why (crash report, app output).
+  if ! xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
+    report="$(python3 "$ROOT/scripts/crash-summary.py" GlassifAI "$started" 2>&1 | head -c 1500)"
+    newest="$(ls -t ~/Library/Logs/DiagnosticReports/GlassifAI*.ips 2>/dev/null | head -1)"
+    [ -n "$newest" ] && cp "$newest" "$LOGS/$screen.crash.ips"
+    output="$(tail -c 400 "$LOGS/$screen.err.txt" 2>/dev/null | tr '\n' ' ')"
+    echo "::warning title=Screenshot $screen::not running after launch — $report — stderr: ${output:-none}"
+    crashed=$((crashed + 1))
+    if [ "$crashed" -ge 3 ]; then
+      echo "::warning title=Screenshots::stopped after 3 launches that did not stay up"
+      break
+    fi
+    continue
+  fi
   if xcrun simctl io "$UDID" screenshot --type=png "$OUT/$screen.png" >/dev/null 2>&1; then
     taken=$((taken + 1))
   else

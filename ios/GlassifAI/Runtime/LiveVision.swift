@@ -77,6 +77,8 @@ final class LiveVisionController: ObservableObject {
   @Published private(set) var lastUpdateAt: Date?
   @Published private(set) var lastError: String?
   @Published private(set) var lastStopReason: String?
+  /// The last few scene notes of this run, for "ne değişti?".
+  private(set) var recentNotes: [(at: Date, text: String)] = []
 
   var isActive: Bool { status != .off }
 
@@ -114,6 +116,7 @@ final class LiveVisionController: ObservableObject {
     lastUpdateAt = nil
     lastError = nil
     lastStopReason = nil
+    recentNotes = []
     lastThumbnail = nil
     lastSentAt = nil
     nextCheckAt = nil
@@ -219,6 +222,10 @@ final class LiveVisionController: ObservableObject {
       lastSummary = summary
       lastUpdateAt = Date()
       updateCount += 1
+      recentNotes.append((Date(), summary))
+      if recentNotes.count > 6 { recentNotes.removeFirst(recentNotes.count - 6) }
+      // Opt-in Scene Timeline (off by default): one line of text, no image.
+      SceneTimeline.shared.note(summary)
       lastError = nil
       let time = Date().formatted(date: .omitted, time: .standard)
       if !contextSink("[Live view \(time)] \(summary)") {

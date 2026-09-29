@@ -217,12 +217,14 @@ private extension String {
 
 /// The search screen: the same engine as voice.
 struct GlobalSearchView: View {
-  @State var text: String
+  let initialText: String
+  @State private var text = ""
   @State private var kind: SearchResult.Kind?
   @State private var results: [SearchResult] = []
+  @State private var seeded = false
 
   init(initialText: String = "") {
-    _text = State(initialValue: initialText)
+    self.initialText = initialText
   }
 
   var body: some View {
@@ -270,9 +272,24 @@ struct GlobalSearchView: View {
     }
     .searchable(text: $text, prompt: L.t("Search AutoLoom", "AutoLoom'da ara"))
     .navigationTitle(L.t("Search", "Ara"))
-    .onAppear(perform: refresh)
+    .onAppear {
+      if !seeded {
+        seeded = true
+        text = initialText
+      }
+      refresh()
+    }
     .onChange(of: text) { _, _ in refresh() }
     .onChange(of: kind) { _, _ in refresh() }
+    // Spotlight's semantic matches (iOS 18+), merged in after the local ones.
+    .task(id: "\(text)|\(kind?.rawValue ?? "")") {
+      try? await Task.sleep(nanoseconds: 350_000_000)
+      guard !Task.isCancelled else { return }
+      var query = GlobalSearch.parse(text)
+      if let kind { query.kinds = [kind] }
+      let merged = await GlobalSearch.runWithSpotlight(query)
+      if !Task.isCancelled, merged.count > results.count { results = merged }
+    }
   }
 
   private func filterChip(_ value: SearchResult.Kind?, _ title: String, _ icon: String) -> some View {

@@ -128,7 +128,8 @@ jobs:
         run: |
           chmod +x ./scripts/ci-screenshots.sh
           ./scripts/ci-screenshots.sh
-          ls screenshots/*.png >/dev/null 2>&1 || exit 0
+          # Screenshots, or at least the launch logs and crash reports.
+          compgen -G "screenshots/*.png" >/dev/null || compgen -G "screenshots/logs/*" >/dev/null || exit 0
           RUN_DIR="run-${GITHUB_RUN_ID}-${GITHUB_SHA::7}"
           SHOTS="$RUNNER_TEMP/shots"
           if git fetch -q origin ci-screenshots 2>/dev/null; then
@@ -139,7 +140,8 @@ jobs:
             git -C "$SHOTS" switch -q --orphan ci-screenshots
           fi
           mkdir -p "$SHOTS/$RUN_DIR"
-          cp screenshots/*.png "$SHOTS/$RUN_DIR/"
+          cp screenshots/*.png "$SHOTS/$RUN_DIR/" 2>/dev/null || true
+          cp -R screenshots/logs "$SHOTS/$RUN_DIR/" 2>/dev/null || true
           git -C "$SHOTS" add "$RUN_DIR"
           git -C "$SHOTS" -c user.name="autoloom-ci" -c user.email="autoloom-ci@users.noreply.github.com" \
             commit -q -m "Screenshots ${RUN_DIR} [skip ci]"

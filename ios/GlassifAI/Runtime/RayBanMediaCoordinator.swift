@@ -63,6 +63,14 @@ final class RayBanMediaCoordinator: ObservableObject {
     case kept(CaptureRecord, KeptReason)
     case unavailable(Unavailable)
     case failed(String)
+
+    /// The capture that was made, if any.
+    var record: CaptureRecord? {
+      switch self {
+      case .saved(let record), .kept(let record, _): record
+      case .unavailable, .failed: nil
+      }
+    }
   }
 
   enum StartOutcome: Equatable {
@@ -167,6 +175,11 @@ final class RayBanMediaCoordinator: ObservableObject {
     record.codec = "JPEG"
     let jpeg = still.jpeg
     let thumbnail = await Task.detached(priority: .utility) { CaptureLibrary.thumbnail(fromJPEG: jpeg) }.value
+    // Dealer photos get quality hints (measured here; the photo is kept either way).
+    if let vehicleID = record.vehicleSessionID,
+       let assessment = await Task.detached(priority: .utility, operation: { PhotoDirector.assess(jpeg: jpeg) }).value {
+      record.quality = PhotoDirector.review(assessment, vehicleID: vehicleID)
+    }
     switch CaptureSaveMode.current {
     case .always:
       do {
@@ -444,6 +457,24 @@ final class RayBanMediaCoordinator: ObservableObject {
     let en: String
 
     var localized: String { L.t(en, tr) }
+  }
+
+  /// The photo director's hint and the damage note the photo was linked to.
+  @MainActor
+  static func dealerSpeech(for outcome: PhotoOutcome) -> Speech? {
+    guard let record = outcome.record, let vehicleID = record.vehicleSessionID else { return nil }
+    var tr: [String] = []
+    var en: [String] = []
+    if let damage = DealerStore.shared.vehicle(vehicleID)?.damage.first(where: { $0.captureIDs.contains(record.id) }) {
+      tr.append("Hasar kaydına bağladım: \(damage.title(turkish: true)).")
+      en.append("Linked to the damage note: \(damage.title(turkish: false)).")
+    }
+    if let hintTR = record.quality?.hint(turkish: true), let hintEN = record.quality?.hint(turkish: false) {
+      tr.append(hintTR)
+      en.append(hintEN)
+    }
+    guard !tr.isEmpty else { return nil }
+    return Speech(tr: tr.joined(separator: " "), en: en.joined(separator: " "))
   }
 
   static func photoSpeech(_ outcome: PhotoOutcome, withNote: Bool = false) -> Speech {

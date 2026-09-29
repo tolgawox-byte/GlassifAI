@@ -61,7 +61,7 @@ extension VoiceIntent {
   var isGraphStep: Bool {
     switch self {
     case .ask, .classify, .graph, .dropAwaiting, .confirmPending, .choosePendingTime, .cancelTasks, .correctPending,
-         .capabilities, .search:
+         .capabilities, .search, .findVisual, .whatChanged:
       false
     default:
       true
@@ -202,5 +202,59 @@ extension VoiceActionIntentBridge {
       "this", "bunu", "onu", "sunu", "lutfen", "please", "gorevi", "gorevini", "task", "the", "my",
     ])
     return VoiceBridgeDecision(.moveTask(title: rest.isEmpty ? nil : rest.text, time: time), "move task")
+  }
+}
+
+// MARK: Visual Second Brain and Live Vision questions
+
+extension VoiceActionIntentBridge {
+  static let seeVerbs: Set<String> = [
+    "gordum", "gormustum", "gorduk", "gormustuk", "gordugum", "gordugumu", "gorduydum", "gormusum", "saw", "seen",
+  ]
+
+  /// "Anahtarımı en son nerede gördüm?", "where did I last see my keys?",
+  /// "bugün neler gördüm?", "görsel anılarımı göster".
+  static func visualRecall(_ u: Utterance) -> VoiceBridgeDecision? {
+    guard u.count <= 10 else { return nil }
+    let whereWords: Set<String> = ["nerede", "nerde", "nereye", "where"]
+    if u.containsAny(whereWords), u.containsAny(seeVerbs) || (u.starts(with: ["where"]) && u.contains("see")) {
+      var object = u
+      object.removeKeys(whereWords.union(seeVerbs).union([
+        "en", "son", "ben", "acaba", "did", "i", "last", "see", "my", "the", "a", "an", "have", "had", "do",
+      ]))
+      return VoiceBridgeDecision(.findVisual(object.text), "where did I see it (visual memories)")
+    }
+    let today: [[String]] = [
+      ["bugun", "neler", "gordum"], ["bugun", "ne", "gordum"], ["what", "did", "i", "see", "today"],
+    ]
+    if today.contains(where: { u.range(of: $0) != nil }) {
+      return VoiceBridgeDecision(.findVisual(""), "what did I see today")
+    }
+    let gallery: [[String]] = [["gorsel", "anilarimi"], ["gorsel", "hafizami"], ["gorsel", "anilarim"], ["visual", "memories"]]
+    if gallery.contains(where: { u.range(of: $0) != nil }),
+       u.containsAny(["goster", "ac", "show", "open", "neler", "listele", "var"]) {
+      return VoiceBridgeDecision(.findVisual(""), "visual memory gallery")
+    }
+    return nil
+  }
+
+  /// "Ne değişti?" — only while Live Vision is watching; otherwise the
+  /// words are left to the conversation.
+  static func whatChanged(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+    guard context.liveVisionActive, u.count <= 5 else { return nil }
+    let phrases: [[String]] = [
+      ["ne", "degisti"], ["neler", "degisti"], ["degisen", "ne"], ["bir", "sey", "degisti", "mi"], ["birsey", "degisti", "mi"],
+      ["ne", "farkli"], ["what", "changed"], ["whats", "changed"], ["what", "has", "changed"], ["anything", "changed"],
+      ["whats", "different"],
+    ]
+    guard let phrase = phrases.first(where: { u.range(of: $0) != nil }), let range = u.range(of: phrase) else { return nil }
+    // Only about the view: "bu güncellemede ne değişti?" is left alone.
+    var rest = u.dropping(range)
+    rest.removeKeys([
+      "simdi", "peki", "acaba", "orada", "burada", "sahnede", "goruntude", "etrafta", "now", "there", "here", "in", "the",
+      "view", "scene",
+    ])
+    guard rest.isEmpty else { return nil }
+    return VoiceBridgeDecision(.whatChanged, "live vision: what changed")
   }
 }

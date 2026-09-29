@@ -718,6 +718,7 @@ final class MemoryStore: ObservableObject {
   }
 
   func delete(_ record: MemoryRecord) {
+    if record.kind == .visual { VisualMemoryIndex.shared.remove(record.id) }
     context?.delete(record)
     save()
   }
@@ -730,6 +731,7 @@ final class MemoryStore: ObservableObject {
   /// Notes and tasks are kept (they have their own delete).
   func deleteAllMemories() {
     for record in memories { context?.delete(record) }
+    VisualMemoryIndex.shared.deleteEverything()
     save()
     clearProfile()
   }

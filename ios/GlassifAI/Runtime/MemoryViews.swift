@@ -171,7 +171,18 @@ struct MemoryTabView: View {
       }
       let visual = visualMemories
       if !visual.isEmpty {
-        SwiftUI.Section(L.t("Visual memories", "Görsel anılar")) { ForEach(visual) { memoryLink($0) } }
+        SwiftUI.Section(L.t("Visual memories", "Görsel anılar")) {
+          NavigationLink {
+            VisualMemoryGallery()
+          } label: {
+            Label(L.t("Search what you saw", "Gördüklerinde ara"), systemImage: "eye")
+          }
+          ForEach(visual.prefix(5)) { memoryLink($0) }
+        }
+      } else if SceneTimeline.isEnabled {
+        SwiftUI.Section(L.t("Visual memories", "Görsel anılar")) {
+          NavigationLink(L.t("Scene Timeline", "Sahne zaman çizelgesi")) { VisualMemoryGallery() }
+        }
       }
     }
   }
@@ -690,6 +701,7 @@ struct NoteEditorView: View {
 
 /// Settings → Memory.
 struct MemorySettingsView: View {
+  @AppStorage(SceneTimeline.enabledKey) private var sceneTimeline = false
   @ObservedObject private var store = MemoryStore.shared
   @State private var confirmDeleteAll = false
 
@@ -724,17 +736,25 @@ struct MemorySettingsView: View {
       SwiftUI.Section(
         header: Text(L.t("Visual memories", "Görsel anılar")),
         footer: Text(L.t(
-          "Say “remember this” while looking at something: a short description of the view is saved. Photos and places are saved only if you turn them on.",
-          "Bir şeye bakarken “bunu hatırla” deyin: görüntünün kısa bir açıklaması kaydedilir. Fotoğraf ve konum yalnızca açarsanız kaydedilir."))) {
+          "Say “remember this” while looking at something: a short description, and the text and objects the phone reads in it, are saved. Photos and places are saved only if you turn them on. Nothing is recorded continuously.",
+          "Bir şeye bakarken “bunu hatırla” deyin: kısa bir açıklama ve telefonun görüntüde okuduğu yazı ve nesneler kaydedilir. Fotoğraf ve konum yalnızca açarsanız kaydedilir. Sürekli kayıt yapılmaz."))) {
         Toggle(L.t("Visual memories", "Görsel anılar"), isOn: $store.visualMemoriesEnabled)
           .disabled(!store.isEnabled)
-        Toggle(L.t("Keep a small photo", "Küçük fotoğraf sakla"), isOn: $store.saveVisualPhotos)
+        Toggle(L.t("Keep the photo", "Fotoğrafı sakla"), isOn: $store.saveVisualPhotos)
           .disabled(!store.visualMemoriesEnabled)
         Toggle(L.t("Attach the place", "Konumu ekle"), isOn: $store.attachLocation)
           .disabled(!store.visualMemoriesEnabled)
           .onChange(of: store.attachLocation) { _, on in
             if on { LocationProvider.shared.requestPermission() }
           }
+      }
+      SwiftUI.Section(
+        footer: Text(L.t(
+          "Off by default. While Live Vision runs, one short line of text per scene is kept on this iPhone for a week — never a photo. Ask “bugün neler gördüm?”.",
+          "Varsayılan olarak kapalı. Canlı görüş açıkken her sahne için kısa bir metin satırı bu iPhone'da bir hafta saklanır; asla fotoğraf değil. “Bugün neler gördüm?” diye sorun."))) {
+        Toggle(L.t("Scene Timeline", "Sahne zaman çizelgesi"), isOn: $sceneTimeline)
+          .disabled(!store.isEnabled)
+        NavigationLink(L.t("Visual memory and timeline", "Görsel hafıza ve zaman çizelgesi")) { VisualMemoryGallery() }
       }
       SwiftUI.Section {
         Button(L.t("Clear all AutoLoom memory", "Tüm AutoLoom hafızasını temizle"), role: .destructive) { confirmDeleteAll = true }
