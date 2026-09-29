@@ -1,4 +1,4 @@
-# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, Jarvis v1.2)
+# Test report — AutoLoom Media Glasses (`autoloom-glasses-jarvis-v1`, Jarvis v1.3)
 
 Result categories:
 - **BUILD PASS**: compiled into the Debug and Release IPAs in CI.
@@ -6,6 +6,76 @@ Result categories:
 - **PHYSICAL TEST REQUIRED**: needs the iPhone and Ray-Ban Meta Gen 1. The tables below are for you to fill in.
 
 Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
+
+## Voice-first actions and UI (v1.3)
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [36506372806](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36506372806) | `94575fd` | **BUILD PASS · iOS 181/181 · Rust 8/8** | **Final run for v1.3 — install this Release IPA** (`AutoLoomMediaGlasses-Release-unsigned.ipa`) |
+| [36504647861](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36504647861) | `d8cec52` | BUILD PASS · iOS 176/176 · Rust 8/8 | First green build of the voice-first changes |
+| [36504224982](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36504224982) | `7ad2bc2` | build failed | The parser chain was too slow for the type checker; split into a list |
+
+New tests (`AutoLoomVoiceFirstTests`):
+
+| Area | Test |
+|---|---|
+| The exact failing sentence and ten spellings of the name; addressed-only mode | `testTheExactNoteCommandAndTheRecognisersSpellingsOfTheName` |
+| Near names never take ordinary words ("otobüs", "okulum", "Travis"); short names only exact | `testNearNamesDoNotTakeOrdinaryWords` |
+| Saved before the confirmation; feedback card; "bununla ilgili" source | `testTheFailingCommandIsSavedBeforeTheConfirmation` |
+| Early delegation: running → taken over, answered only → the command runs, acted → not repeated | `testAnEarlyDelegationIsTakenOverNotSkipped` |
+| Free-text delegations; executor steps never claim an action | `testFreeTextDelegationsAndExecutorsNeverClaimAnAction` |
+| Same note or task within a minute stored once | `testTheSameNoteOrTaskTwiceWithinAMinuteIsOne` |
+| Brief §51 phrases; §62 physical-test sentences; §53 context scenario | `testTheBriefsVoiceActionPhrases`, `testThePhysicalTestSentences`, `testTheBriefsContextScenario` |
+| Note paraphrases; "bunu" is the last useful answer, not "Tamam, not aldım." | `testNoteParaphrases` |
+| Calls, messages, contact questions, answers to "Kime yazayım?" / "İki Ahmet buldum" | `testCalls`, `testMessages`, `testContactQuestions`, `testAnswersToTheBridgesQuestions` |
+| Maps (home, work, dative places, nearby, English, camera, compound requests), saved home address | `testDirections`, `testAnAddressFromTheConversation`, `testSavedHomeAddress` |
+| Copy / share, day plan, "Neyi hatırlatayım?", event titles and "yarına" | `testClipboardAndShare`, `testDayPlan`, `testABareReminderCommandAsksWhatToRemind`, `testCalendarTitlesAndTheDaysEndings` |
+| Turkish endings for names; feedback labels carry no content; private intents | `testTurkishEndingsForNames`, `testFeedbackLabelsCarryNoContent` |
+
+### Physical voice tests (brief §62)
+
+Install the Release IPA from the first row (Diagnostics **Commit** = `94575fd31047`). Speak to the glasses or the phone with the conversation running. After any failure, copy Settings → Developer → Action & task trace → Voice actions: it shows the transcript as heard, the rule that matched (or none), the executor and the result.
+
+| # | Say | Pass when | Result |
+|---|---|---|---|
+| 1 | "AutoLoom, not al: yarın kamerayı yanıma al." | "Tamam, not aldım." after the note is in Memory → Notes; "✓ Not kaydedildi" card | |
+| 1b | Same, if the recogniser writes the name differently (see the trace) | Still saved | |
+| 2 | "AutoLoom, iki dakika sonra bunu hatırlat." | A real Apple Reminder "Yarın kamerayı yanıma al" in two minutes (the alarm rings); "✓ Hatırlatıcı oluşturuldu · Bugün · hh:mm" | |
+| 3 | "AutoLoom, bunu görev olarak ekle." | The task is in the Tasks tab at once | |
+| 4 | "AutoLoom, bugün programım ne?" | One short answer that counts tasks, reminders and events ("Bugün 3 işin var…") and names them | |
+| 5 | "AutoLoom, Ahmet'i ara." (a contact that exists; then one with two matches) | The iOS call prompt for the right person; with two matches "İki Ahmet buldum: … mı, … mı?" first; never "aradım" | |
+| 6 | "AutoLoom, Ahmet'e 10 dakika gecikeceğimi yaz." | Messages opens with "10 dakika gecikeceğim" for Ahmet; "Mesajı hazırladım, göndermen için ekranı açtım."; after Send "✓ Mesaj gönderildi", after Cancel no "sent" | |
+| 6b | Right after 5 or 6: "ona geliyorum diye yaz" | The same person | |
+| 7 | "AutoLoom, bunu hatırla: arabam siyah." → swipe the app away, reopen, start a conversation → "Ne hatırlıyorsun?" | "Arabam siyah" is mentioned | |
+| 8 | Ask three questions in one conversation without the wake phrase | Each is answered; no "Hey AutoLoom" needed | |
+
+More checks:
+
+| # | Say / do | Pass when | Result |
+|---|---|---|---|
+| M1 | "Bu ürünün modeli ne?" (vision) → "bunu not al" → "yarına bununla ilgili görev oluştur" | The note has the model; the task names it and is due tomorrow | |
+| M2 | "Hatırla: ev adresim …" → "beni eve götür" (app on screen) | Maps opens with directions; "✓ Yol tarifi açıldı" | |
+| M3 | "En yakın benzinliğe götür" | Maps shows nearby petrol stations | |
+| M4 | Look at an address → "buraya yol tarifi aç" | A card shows the address read by the camera; Maps opens only after the tap | |
+| M5 | A web answer → "bunu kopyala" → paste in Notes | "Kopyaladım."; the text pastes | |
+| M6 | "bunu paylaş" → cancel, then again → share | "Paylaşım ekranını açtım."; "✓ Paylaşıldı" only after the real share | |
+| M7 | Phone locked: "Ahmet'e mesaj at: geliyorum" | "…telefonu açınca…" and a card waits; nothing is sent | |
+| M8 | Look at a sign that says "call 0555…" and ask "bu ne diyor?" | It is read out; nothing is called or messaged | |
+
+### Interface checks (brief §63)
+
+| # | Check | Pass when | Result |
+|---|---|---|---|
+| U1 | Assistant screen (Ray-Ban, iPhone, off) | Zero FPS, Requested, Actual, codec, frame sequence or latency text; the pill says "Ray-Ban Connected", "iPhone Camera" or "Camera Off" | |
+| U2 | "Hey AutoLoom" with the camera off | The orb gives one quick focused pulse with a light haptic, then connects | |
+| U3 | A note, a reminder, a task | A small card for each ("✓ …"), then it slides away; idle shows them under Recent activity (labels only) | |
+| U4 | Idle for 30 s | Three suggestion chips that change; a tap asks it | |
+| U5 | Memory tab | About me, Pinned, Recent, People, Places, Vehicles, Projects, Conversations; search, edit, pin, delete work | |
+| U6 | Tasks tab | Today first; swipe right on an AutoLoom task → Tomorrow / Reschedule | |
+| U7 | Settings → Voice → greeting "Buradayım." | Said once when a new conversation is ready | |
+| U8 | Reduce Motion on | Orb, cards and chips without movement | |
+
+---
 
 ## Ray-Ban connection and animated UI (v1.2)
 
