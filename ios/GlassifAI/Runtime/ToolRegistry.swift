@@ -16,12 +16,11 @@ struct NativeTool: Identifiable, Equatable {
   var name: String { L.t(english, turkish) }
   var detail: String { L.t(englishDetail, turkishDetail) }
 
-  /// The strictest confirmation among the tool's actions.
+  /// The confirmation the tool's main action (its first kind) needs, as
+  /// Settings shows it. Other actions keep their own level (deleting a note
+  /// still waits for a yes; the detail text says so).
   var risk: DeviceActionKind.Risk {
-    let risks = kinds.map(\.risk)
-    if risks.contains(.strongConfirm) { return .strongConfirm }
-    if risks.contains(.confirm) { return .confirm }
-    return .safe
+    kinds.first?.risk ?? .safe
   }
 }
 
@@ -40,8 +39,8 @@ enum ToolRegistry {
     NativeTool(
       id: "notes", english: "AutoLoom Notes", turkish: "AutoLoom Notları", systemImage: "note.text",
       kinds: [.saveNote, .deleteNote], permission: nil,
-      englishDetail: "Saved on this iPhone. Share a note to Apple Notes from the Memory tab.",
-      turkishDetail: "Bu iPhone'a kaydedilir. Notu Hafıza sekmesinden Apple Notlar'a paylaşabilirsiniz."),
+      englishDetail: "Saved on this iPhone at once; deleting a note waits for your yes. Share a note to Apple Notes from the Memory tab.",
+      turkishDetail: "Bu iPhone'a hemen kaydedilir; not silmek onayınızı bekler. Notu Hafıza sekmesinden Apple Notlar'a paylaşabilirsiniz."),
     NativeTool(
       id: "memory", english: "Memory", turkish: "Hafıza", systemImage: "brain",
       kinds: [.forgetMemory], permission: nil,
