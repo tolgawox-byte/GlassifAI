@@ -33,6 +33,8 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
   case deleteNote = "delete_note"
   /// A request for the user's own OpenClaw agent (never chosen by the planner).
   case agentTask = "agent_task"
+  /// A tool call on an MCP server the user added (never chosen by the planner).
+  case skillCall = "skill_call"
   case none
 
   enum Risk: String, Equatable {
@@ -48,7 +50,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .listReminders, .todayEvents, .upcomingEvents, .copyText, .saveNote, .scheduleNotification,
          .findContact, .createReminder, .createEvent, .none:
       .safe
-    case .forgetMemory, .deleteNote, .agentTask:
+    case .forgetMemory, .deleteNote, .agentTask, .skillCall:
       .confirm
     case .openMaps, .openURL, .shareText, .call, .message:
       .strongConfirm
@@ -65,7 +67,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
 
   /// Kinds the action planner may choose.
   static var plannable: [DeviceActionKind] {
-    allCases.filter { $0 != .agentTask && $0 != .forgetMemory && $0 != .deleteNote }
+    allCases.filter { $0 != .agentTask && $0 != .forgetMemory && $0 != .deleteNote && $0 != .skillCall }
   }
 
   var label: String {
@@ -87,6 +89,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .forgetMemory: L.t("Forget memory", "Hafızadan sil")
     case .deleteNote: L.t("Delete note", "Notu sil")
     case .agentTask: L.t("Your agent (OpenClaw)", "Ajanınız (OpenClaw)")
+    case .skillCall: L.t("Skill (MCP)", "Beceri (MCP)")
     case .none: L.t("No action", "İşlem yok")
     }
   }
@@ -107,6 +110,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .forgetMemory: "brain"
     case .deleteNote: "trash"
     case .agentTask: "server.rack"
+    case .skillCall: "puzzlepiece.extension"
     case .none: "questionmark.circle"
     }
   }
@@ -172,6 +176,8 @@ struct DeviceActionPlan: Equatable {
   /// Planned by the model in a turn that also brought camera, web or agent
   /// content (`AssistantOrchestrator.runAction`).
   var afterUntrustedContent = false
+  /// The MCP tool call (skill_call): the service, tool and arguments.
+  var skill: SkillCallRequest?
 
   /// Agent requests that sound destructive (deleting, deploying, payments,
   /// email) need a tap, even though other agent requests accept a spoken yes.
@@ -180,6 +186,8 @@ struct DeviceActionPlan: Equatable {
   /// outbound actions need a tap anyway.
   var risk: DeviceActionKind.Risk {
     if kind == .agentTask, ActionGuard.soundsDestructive(text ?? "") { return .strongConfirm }
+    // A skill call keeps its tool's risk, never less than a yes.
+    if kind == .skillCall { return skill?.risk == .strongConfirm ? .strongConfirm : .confirm }
     if afterUntrustedContent, kind.writes, kind.risk == .safe { return .confirm }
     return kind.risk
   }
@@ -208,6 +216,9 @@ struct DeviceActionPlan: Equatable {
     case .openMaps:
       return L.t("Directions to ", "Yol tarifi: ") + (location ?? "")
     case .openURL:
+      if let url, ShortcutLink.isRunShortcut(url) {
+        return L.t("Run the shortcut ", "Kısayolu çalıştır: ") + "“\(ShortcutLink.name(in: url) ?? "")”"
+      }
       return L.t("Open ", "Aç: ") + (url?.host ?? url?.absoluteString ?? "")
     case .copyText:
       return L.t("Copy", "Kopyala") + " \"\((text ?? "").prefix(60))\""
@@ -225,6 +236,9 @@ struct DeviceActionPlan: Equatable {
       return L.t("Delete note", "Notu sil") + ": \"\((text ?? "").prefix(80))\""
     case .agentTask:
       return L.t("Ask your agent", "Ajanınıza sor") + ": \"\((text ?? "").prefix(120))\""
+    case .skillCall:
+      guard let skill else { return kind.label }
+      return L.t("Send to ", "Gönder: ") + skill.host + " · " + skill.tool + " " + String(skill.arguments.prefix(160))
     case .listReminders, .todayEvents, .upcomingEvents, .none:
       return kind.label
     }
@@ -403,7 +417,10 @@ enum DeviceActionParser {
     case .openMaps:
       guard plan.location != nil else { return .failure(.missing("the destination")) }
     case .openURL:
-      guard plan.url != nil else { return .failure(.missing("the web address")) }
+      guard let url = plan.url else { return .failure(.missing("the web address")) }
+      if ShortcutLink.isRunShortcut(url), plan.afterUntrustedContent {
+        return .failure(.invalid("A shortcut runs only when the user asks for it."))
+      }
     case .call:
       guard plan.phone != nil || plan.recipient != nil else { return .failure(.missing("who to call")) }
     case .message:
@@ -414,6 +431,8 @@ enum DeviceActionParser {
       guard plan.noteID != nil else { return .failure(.missing("which note to delete")) }
     case .agentTask:
       guard plan.text != nil else { return .failure(.missing("what to ask your agent")) }
+    case .skillCall:
+      guard plan.skill != nil else { return .failure(.missing("which skill tool to call")) }
     case .listReminders, .todayEvents, .upcomingEvents, .none:
       break
     }
@@ -616,6 +635,8 @@ final class DeviceActionExecutor {
       throw ExecutionError.failed("This action must be confirmed with a tap on the phone.")
     case .agentTask:
       throw ExecutionError.failed("Agent requests are sent by the assistant, not the device executor.")
+    case .skillCall:
+      throw ExecutionError.failed("Skill calls are sent by the assistant after confirmation, not the device executor.")
     }
   }
 

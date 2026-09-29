@@ -534,6 +534,8 @@ final class EntityContext: ObservableObject {
 /// Whether the phone is online, so cloud agents are not tried offline.
 final class NetworkStatus: @unchecked Sendable {
   static let shared = NetworkStatus()
+  /// Posted (on the monitor's queue) when the connection comes or goes.
+  static let changed = Notification.Name("AutoLoomNetworkStatusChanged")
 
   private let monitor = NWPathMonitor()
   private let queue = DispatchQueue(label: "com.autoloom.network")
@@ -554,8 +556,10 @@ final class NetworkStatus: @unchecked Sendable {
     monitor.pathUpdateHandler = { [weak self] path in
       guard let self else { return }
       self.lock.lock()
+      let changed = self.satisfied != (path.status == .satisfied)
       self.satisfied = path.status == .satisfied
       self.lock.unlock()
+      if changed { NotificationCenter.default.post(name: NetworkStatus.changed, object: nil) }
     }
     monitor.start(queue: queue)
   }

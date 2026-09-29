@@ -552,6 +552,30 @@ enum ActionCatalog {
       summary: "The song the Music player is playing.", examplesTR: ["Ne çalıyor?"], examplesEN: ["What's playing?"],
       voiceOnly: "The Music app shows it", status: .working, keys: ["music.nowPlaying"]),
     ActionDefinition(
+      "remoteAssist.start", .camera, name: "Share my view", tr: "Görüntümü paylaş",
+      summary: "Remote Assist on the same Wi-Fi with a room code; only a tap on Start begins it, a red bar stays on screen.",
+      examplesTR: ["Uzaktan yardımı başlat", "Görüntümü paylaş"], examplesEN: ["Start remote assist"],
+      risk: .confirm, confirmation: .tapOnPhone, capabilities: [.camera, .network], offline: false,
+      ui: "Explore → Remote Assist", status: .physicalTestRequired, keys: ["remoteAssist.start"]),
+    ActionDefinition(
+      "remoteAssist.stop", .camera, name: "Stop sharing", tr: "Paylaşımı durdur",
+      summary: "Stops Remote Assist at once.", examplesTR: ["Paylaşımı durdur", "Paylaşımı bitir"],
+      examplesEN: ["Stop sharing"], localPriority: true, ui: "The red sharing bar → Stop", status: .working,
+      keys: ["remoteAssist.stop"]),
+    ActionDefinition(
+      "shortcut.run", .automation, name: "Run my shortcut", tr: "Kısayolumu çalıştır",
+      summary: "Your own Shortcut (Home scenes, lights…) in the Shortcuts app, only after a tap; never from the camera or the web.",
+      examplesTR: ["Işıkları Aç kısayolunu çalıştır"], examplesEN: ["Run the Good Night shortcut"],
+      parameters: [.init("name", .text, "The shortcut's exact name")], risk: .strongConfirm, confirmation: .tapOnPhone,
+      ui: "The card on the phone → Run", status: .physicalTestRequired, keys: ["runShortcut"]),
+    ActionDefinition(
+      "skill.call", .automation, name: "Use a skill", tr: "Beceri kullan",
+      summary: "A tool of an MCP server you added; says which service receives what, then follows the tool's policy.",
+      examplesTR: ["[skill] Notion ile bugünkü görevlerimi listele"], examplesEN: ["[skill] Ask Notion to list my tasks"],
+      parameters: [.init("skill", .text, "The skill's name"), .init("request", .text, "What to do")],
+      risk: .confirm, confirmation: .always, capabilities: [.network], offline: false, ui: "Settings → Skills",
+      status: .requiresProvider, keys: ["skill"]),
+    ActionDefinition(
       "routine.user", .automation, name: "Run my routine", tr: "Rutinimi başlat",
       summary: "A routine you built from safe steps, run in order with an honest report.",
       examplesTR: ["[routine] Sabah turu rutinini başlat"], examplesEN: ["[routine] Run the Sabah turu routine"],
@@ -917,6 +941,12 @@ enum ActionCatalog {
     case "media.previous": return .music(.previous)
     case "media.nowPlaying": return .music(.nowPlaying)
     case "routine.user": return text("name").map { .userRoutine($0) }
+    case "remoteAssist.start": return .remoteAssist(start: true)
+    case "remoteAssist.stop": return .remoteAssist(start: false)
+    case "shortcut.run": return text("name").map { .runShortcut($0) }
+    case "skill.call":
+      guard let server = text("skill"), let request = text("request") else { return nil }
+      return .skill(server: server, request: request)
     case "task.create":
       guard let title = text("title") else { return .ask(.task) }
       var due = time("due")
@@ -1136,6 +1166,9 @@ extension VoiceIntent {
     case .document(let command): "document." + command.key
     case .music(let command): "music." + command.key
     case .userRoutine: "userRoutine"
+    case .remoteAssist(let start): start ? "remoteAssist.start" : "remoteAssist.stop"
+    case .skill: "skill"
+    case .runShortcut: "runShortcut"
     case .correctPending: "correctPending"
     case .graph: "graph"
     case .ask(let awaiting): "ask." + awaiting.label

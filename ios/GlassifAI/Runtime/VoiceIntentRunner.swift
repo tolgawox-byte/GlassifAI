@@ -162,6 +162,9 @@ extension VoiceIntent {
     case .document: "DOCUMENT"
     case .music: "MUSIC"
     case .userRoutine: "USER_ROUTINE"
+    case .remoteAssist: "REMOTE_ASSIST"
+    case .skill: "SKILL"
+    case .runShortcut: "RUN_SHORTCUT"
     case .moveTask: "MOVE_TASK"
     case .correctPending: "CORRECT_PENDING"
     case .graph: "ACTION_GRAPH"
@@ -268,6 +271,7 @@ extension AssistantOrchestrator {
     bridge.activeVehicle = DealerStore.shared.active != nil
     bridge.liveVisionActive = LiveVisionController.shared.isActive
     bridge.routineNames = UserRoutineStore.shared.routines.map(\.name)
+    bridge.skillNames = SkillStore.shared.enabledServers.map(\.name)
     bridge.recentTimedAction = DeviceActionExecutor.shared.lastCreated.map { Date().timeIntervalSince($0.at) < 180 } ?? false
     return bridge
   }
@@ -856,6 +860,15 @@ extension AssistantOrchestrator {
 
     case .userRoutine(let name):
       return await runUserRoutine(name, traceID: traceID)
+
+    case .remoteAssist(let start):
+      return runRemoteAssist(start: start, traceID: traceID)
+
+    case .skill(let server, let request):
+      return await runSkill(server: server, request: request, traceID: traceID)
+
+    case .runShortcut(let name):
+      return await runShortcut(name, traceID: traceID)
 
     case .moveTask(let title, let time):
       return moveTask(title: title, time: time, traceID: traceID)

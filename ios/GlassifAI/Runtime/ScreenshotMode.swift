@@ -172,6 +172,12 @@ struct ScreenshotRootView: View {
       case "translation": NavigationStack { TranslationView() }
       case "documents": NavigationStack { DocumentsView() }
       case "routines": NavigationStack { RoutinesView() }
+      case "remoteassist": NavigationStack { RemoteAssistView() }
+      case "skills": NavigationStack { SkillsView() }
+      case "performance": NavigationStack { PerformanceView() }
+      case "timeline": NavigationStack { ActivityTimelineView() }
+      case "privacydashboard": NavigationStack { PrivacySettingsView() }
+      case "palette": NavigationStack { CommandPaletteView() }
       default: StreamSessionView(wearables: nil)
       }
     }

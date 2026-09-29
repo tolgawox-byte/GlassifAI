@@ -22,6 +22,60 @@ enum AppInfo {
 
 /// Settings → Privacy center: what leaves the phone, what is stored, every
 /// permission and its state, and deleting local data.
+/// Privacy dashboard: what runs right now, and what is kept on this iPhone.
+struct PrivacyNowSection: View {
+  @ObservedObject private var memory = MemoryStore.shared
+  @ObservedObject private var captures = CaptureLibrary.shared
+  @ObservedObject private var dealer = DealerStore.shared
+  @ObservedObject private var documents = DocumentStore.shared
+  @ObservedObject private var visual = VisualMemoryIndex.shared
+  @ObservedObject private var timeline = SceneTimeline.shared
+  @ObservedObject private var liveVision = LiveVisionController.shared
+  @ObservedObject private var sharing = RemoteAssistServer.shared
+  @ObservedObject private var skills = SkillStore.shared
+  @AppStorage(SceneTimeline.enabledKey) private var timelineOn = false
+
+  var body: some View {
+    Section {
+      state(L.t("Live Vision", "Canlı görüş"), liveVision.isActive, "eye")
+      state(L.t("Remote Assist sharing", "Uzaktan yardım paylaşımı"), sharing.isSharing, "dot.radiowaves.left.and.right")
+      state(L.t("Scene Timeline", "Sahne zaman çizelgesi"), timelineOn, "clock.arrow.circlepath")
+      LabeledContent(L.t("Skills (MCP)", "Beceriler (MCP)"), value: "\(skills.enabledServers.count)")
+    } header: {
+      Text(L.t("Right now", "Şu an"))
+    }
+    Section {
+      count(L.t("Memories", "Anılar"), memory.memories.count)
+      count(L.t("Visual memories", "Görsel anılar"), visual.entries.count)
+      count(L.t("Notes", "Notlar"), memory.notes.count)
+      count(L.t("Tasks", "Görevler"), memory.tasks.count)
+      count(L.t("Vehicles", "Araçlar"), dealer.vehicles.count)
+      count(L.t("Documents and receipts", "Belgeler ve fişler"), documents.records.count)
+      count(L.t("Timeline lines", "Zaman çizelgesi satırı"), timeline.entries.count)
+      count(L.t("Captures listed", "Listelenen çekimler"), captures.records.count)
+    } header: {
+      Text(L.t("Kept on this iPhone", "Bu iPhone'da saklanan"))
+    } footer: {
+      Text(L.t("Everything here stays on this iPhone until you delete it; the button at the bottom deletes it all.",
+               "Buradakilerin hepsi sen silene kadar bu iPhone'da kalır; en alttaki düğme hepsini siler."))
+    }
+  }
+
+  private func state(_ title: String, _ on: Bool, _ icon: String) -> some View {
+    HStack {
+      Label(title, systemImage: icon)
+      Spacer()
+      Text(on ? L.t("On", "Açık") : L.t("Off", "Kapalı"))
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(on ? Color.orange : Color.secondary)
+    }
+  }
+
+  private func count(_ title: String, _ value: Int) -> some View {
+    LabeledContent(title, value: "\(value)")
+  }
+}
+
 struct PrivacySettingsView: View {
   @ObservedObject private var memory = MemoryStore.shared
   @ObservedObject private var captures = CaptureLibrary.shared
@@ -34,6 +88,7 @@ struct PrivacySettingsView: View {
 
   var body: some View {
     Form {
+      PrivacyNowSection()
       Section(L.t("What leaves this iPhone", "Bu iPhone'dan ne çıkar")) {
         privacyRow(
           L.t("Voice", "Ses"),

@@ -61,7 +61,7 @@ extension VoiceIntent {
   var isGraphStep: Bool {
     switch self {
     case .ask, .classify, .graph, .dropAwaiting, .confirmPending, .choosePendingTime, .cancelTasks, .correctPending,
-         .capabilities, .search, .findVisual, .whatChanged, .userRoutine:
+         .capabilities, .search, .findVisual, .whatChanged, .userRoutine, .remoteAssist, .skill, .runShortcut:
       false
     default:
       true

@@ -43,6 +43,7 @@ final class AutoLoomActionCatalogTests: XCTestCase {
     if tags.contains("vehicle") { context.activeVehicle = true }
     if tags.contains("live") { context.liveVisionActive = true }
     if tags.contains("routine") { context.routineNames = ["Sabah turu"] }
+    if tags.contains("skill") { context.skillNames = ["Notion"] }
     if tags.contains("camera") { context.cameraAvailable = true }
     if tags.contains("visual") {
       context.cameraAvailable = true
@@ -173,7 +174,8 @@ final class AutoLoomActionCatalogTests: XCTestCase {
       .shopping(.remove("x")), .parking(.save(note: nil)), .parking(.recall), .parking(.directions), .parking(.clear),
       .findVisual("x"), .findVisual(""), .whatChanged, .document(.summarize), .document(.saveReceipt), .document(.spending),
       .music(.play(nil)), .music(.play("x")), .music(.pause), .music(.next), .music(.previous), .music(.nowPlaying),
-      .userRoutine("x"),
+      .userRoutine("x"), .remoteAssist(start: true), .remoteAssist(start: false), .skill(server: "x", request: "y"),
+      .runShortcut("x"),
     ]
     let dealer: [DealerCommand] = [
       .startVehicle, .nextVehicle, .finishVehicle, .readVIN, .readOdometer, .setOdometer(1, .km), .addDamage("x"),

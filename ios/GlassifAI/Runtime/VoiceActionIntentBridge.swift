@@ -160,6 +160,12 @@ enum VoiceIntent: Equatable {
   case music(MusicCommand)
   /// "Sabah turu rutinini başlat": a routine the user built.
   case userRoutine(String)
+  /// "Uzaktan yardımı başlat" (opens the Start button), "paylaşımı durdur".
+  case remoteAssist(start: Bool)
+  /// "Notion ile bugünkü görevlerimi listele": a tool of an MCP server the user added.
+  case skill(server: String, request: String)
+  /// "Işıkları Aç kısayolunu çalıştır": the user's own Shortcut, after a tap.
+  case runShortcut(String)
   /// "Bunu yarına taşı": moves a task (nil title: the task just mentioned).
   case moveTask(title: String?, time: ParsedTime)
   /// "Hayır, cumartesi": the waiting or just-saved action gets this day/time.
@@ -238,6 +244,9 @@ enum VoiceIntent: Equatable {
     case .document(let command): "document(\(command.key))"
     case .music(let command): "music(\(command.key))"
     case .userRoutine: "userRoutine"
+    case .remoteAssist(let start): start ? "remoteAssistStart" : "remoteAssistStop"
+    case .skill: "skill"
+    case .runShortcut: "runShortcut"
     case .moveTask: "moveTask"
     case .correctPending: "correctPending"
     case .graph(let steps): "graph(\(steps.count))"
@@ -282,6 +291,8 @@ struct VoiceBridgeContext {
   var liveVisionActive = false
   /// Names of the user's own routines ("sabah turu").
   var routineNames: [String] = []
+  /// Names of the enabled MCP skills ("Notion").
+  var skillNames: [String] = []
   /// An event or reminder was saved moments ago ("hayır, cumartesi" fixes it).
   var recentTimedAction = false
   /// Addressed-only mode: act only when the user says the assistant's name.
@@ -385,6 +396,9 @@ enum VoiceActionIntentBridge {
       { whatChanged($0, context) },
       { documents($0) },
       { music($0) },
+      { remoteAssist($0) },
+      { skill($0, context) },
+      { shortcut($0) },
       { translation($0, context) },
       { messages($0, context) },
       { notes($0, context) },

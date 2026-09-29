@@ -104,7 +104,7 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Only if you connect your own agent gateway (OpenClaw) on your home network or tailnet in Settings.</string>
+	<string>Only if you connect your own agent gateway (OpenClaw) on your home network or tailnet in Settings, or when you start Remote Assist to show your camera view to someone on the same Wi-Fi.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Only when you turn on the wake phrase: on-device speech recognition listens for your phrase (while the app is open, or in the background if you turn on Hands-Free Ready) to start a conversation. Audio is not stored or sent.</string>
 	<key>NSContactsUsageDescription</key>

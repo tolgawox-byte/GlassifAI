@@ -20,6 +20,8 @@ struct AssistantHomeView: View {
   @ObservedObject private var media = RayBanMediaCoordinator.shared
   @ObservedObject private var agents = AutoLoomAgentOrchestrator.shared
   @ObservedObject private var timers = TimerCenter.shared
+  @ObservedObject private var dealer = DealerStore.shared
+  @ObservedObject private var sharing = RemoteAssistServer.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
@@ -27,6 +29,7 @@ struct AssistantHomeView: View {
   @State private var metrics = FrameMetricsSnapshot()
   @State private var notice: String?
   @State private var showConnectedToast = false
+  @State private var online = NetworkStatus.shared.isOnline
   /// A short one-shot orb state (the confirmation after a save).
   @State private var orbFlash: OrbMood?
   @FocusState private var textFieldFocused: Bool
@@ -94,6 +97,9 @@ struct AssistantHomeView: View {
       }
     }
     .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: orchestrator.actionFeedback?.id)
+    .onReceive(NotificationCenter.default.publisher(for: NetworkStatus.changed).receive(on: RunLoop.main)) { _ in
+      online = NetworkStatus.shared.isOnline
+    }
     .preferredColorScheme(.dark)
     .tint(AutoLoomTheme.electricBlue)
     .sensoryFeedback(trigger: orchestrator.actionFeedback?.id) { _, _ in
@@ -288,7 +294,28 @@ struct AssistantHomeView: View {
 
   @ViewBuilder
   private var chips: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      GlassGroup(spacing: 8) {
+        chipRow
+      }
+    }
+    .scrollClipDisabled()
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: notice)
+  }
+
+  /// Only what is happening now: at most a few chips, never a dashboard.
+  private var chipRow: some View {
     HStack(spacing: 8) {
+      if !online {
+        chip(L.t("Offline · notes, tasks, timers work", "Çevrimdışı · not, görev, zamanlayıcı çalışır"), systemImage: "wifi.slash", tint: .orange)
+      }
+      if sharing.isSharing {
+        chip(L.t("Sharing your view", "Görüntün paylaşılıyor"), systemImage: "dot.radiowaves.left.and.right", tint: .red)
+      }
+      if let vehicle = dealer.active {
+        let missing = vehicle.remainingPhotos.count
+        chip(vehicle.title + (missing > 0 ? " · \(missing) " + L.t("photos", "foto") : ""), systemImage: "car.fill")
+      }
       if showsRecordingChip {
         RecordingChip(media: media)
       }
@@ -310,8 +337,7 @@ struct AssistantHomeView: View {
         chip(notice, systemImage: "info.circle")
       }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: notice)
+    .padding(.vertical, 2)
   }
 
   /// A recording is running or still being saved.
@@ -334,7 +360,7 @@ struct AssistantHomeView: View {
     .font(.caption.weight(.semibold))
     .padding(.horizontal, 12)
     .padding(.vertical, 6)
-    .background(.ultraThinMaterial, in: Capsule())
+    .glassBackground(in: Capsule())
     .transition(.opacity)
   }
 
@@ -702,15 +728,24 @@ struct AssistantHomeView: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 5)
-    .background(.ultraThinMaterial, in: Capsule())
+    .glassBackground(in: Capsule())
     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: presence)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(L.t("Status: ", "Durum: ") + presence.word)
   }
 
   private var voiceBar: some View {
+    GlassGroup(spacing: 12) {
+      voiceBarContent
+    }
+  }
+
+  private var voiceBarContent: some View {
     HStack(alignment: .center) {
       HStack(spacing: 10) {
+        roundButton(systemImage: "command", label: L.t("Commands", "Komutlar")) {
+          AppNavigator.shared.show(.commandPalette)
+        }
         roundButton(
           systemImage: showTextInput ? "keyboard.chevron.compact.down" : "keyboard",
           label: showTextInput ? L.t("Hide keyboard", "Klavyeyi gizle") : L.t("Type a question", "Soru yaz")) {
@@ -817,8 +852,7 @@ struct AssistantHomeView: View {
         .contentTransition(.symbolEffect(.replace))
         .frame(width: 44, height: 44)
         .foregroundStyle(.white)
-        .background(highlighted ? AnyShapeStyle(AutoLoomTheme.electricBlue.opacity(0.85)) : AnyShapeStyle(.thinMaterial), in: Circle())
-        .overlay(Circle().strokeBorder(.white.opacity(0.08)))
+        .glassBackground(in: Circle(), tint: highlighted ? AutoLoomTheme.electricBlue : nil, interactive: true)
     }
     .buttonStyle(PressableButtonStyle())
     .accessibilityLabel(label)

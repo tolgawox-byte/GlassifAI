@@ -405,6 +405,7 @@ extension AssistantOrchestrator {
         reply: L.t(en, tr), failed: "no visual memory", said: L.t(en, tr))
     }
     AppNavigator.shared.show(.visualMemory(best.record.id))
+    if let place = best.record.placeName { EntityContext.shared.note(.place, place) }
     let when = best.record.createdAt.formatted(date: .abbreviated, time: .shortened)
     let place = best.record.placeName.map { " at \($0)" } ?? ""
     let vehicle = best.entry?.vehicleID.flatMap { DealerStore.shared.vehicle($0)?.title }.map { " (vehicle: \($0))" } ?? ""

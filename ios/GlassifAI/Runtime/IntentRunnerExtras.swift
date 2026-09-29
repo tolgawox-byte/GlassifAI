@@ -12,6 +12,10 @@ final class AppNavigator: ObservableObject {
     case commandLab
     /// One visual memory with its photo, or the gallery (nil).
     case visualMemory(UUID?)
+    /// Remote Assist, where only a tap starts sharing.
+    case remoteAssist
+    /// The command palette (every action, searchable).
+    case commandPalette
 
     var id: String {
       switch self {
@@ -19,6 +23,8 @@ final class AppNavigator: ObservableObject {
       case .search(let text): "search-\(text)"
       case .commandLab: "commandlab"
       case .visualMemory(let id): "visual-\(id?.uuidString ?? "all")"
+      case .remoteAssist: "remoteassist"
+      case .commandPalette: "palette"
       }
     }
   }

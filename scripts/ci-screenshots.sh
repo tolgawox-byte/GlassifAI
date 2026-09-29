@@ -9,7 +9,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build-tests/Build/Products/Debug-iphonesimulator/GlassifAI.app"
 OUT="$ROOT/screenshots"
-SCREENS="${AUTOLOOM_SCREENS:-assistant memory tasks explore settings dealer vehicle shopping intelligence personality captures commands commandlab search privacy skills visualmemory memorysettings raybancaps translation documents remoteassist routines timeline performance}"
+SCREENS="${AUTOLOOM_SCREENS:-assistant memory tasks explore settings dealer vehicle shopping intelligence personality captures commands commandlab search privacy skills visualmemory memorysettings raybancaps translation documents remoteassist routines timeline performance palette}"
 
 if [ ! -d "$APP" ]; then
   echo "::warning title=Screenshots::No simulator build at build-tests/ (did the unit tests run?)"

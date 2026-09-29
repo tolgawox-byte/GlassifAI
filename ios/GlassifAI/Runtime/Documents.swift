@@ -291,6 +291,8 @@ extension AssistantOrchestrator {
     var record = DocumentExtractor.record(from: text, kind: command == .saveReceipt ? .receipt : .document, now: now)
     record.vehicleID = DealerStore.shared.active?.id
     DocumentStore.shared.add(record)
+    // "Bunu" now means this document.
+    EntityContext.shared.note(.document, record.title)
     trace.update(traceID) {
       $0.parsed = "\(record.dates.count) dates, \(record.amounts.count) amounts"
       $0.persistence = "document text saved on this iPhone (no photo)"

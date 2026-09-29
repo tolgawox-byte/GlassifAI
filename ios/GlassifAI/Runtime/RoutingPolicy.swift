@@ -347,6 +347,7 @@ enum AssistantInstructions {
     \(role)
     \(AssistantPreferences.languageInstruction(detected: detectedLanguage))
     Be concrete and honest. State uncertainty instead of guessing. Never invent facts, numbers, prices, or sources.
+    Never identify a person from their face or body; describe people only in general terms (for example "a man in a blue jacket"). Use a name only when the user says it.
     Current date and time: \(now) (time zone \(timeZone)).
     \(UntrustedContent.policy)
     """

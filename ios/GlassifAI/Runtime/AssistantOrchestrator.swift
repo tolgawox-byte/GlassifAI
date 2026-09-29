@@ -1037,6 +1037,9 @@ final class AssistantOrchestrator: ObservableObject {
     if pending.plan.kind == .agentTask {
       return await sendToAgent(pending.plan.text ?? "")
     }
+    if pending.plan.kind == .skillCall, let skill = pending.plan.skill {
+      return await runSkillCall(skill)
+    }
     do {
       let text = try await DeviceActionExecutor.shared.run(pending.plan)
       lastActionResult = text

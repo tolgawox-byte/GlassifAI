@@ -94,6 +94,12 @@ struct SettingsView: View {
           NavigationLink { GlobalSearchView() } label: {
             row(L.t("Search AutoLoom", "AutoLoom'da ara"), "magnifyingglass", value: nil)
           }
+          NavigationLink { SkillsView() } label: {
+            row(L.t("Skills (MCP)", "Beceriler (MCP)"), "puzzlepiece.extension", value: "\(SkillStore.shared.enabledServers.count)")
+          }
+          NavigationLink { PerformanceView() } label: {
+            row(L.t("Performance", "Performans"), "thermometer.medium", value: PerformanceGuard.shared.thermalTitle)
+          }
         }
 
         Section(L.t("Assistant", "Asistan")) {

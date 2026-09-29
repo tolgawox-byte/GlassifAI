@@ -58,6 +58,7 @@ struct PendingActionCard: View {
     case .forgetMemory: L.t("Forget", "Unut")
     case .deleteNote: L.t("Delete", "Sil")
     case .agentTask: L.t("Send to agent", "Ajana gönder")
+    case .skillCall: L.t("Send", "Gönder")
     default: L.t("Confirm", "Onayla")
     }
   }
@@ -66,7 +67,7 @@ struct PendingActionCard: View {
   private var primaryButton: some View {
     switch plan.kind {
     case .createReminder, .createEvent, .saveNote, .listReminders, .todayEvents, .upcomingEvents, .copyText,
-         .scheduleNotification, .findContact, .forgetMemory, .deleteNote, .agentTask, .none:
+         .scheduleNotification, .findContact, .forgetMemory, .deleteNote, .agentTask, .skillCall, .none:
       Button(confirmTitle) {
         working = true
         Task {
@@ -90,8 +91,10 @@ struct PendingActionCard: View {
       }
       .buttonStyle(.borderedProminent)
     case .openURL:
-      Button(L.t("Open link", "Bağlantıyı aç")) {
-        guard let url = plan.url, URLSafety.isPublicWebURL(url) else { return }
+      Button(plan.url.map(ShortcutLink.isRunShortcut) == true ? L.t("Run", "Çalıştır") : L.t("Open link", "Bağlantıyı aç")) {
+        // A web page, or the user's own shortcut asked for in their own words.
+        guard let url = plan.url,
+              URLSafety.isPublicWebURL(url) || (ShortcutLink.isRunShortcut(url) && !plan.afterUntrustedContent) else { return }
         openURL(url) { accepted in
           orchestrator.completeTapAction(accepted ? "Opened \(url.host ?? "link")" : "The link could not be opened")
         }

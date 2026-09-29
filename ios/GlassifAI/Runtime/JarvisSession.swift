@@ -28,6 +28,8 @@ enum JarvisSession {
     var liveVision: Bool
     var remoteAssist: Bool
     var timer: String?
+    /// The opt-in Scene Timeline is recording lines of text.
+    var sceneTimeline = false
 
     /// Short labels for the context chips ("Honda Civic", "Canlı görüş"…).
     var chips: [String] {
@@ -37,6 +39,7 @@ enum JarvisSession {
       if liveVision { chips.append(L.t("Live Vision", "Canlı görüş")) }
       if remoteAssist { chips.append(L.t("Sharing view", "Görüntü paylaşılıyor")) }
       if let timer { chips.append(timer) }
+      if sceneTimeline { chips.append(L.t("Scene Timeline", "Sahne zaman çizelgesi")) }
       return chips
     }
 
@@ -52,6 +55,7 @@ enum JarvisSession {
       if recording != nil { parts.append("A Ray-Ban video recording is running.") }
       if liveVision { parts.append("Live Vision is on.") }
       if remoteAssist { parts.append("The user's view is being shared (Remote Assist).") }
+      if sceneTimeline { parts.append("Scene Timeline is on (text lines only).") }
       if let recentAction { parts.append("Last action: \(recentAction).") }
       parts.append("Camera: \(cameraSource.rawValue).")
       return parts.joined(separator: " ")
@@ -93,6 +97,7 @@ enum JarvisSession {
       providers: providers,
       liveVision: LiveVisionController.shared.isActive,
       remoteAssist: MediaResourceCoordinator.shared.isActive(.remoteAssist),
-      timer: timer)
+      timer: timer,
+      sceneTimeline: SceneTimeline.isEnabled && LiveVisionController.shared.isActive)
   }
 }

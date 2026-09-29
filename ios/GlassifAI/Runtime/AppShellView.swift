@@ -49,13 +49,22 @@ struct AppShellView: View {
         .tag(AppTab.settings)
     }
     .tint(AutoLoomTheme.electricBlue)
+    // While Remote Assist shares the view, on every screen.
+    .safeAreaInset(edge: .top, spacing: 0) { RemoteAssistBar() }
     .preferredColorScheme(.dark)
     .sensoryFeedback(.selection, trigger: tab)
     // iOS Spotlight: indexed on launch and when the app goes to the
     // background; a tap on a result opens it here.
-    .task { SpotlightIndexer.shared.scheduleReindex(after: 5) }
+    .task {
+      SpotlightIndexer.shared.scheduleReindex(after: 5)
+      PerformanceGuard.shared.start()
+    }
     .onChange(of: scenePhase) { _, phase in
-      if phase == .background { SpotlightIndexer.shared.scheduleReindex(after: 0.5) }
+      if phase == .background {
+        SpotlightIndexer.shared.scheduleReindex(after: 0.5)
+        // No hidden background sharing.
+        RemoteAssistServer.shared.stop(.background)
+      }
     }
     .onContinueUserActivity(CSSearchableItemActionType) { activity in
       if let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
@@ -70,6 +79,8 @@ struct AppShellView: View {
         case .commandLab: CommandLabView()
         case .visualMemory(let id):
           if let id { VisualMemoryDetail(recordID: id) } else { VisualMemoryGallery() }
+        case .remoteAssist: RemoteAssistView()
+        case .commandPalette: CommandPaletteView()
         }
       }
       .presentationDetents([.medium, .large])

@@ -60,6 +60,9 @@ xcodebuild test \
 status=${PIPESTATUS[0]}
 set -e
 
+# The voice evaluation's report lines (AutoLoomVoiceEvaluationTests prints them).
+grep -h "VOICE_EVAL" "$LOG" | sed 's/.*VOICE_EVAL/VOICE_EVAL/' | sort -u | head -n 16   | while IFS= read -r line; do echo "::notice title=Voice evaluation::${line}"; done || true
+
 if [ "$status" -ne 0 ]; then
   # Test-target compile errors, visible without the raw log.
   grep -E ": error: " "$LOG" | sed "s|$ROOT/||g" | sort -u | head -n 40 \

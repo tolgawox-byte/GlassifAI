@@ -326,9 +326,9 @@ enum SpecialistPrompts {
     case .document:
       text += " Summarise the key points, dates, amounts and obligations."
     case .vision:
-      text += " Answer from the image. For a vehicle give make, model and a generation or year range only if visible; say when you are not sure."
+      text += " Answer from the image. For a vehicle give make, model and a generation or year range only if visible; say when you are not sure. Never identify people from their faces."
     case .liveVision:
-      text += " One or two short sentences: what is in view and what changed. Do not guess."
+      text += " One or two short sentences: what is in view and what changed. Do not guess. Never identify people from their faces."
     case .translation:
       text += " Translate faithfully; keep names and numbers."
     default:

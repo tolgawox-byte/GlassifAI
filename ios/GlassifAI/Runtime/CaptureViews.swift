@@ -208,6 +208,13 @@ struct CapturesView: View {
             .font(.caption)
             .lineLimit(2)
         }
+        // Dealer photos: the photo director's hint, measured on the phone.
+        if let hint = record.quality?.hint(turkish: L.isTurkish) {
+          Label(hint, systemImage: "exclamationmark.triangle")
+            .font(.caption2)
+            .foregroundStyle(.orange)
+            .lineLimit(2)
+        }
         HStack(spacing: 8) {
           storageBadge(record)
           if record.storage == .appOnly, record.localFile != nil {
@@ -362,6 +369,16 @@ struct ExploreTabView: View {
             RoutinesView()
           } label: {
             Label(L.t("Routines", "Rutinler"), systemImage: "list.bullet.circle")
+          }
+          NavigationLink {
+            RemoteAssistView()
+          } label: {
+            Label(L.t("Remote Assist", "Uzaktan yardım"), systemImage: "video.badge.waveform")
+          }
+          NavigationLink {
+            ActivityTimelineView()
+          } label: {
+            Label(L.t("Timeline", "Zaman çizelgesi"), systemImage: "clock")
           }
         }
         TimersSection()
