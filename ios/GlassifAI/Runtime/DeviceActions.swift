@@ -656,6 +656,40 @@ final class DeviceActionExecutor {
     return try await events(from: start, days: days, label: label)
   }
 
+  /// Open reminders due in [start, end) as short lines; with
+  /// `includeOverdue`, also the ones already overdue. Reminders without a
+  /// due date are not part of a day.
+  func dueReminderLines(from start: Date, to end: Date, includeOverdue: Bool) async throws -> [String] {
+    try await ensureReminderAccess()
+    let predicate = store.predicateForIncompleteReminders(
+      withDueDateStarting: includeOverdue ? nil : start, ending: end, calendars: nil)
+    let reminders: [EKReminder] = await withCheckedContinuation { continuation in
+      _ = store.fetchReminders(matching: predicate) { continuation.resume(returning: $0 ?? []) }
+    }
+    let calendar = Calendar.current
+    let dated = reminders.compactMap { reminder -> (date: Date, hasTime: Bool, title: String)? in
+      guard let components = reminder.dueDateComponents, let date = calendar.date(from: components), date < end else {
+        return nil
+      }
+      return (date, components.hour != nil, reminder.title ?? "Untitled")
+    }
+    return dated.sorted { $0.date < $1.date }.prefix(8).map { item in
+      if item.date < start { return "overdue: \(item.title)" }
+      return item.hasTime ? "\(item.date.formatted(date: .omitted, time: .shortened)): \(item.title)" : item.title
+    }
+  }
+
+  /// Calendar events in [start, end) as short lines.
+  func eventLines(from start: Date, to end: Date) async throws -> [String] {
+    try await ensureEventAccess(fullAccess: true)
+    let events = store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: nil))
+      .sorted { $0.startDate < $1.startDate }
+    return events.prefix(10).map { event in
+      let time = event.isAllDay ? "all day" : event.startDate.formatted(date: .omitted, time: .shortened)
+      return "\(time): \(event.title ?? "Untitled")" + (event.location.map { " @ \($0)" } ?? "")
+    }
+  }
+
   private func events(from start: Date, days: Int, label: String) async throws -> String {
     try await ensureEventAccess(fullAccess: true)
     let end = Calendar.current.date(byAdding: .day, value: days, to: start) ?? start.addingTimeInterval(Double(days) * 86_400)
@@ -707,6 +741,13 @@ final class DeviceActionExecutor {
       URLQueryItem(name: "daddr", value: destination),
       URLQueryItem(name: "dirflg", value: "d"),
     ]
+    return components?.url
+  }
+
+  /// A Maps search around the user ("benzinlik", "pharmacy").
+  static func mapsSearchURL(for query: String) -> URL? {
+    var components = URLComponents(string: "https://maps.apple.com/")
+    components?.queryItems = [URLQueryItem(name: "q", value: query)]
     return components?.url
   }
 

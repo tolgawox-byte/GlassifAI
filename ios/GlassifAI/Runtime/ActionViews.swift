@@ -2,7 +2,9 @@ import SwiftUI
 
 /// Confirmation card for an iPhone action. CONFIRM actions can also be
 /// confirmed by voice; STRONG CONFIRM actions (anything that opens another
-/// app or contacts someone) are only ever done by a tap here.
+/// app or contacts someone) are only ever done by a tap here. What the card
+/// reports afterwards comes from iOS: "sent" only when Messages sent it,
+/// "shared" only when the share sheet finished.
 struct PendingActionCard: View {
   let pending: PendingDeviceAction
   @ObservedObject private var orchestrator = AssistantOrchestrator.shared
@@ -74,42 +76,71 @@ struct PendingActionCard: View {
       .buttonStyle(.borderedProminent)
     case .openMaps:
       Button(L.t("Open in Maps", "Haritalar'da aç")) {
-        if let destination = plan.location, let url = DeviceActionExecutor.mapsURL(for: destination) {
-          openURL(url)
-          orchestrator.completeTapAction("Opened directions to \(destination)")
+        guard let destination = plan.location, let url = DeviceActionExecutor.mapsURL(for: destination) else { return }
+        openURL(url) { accepted in
+          orchestrator.completeTapAction(
+            accepted ? "Opened directions to \(destination)" : "Maps could not be opened",
+            feedback: accepted
+              ? ActionFeedback(kind: .directions, title: L.t("Directions opened", "Yol tarifi açıldı"))
+              : ActionFeedback.failed(L.t("Maps could not be opened", "Haritalar açılamadı")))
         }
       }
       .buttonStyle(.borderedProminent)
     case .openURL:
       Button(L.t("Open link", "Bağlantıyı aç")) {
-        if let url = plan.url, URLSafety.isPublicWebURL(url) {
-          openURL(url)
-          orchestrator.completeTapAction("Opened \(url.host ?? "link")")
+        guard let url = plan.url, URLSafety.isPublicWebURL(url) else { return }
+        openURL(url) { accepted in
+          orchestrator.completeTapAction(accepted ? "Opened \(url.host ?? "link")" : "The link could not be opened")
         }
       }
       .buttonStyle(.borderedProminent)
     case .call:
       Button(L.t("Call", "Ara")) {
-        if let phone = plan.phone, let url = DeviceActionExecutor.callURL(for: phone) {
-          openURL(url)
-          orchestrator.completeTapAction("Call started to \(plan.recipient ?? phone)")
+        guard let phone = plan.phone, let url = DeviceActionExecutor.callURL(for: phone) else { return }
+        // iOS asks once more before dialling; the app never says a call
+        // was made.
+        openURL(url) { accepted in
+          orchestrator.completeTapAction(
+            accepted ? "The call screen opened for \(plan.recipient ?? phone)" : "The call screen could not be opened",
+            feedback: accepted
+              ? ActionFeedback(kind: .call, title: L.t("Call screen opened", "Arama ekranı açıldı"))
+              : ActionFeedback.failed(L.t("Call screen could not be opened", "Arama ekranı açılamadı")))
         }
       }
       .buttonStyle(.borderedProminent)
       .disabled(plan.phone == nil)
     case .message:
-      Button(L.t("Write in Messages", "Mesajlar'da yaz")) {
-        if let url = DeviceActionExecutor.messageURL(phone: plan.phone, body: plan.text) {
-          openURL(url)
-          orchestrator.completeTapAction("Message opened in Messages; sending is up to the user")
-        }
-      }
-      .buttonStyle(.borderedProminent)
+      Button(L.t("Write in Messages", "Mesajlar'da yaz")) { openMessages() }
+        .buttonStyle(.borderedProminent)
     case .shareText:
-      ShareLink(item: plan.text ?? "") {
+      Button {
+        let text = plan.text ?? ""
+        let opened = SystemSheets.presentShare(text: text) { completed in
+          orchestrator.shareSheetFinished(completed)
+        }
+        if opened { orchestrator.completeTapAction("Share sheet opened") }
+      } label: {
         Label(L.t("Share", "Paylaş"), systemImage: "square.and.arrow.up")
       }
       .buttonStyle(.borderedProminent)
+    }
+  }
+
+  /// Messages' own compose sheet (the user sends), or the Messages app
+  /// when the sheet is not available.
+  private func openMessages() {
+    let body = plan.text ?? ""
+    if SystemSheets.presentMessage(phone: plan.phone, body: body, finished: { result in
+      orchestrator.messageSheetFinished(result)
+    }) {
+      orchestrator.completeTapAction("Messages opened; sending is up to the user")
+      return
+    }
+    guard let url = DeviceActionExecutor.messageURL(phone: plan.phone, body: body) else { return }
+    openURL(url) { accepted in
+      orchestrator.completeTapAction(
+        accepted ? "Message opened in Messages; sending is up to the user" : "Messages could not be opened",
+        feedback: accepted ? nil : ActionFeedback.failed(L.t("Messages could not be opened", "Mesajlar açılamadı")))
     }
   }
 }

@@ -41,7 +41,7 @@ final class AutoLoomVoiceActionTests: XCTestCase {
   func testOrdinarySpeechIsLeftToTheVoiceModel() {
     XCTAssertNil(decide("Bugün hava nasıl?"))
     XCTAssertNil(decide("Not almak için hangi uygulama iyi?"))
-    XCTAssertNil(decide("Ahmet'e mesaj yaz"))
+    XCTAssertEqual(decide("Ahmet'e mesaj yaz"), .message(contact: "Ahmet", body: nil), "the app asks what to write")
     XCTAssertNil(decide("Adım atmak istiyorum"), "\"adım\" is also \"step\"")
     XCTAssertNil(decide("Bunu bana hatırlatma"), "a negative is not a request")
     var addressed = VoiceBridgeContext()

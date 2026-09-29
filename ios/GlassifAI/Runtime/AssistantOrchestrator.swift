@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import MessageUI
 import QuartzCore
 import UIKit
 
@@ -88,6 +89,15 @@ final class AssistantOrchestrator: ObservableObject {
   var speakInConversation: ((String) -> Bool)?
   /// Commands the app is saving itself (notes, reminders, tasks…).
   private var localWork = 0
+  /// The person of the last call, message or contact lookup ("ona da yaz").
+  var recentContact: (name: String, at: Date)?
+  /// What the user saved last (note, task, memory), for "bununla ilgili".
+  var recentSaved: (text: String, at: Date)?
+  /// The app's last own result, shown as a short card with a haptic
+  /// ("✓ Not kaydedildi"). Posted only after the store or iOS confirmed it.
+  @Published private(set) var actionFeedback: ActionFeedback?
+  /// Recent results for the assistant screen (labels and times only).
+  @Published private(set) var recentActivity: [ActionFeedback] = []
   /// The current conversation's turns, in memory only until it ends; then
   /// a short summary is saved (Settings → Memory → Conversation memory) and
   /// the turns are dropped. Reconnects keep the same conversation.
@@ -144,6 +154,16 @@ final class AssistantOrchestrator: ObservableObject {
 
   func clearNotice() {
     notice = nil
+  }
+
+  func postFeedback(_ feedback: ActionFeedback) {
+    actionFeedback = feedback
+    recentActivity.insert(feedback, at: 0)
+    if recentActivity.count > 12 { recentActivity.removeLast(recentActivity.count - 12) }
+  }
+
+  func dismissFeedback(_ id: UUID) {
+    if actionFeedback?.id == id { actionFeedback = nil }
   }
 
   func beginLocalWork() {
@@ -385,6 +405,37 @@ final class AssistantOrchestrator: ObservableObject {
     return cancelled
   }
 
+  /// How a delegation the voice model made before the user's final words
+  /// relates to a command the app then handles itself.
+  enum DelegationTakeover: Equatable {
+    /// Still running: cancelled; the app's result answers its handoff.
+    case cancelled
+    /// It already did an action (a note, reminder, memory…): not repeated.
+    case completedAction
+    /// It finished without acting (an answer, a failure): the app runs the
+    /// command.
+    case completedOther
+    case unknown
+  }
+
+  /// The voice model delegated the user's words before their final
+  /// transcript arrived, and the app now recognises them as its own
+  /// command. One request, one result: the running delegation is stopped
+  /// and the app's result answers it; one that already acted is kept.
+  func takeOverDelegation(handoffID: String) -> DelegationTakeover {
+    guard let record = ledger.records.last(where: { $0.handoffID == handoffID }) else { return .unknown }
+    if !record.phase.isTerminal {
+      ledger.update(record.id) { $0.phase = .cancelled("taken over by the voice action bridge") }
+      running[record.id]?.cancel()
+      running[record.id] = nil
+      refreshActivity()
+      return .cancelled
+    }
+    let acting: Set<AssistantTaskKind> = [.authorizedAction, .localMemory, .visualMemory, .report]
+    if record.completed, let kind = record.kind, acting.contains(kind) { return .completedAction }
+    return .completedOther
+  }
+
   // MARK: Execution
 
   private struct Outcome {
@@ -416,6 +467,23 @@ final class AssistantOrchestrator: ObservableObject {
     } else {
       let origin: RouteOrigin = ledger.record(taskID)?.source == .typedInput ? .typedInput : .toolRouting
       ledger.update(taskID) { $0.routeOrigin = origin }
+      // A delegation without an envelope can still be an explicit command
+      // ("not al: …"). The app runs it itself rather than letting a model
+      // answer "noted" with nothing saved; never in a turn that brought
+      // camera, web or agent content.
+      if origin == .toolRouting, untrustedTurnID != turnID {
+        var bridge = bridgeContext()
+        bridge.addressedOnly = false
+        bridge.awaiting = nil
+        if let decision = VoiceActionIntentBridge.decide(rawText, context: bridge), decision.intent.runsFromDelegation {
+          ledger.update(taskID) {
+            $0.kind = .authorizedAction
+            $0.notes.append("free-text delegation run by the voice action bridge")
+          }
+          let result = await runVoiceIntent(decision, transcript: rawText)
+          return Outcome(speakable: result.spoken, display: nil, kind: .authorizedAction, failed: result.failed)
+        }
+      }
     }
 
     // Verify the requested route against what the app can actually do now.
@@ -763,10 +831,13 @@ final class AssistantOrchestrator: ObservableObject {
       do {
         let text = try await DeviceActionExecutor.shared.run(plan)
         lastActionResult = text
+        if let feedback = ActionFeedback.saved(plan) { postFeedback(feedback) }
+        if plan.kind == .saveNote, let saved = plan.text { recentSaved = (saved, Date()) }
         return ActionStageResult(
           speakable: text + "\nTell the user naturally and briefly.", display: text, failed: nil)
       } catch {
         let message = LogSanitizer.sanitize(error.localizedDescription)
+        if let feedback = ActionFeedback.notSaved(plan) { postFeedback(feedback) }
         return ActionStageResult(speakable: message + " Tell the user.", display: nil, failed: message)
       }
     case .confirm:
@@ -802,10 +873,12 @@ final class AssistantOrchestrator: ObservableObject {
     do {
       let text = try await DeviceActionExecutor.shared.run(pending.plan)
       lastActionResult = text
+      if let feedback = ActionFeedback.saved(pending.plan) { postFeedback(feedback) }
       return text + (byVoice ? " Tell the user it is done." : "")
     } catch {
       let message = LogSanitizer.sanitize(error.localizedDescription)
       lastActionResult = message
+      if let feedback = ActionFeedback.notSaved(pending.plan) { postFeedback(feedback) }
       return message
     }
   }
@@ -864,9 +937,35 @@ final class AssistantOrchestrator: ObservableObject {
 
   /// Called by the confirmation card after the user tapped an action that
   /// opens another app (Maps, Safari, Phone, Messages, share sheet).
-  func completeTapAction(_ result: String) {
+  func completeTapAction(_ result: String, feedback: ActionFeedback? = nil) {
     pendingAction = nil
     lastActionResult = result
+    if let feedback { postFeedback(feedback) }
+  }
+
+  /// What the user did in the Messages sheet the app opened. "Sent" is
+  /// reported only when Messages says so.
+  func messageSheetFinished(_ result: MessageComposeResult) {
+    switch result {
+    case .sent:
+      lastActionResult = "The user sent the message in Messages"
+      postFeedback(ActionFeedback(kind: .message, title: L.t("Message sent", "Mesaj gönderildi")))
+      context.addFact(kind: .authorizedAction, request: "message", result: "The user sent the prepared message.", sources: [])
+    case .failed:
+      lastActionResult = "Messages could not send the message"
+      postFeedback(.failed(L.t("Message not sent", "Mesaj gönderilemedi")))
+    default:
+      lastActionResult = "The user closed Messages without sending"
+      postFeedback(ActionFeedback(kind: .message, title: L.t("Message not sent", "Mesaj gönderilmedi"), success: false))
+    }
+  }
+
+  /// What the user did in the share sheet the app opened.
+  func shareSheetFinished(_ completed: Bool) {
+    lastActionResult = completed ? "The user shared the text" : "The user closed the share sheet"
+    if completed {
+      postFeedback(ActionFeedback(kind: .share, title: L.t("Shared", "Paylaşıldı")))
+    }
   }
 
   // MARK: Agent gateway (OpenClaw, optional)

@@ -69,9 +69,33 @@ struct AssistantHomeView: View {
         .transition(.move(edge: .top).combined(with: .opacity))
         .allowsHitTesting(false)
       }
+
+      // "✓ Not kaydedildi": only after the store or iOS confirmed it.
+      if let feedback = orchestrator.actionFeedback {
+        VStack {
+          ActionFeedbackToast(feedback: feedback)
+            .padding(.top, showConnectedToast ? 150 : 96)
+            .onTapGesture { orchestrator.dismissFeedback(feedback.id) }
+          Spacer()
+        }
+        .padding(.horizontal, 16)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .id(feedback.id)
+      }
     }
+    .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: orchestrator.actionFeedback?.id)
     .preferredColorScheme(.dark)
     .tint(AutoLoomTheme.electricBlue)
+    .sensoryFeedback(trigger: orchestrator.actionFeedback?.id) { _, _ in
+      guard let feedback = orchestrator.actionFeedback else { return nil }
+      return feedback.success ? .success : .error
+    }
+    .task(id: orchestrator.actionFeedback?.id) {
+      guard let id = orchestrator.actionFeedback?.id else { return }
+      try? await Task.sleep(nanoseconds: 2_800_000_000)
+      guard !Task.isCancelled else { return }
+      orchestrator.dismissFeedback(id)
+    }
     .sensoryFeedback(trigger: voice.state) { _, state in
       switch state {
       case .listening: .success

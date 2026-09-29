@@ -1,5 +1,21 @@
 # Baseline — last device-verified working build
 
+## Baseline for the voice-first pass (recorded 2026-09-28, brief "ULTIMATE VOICE-FIRST PERSONAL ASSISTANT + PREMIUM UI")
+
+| Item | Value |
+| --- | --- |
+| Branch | `autoloom-glasses-jarvis-v1` (work continues here; `main`, `autoloom-glasses-next`, `autoloom-glasses-vNext` and `autoloom-glasses-dat1` untouched) |
+| Starting HEAD | `e79fd8547aac6046cbc6c28800b55832a709a405` (`e79fd85`, docs only on top of `d8513c9`) |
+| Build of that HEAD | CI run [36430433665](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36430433665), commit `d8513c9`: iOS 157/157, Rust 8/8, Debug + Release IPAs (Jarvis v1.2: Ray-Ban connection coordinator and animated UI) |
+| Rollback tag | `rollback-e79fd85-before-voice-first` (annotated, on `e79fd85`); also `baseline-d8513c9-jarvis-v1.2` |
+| Remote | `origin` https://github.com/tolgawox-byte/GlassifAI.git |
+
+The brief starts from one failure: "AutoLoom, not al: yarın kamerayı getireceğim." must reliably become a saved note.
+
+Rollback: install the IPA from run 36430433665, or rebuild with `git checkout rollback-e79fd85-before-voice-first`.
+
+---
+
 ## Baseline for Jarvis v1.1 (recorded 2026-09-28, brief "ULTIMATE JARVIS / MEMORY / RAY-BAN VISION / VOICE ACTIONS")
 
 | Item | Value |

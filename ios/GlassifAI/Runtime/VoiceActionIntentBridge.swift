@@ -1,9 +1,9 @@
 import Foundation
 
 /// What the local intent bridge understood from one final user utterance.
-/// Explicit commands ("not al", "hatırlat", "görev oluştur", "benim adım…")
-/// are executed by the app itself instead of depending on the voice model to
-/// choose a delegation.
+/// Explicit commands ("not al", "hatırlat", "görev oluştur", "Ahmet'i ara",
+/// "benim adım…") are executed by the app itself instead of depending on the
+/// voice model to choose a delegation.
 enum VoiceIntent: Equatable {
   /// A question the bridge asked; the next utterance answers it.
   enum Awaiting: Equatable {
@@ -12,6 +12,33 @@ enum VoiceIntent: Equatable {
     case task
     case reminderTime(title: String)
     case eventTime(title: String)
+    /// "Ahmet'e ne yazayım?"
+    case messageBody(contact: String)
+    /// "Kime yazayım?"
+    case messageRecipient(body: String?)
+    /// "İki Ahmet buldum: Ahmet Yılmaz mı, Ahmet Kaya mı?"
+    case chooseContact(action: ContactAction, names: [String])
+
+    /// For the action trace: the kind of question, never its content.
+    var label: String {
+      switch self {
+      case .note: "note"
+      case .memory: "memory"
+      case .task: "task"
+      case .reminderTime: "reminderTime"
+      case .eventTime: "eventTime"
+      case .messageBody: "messageBody"
+      case .messageRecipient: "messageRecipient"
+      case .chooseContact: "chooseContact"
+      }
+    }
+  }
+
+  /// What to do with a contact once the right one is known.
+  enum ContactAction: Equatable {
+    case call
+    case message(body: String?)
+    case find
   }
 
   enum CalendarRange: String, Equatable {
@@ -50,8 +77,28 @@ enum VoiceIntent: Equatable {
   case readCalendar(CalendarRange)
   case listTasks
   case completeTask(String)
+  /// "Bugün ne yapmam gerekiyor?": AutoLoom tasks, Apple Reminders and the
+  /// calendar together.
+  case dayPlan(CalendarRange)
   /// Read the text in view and translate it (high detail).
   case translateView(language: String)
+  /// "Ahmet'i ara": the contact is looked up; the call starts only after a
+  /// tap on the phone (iOS asks once more).
+  case call(contact: String)
+  /// "Ahmet'e 10 dakika gecikeceğim diye mesaj yaz": the message is
+  /// prepared in Messages; the user sends it.
+  case message(contact: String?, body: String?)
+  /// "Ahmet'in numarası ne?"
+  case findContact(String)
+  /// "Kadıköy'e yol tarifi aç", "beni eve götür" ("Home" and "Work" are the
+  /// saved addresses).
+  case directions(String)
+  /// "En yakın benzinlik": a Maps search around the user.
+  case nearby(String)
+  /// "Bunu kopyala": the text, or nil when there is nothing to copy.
+  case copyText(String?)
+  /// "Bunu paylaş": the share sheet with the text.
+  case shareText(String?)
   case routine(Routine)
   /// A command without its content: ask for it ("Neyi not alayım?").
   case ask(Awaiting)
@@ -59,7 +106,7 @@ enum VoiceIntent: Equatable {
   /// structured model classification (strict JSON), never to free text.
   case classify(AssistantTaskKind, query: String)
 
-  /// Short name for the action trace.
+  /// Short name for the action trace (no names, numbers or message text).
   var traceName: String {
     switch self {
     case .confirmPending(let yes): yes ? "confirmAction" : "cancelAction"
@@ -82,9 +129,17 @@ enum VoiceIntent: Equatable {
     case .readCalendar(let range): "readCalendar(\(range.rawValue))"
     case .listTasks: "listTasks"
     case .completeTask: "completeTask"
+    case .dayPlan(let range): "dayPlan(\(range.rawValue))"
     case .translateView: "translateView"
+    case .call: "call"
+    case .message: "message"
+    case .findContact: "findContact"
+    case .directions: "directions"
+    case .nearby: "nearbySearch"
+    case .copyText: "copyText"
+    case .shareText: "shareText"
     case .routine(let routine): "routine(\(routine.rawValue))"
-    case .ask(let awaiting): "ask(\(awaiting))"
+    case .ask(let awaiting): "ask(\(awaiting.label))"
     case .classify(let kind, _): "classify(\(kind.rawValue))"
     }
   }
@@ -101,10 +156,22 @@ struct VoiceBridgeContext {
   var previousUserText: String?
   /// The assistant's last answer (for "bunu not al").
   var lastAssistantText: String?
+  /// What the user saved moments ago (a note, task or memory), for
+  /// "bununla ilgili bir görev oluştur".
+  var recentSavedText: String?
+  /// The person of the last call, message or lookup ("ona da yaz").
+  var recentContact: String?
   var cameraAvailable = false
   var visualMemoryAvailable = false
   /// Addressed-only mode: act only when the user says the assistant's name.
   var addressedOnly = false
+
+  /// The assistant's last answer when it was a real answer, not a short
+  /// confirmation such as "Tamam, not aldım."
+  var usefulAnswer: String? {
+    guard let text = lastAssistantText, !VoiceActionIntentBridge.isAcknowledgement(text) else { return nil }
+    return text
+  }
 }
 
 struct VoiceBridgeDecision: Equatable {
@@ -139,6 +206,9 @@ enum VoiceActionIntentBridge {
   static func decide(_ text: String, context: VoiceBridgeContext, now: Date = Date()) -> VoiceBridgeDecision? {
     guard var utterance = Utterance(text) else { return nil }
     var addressed = utterance.stripAddress(assistantName: context.assistantName)
+    // The speech recogniser spells the name its own way ("Oto lum",
+    // "Otoloom", "Carvis"): a near match is the address too.
+    if utterance.stripNearAddress(assistantName: context.assistantName) { addressed = true }
     guard !utterance.isEmpty, utterance.count <= 80 else { return nil }
 
     // 2. The answer to an action waiting for confirmation (it answers the
@@ -151,20 +221,28 @@ enum VoiceActionIntentBridge {
     }
     if utterance.stripDiscourse() {
       // "Tamam Jarvis, not al…": the name can follow a discourse word.
-      addressed = utterance.stripAddress(assistantName: context.assistantName) || addressed
+      if utterance.stripAddress(assistantName: context.assistantName) { addressed = true }
+      if utterance.stripNearAddress(assistantName: context.assistantName) { addressed = true }
     }
     guard !utterance.isEmpty else { return nil }
     if context.addressedOnly && !addressed && context.awaiting == nil { return nil }
 
-    // 3–4. Explicit native actions and explicit memory.
+    // 3–12. Explicit native actions and explicit memory. Messages come
+    // before notes: "Ahmet'e bunu yaz" is a message, "bunu yaz" a note.
     if let decision = profile(utterance)
       ?? translation(utterance, context)
+      ?? messages(utterance, context)
       ?? notes(utterance, context)
       ?? reminders(utterance, context, now)
       ?? tasks(utterance, context, now)
+      ?? dayPlan(utterance)
       ?? calendar(utterance, now)
       ?? taskQueries(utterance)
       ?? routines(utterance)
+      ?? calls(utterance)
+      ?? contactQuestions(utterance)
+      ?? directions(utterance, context)
+      ?? clipboard(utterance, context)
       ?? memory(utterance, context) {
       return decision
     }
@@ -180,17 +258,35 @@ enum VoiceActionIntentBridge {
   static func looksLikeCommandStart(_ partial: String, assistantName: String) -> Bool {
     guard var utterance = Utterance(partial) else { return false }
     _ = utterance.stripAddress(assistantName: assistantName)
+    _ = utterance.stripNearAddress(assistantName: assistantName)
     _ = utterance.stripDiscourse()
     return commandStarts.contains { utterance.starts(with: $0) }
   }
 
   private static let commandStarts: [[String]] = [
-    ["not", "al"], ["not", "et"], ["sunu", "not"], ["bunu", "not"], ["notlara", "ekle"], ["benim", "adim"],
-    ["bunu", "hatirla"], ["sunu", "hatirla"], ["unutma"], ["aklinda", "tut"], ["hafizana"], ["hafizaya"],
-    ["gorev", "olustur"], ["gorev", "ekle"], ["takvime", "ekle"], ["bana", "hatirlat"],
+    ["not", "al"], ["notal"], ["not", "et"], ["not", "tut"], ["sunu", "not"], ["bunu", "not"], ["notlara", "ekle"],
+    ["benim", "adim"], ["bunu", "hatirla"], ["sunu", "hatirla"], ["unutma"], ["aklinda", "tut"], ["hafizana"],
+    ["hafizaya"], ["gorev", "olustur"], ["gorev", "ekle"], ["takvime", "ekle"], ["bana", "hatirlat"],
+    ["bunu", "kopyala"], ["bunu", "paylas"], ["mesaj", "yaz"], ["mesaj", "at"], ["beni", "eve"],
     ["remind", "me"], ["take", "a", "note"], ["make", "a", "note"], ["note", "that"], ["remember", "that"],
     ["my", "name", "is"], ["add", "a", "task"], ["add", "to", "my", "calendar"], ["write", "down"],
   ]
+
+  /// A short confirmation ("Tamam, not aldım.", "Got it.") that "bunu"
+  /// should not point at.
+  static func isAcknowledgement(_ text: String) -> Bool {
+    guard let u = Utterance(text) else { return true }
+    if u.count <= 3 { return true }
+    let openers: Set<String> = [
+      "tamam", "peki", "anladim", "tabii", "tabi", "olur", "harika", "super", "kaydettim", "ekledim",
+      "okay", "ok", "sure", "got", "done", "alright", "noted",
+    ]
+    if u.count <= 7, let first = u.keys.first, openers.contains(first) { return true }
+    let done: Set<String> = [
+      "aldim", "kaydettim", "ekledim", "kurdum", "olusturdum", "hazirladim", "kopyaladim", "saved", "added", "created",
+    ]
+    return u.count <= 5 && u.containsAny(done)
+  }
 
   // MARK: 2. Confirmation
 
@@ -317,28 +413,31 @@ enum VoiceActionIntentBridge {
 
   private static let noteStarts: [[String]] = [
     ["bunu", "not", "olarak", "kaydet"], ["sunu", "not", "olarak", "kaydet"], ["not", "olarak", "kaydet"],
-    ["not", "olarak", "ekle"], ["notlarima", "ekle"], ["notlara", "ekle"], ["nota", "ekle"],
+    ["bunu", "not", "olarak", "yaz"], ["sunu", "not", "olarak", "yaz"], ["not", "olarak", "yaz"],
+    ["not", "olarak", "ekle"], ["notlarima", "ekle"], ["notlara", "ekle"], ["notlarima", "kaydet"],
+    ["notlara", "kaydet"], ["nota", "ekle"], ["nota", "yaz"],
     ["bir", "not", "al"], ["sunu", "not", "al"], ["bunu", "not", "al"], ["not", "alir", "misin"],
-    ["not", "alabilir", "misin"], ["not", "al"], ["sunu", "not", "et"], ["bunu", "not", "et"],
-    ["not", "eder", "misin"], ["not", "et"], ["not", "tut"], ["not", "yaz"], ["sunu", "yaz"], ["bunu", "yaz"],
-    ["sunu", "kaydet"], ["bunu", "kaydet"],
+    ["not", "alabilir", "misin"], ["not", "alsana"], ["not", "al"], ["notal"], ["sunu", "not", "et"], ["bunu", "not", "et"],
+    ["not", "eder", "misin"], ["not", "et"], ["not", "tut"], ["not", "dus"], ["not", "ekle"], ["bir", "not", "yaz"],
+    ["not", "yaz"], ["sunu", "yaz"], ["bunu", "yaz"], ["sunu", "kaydet"], ["bunu", "kaydet"],
     ["take", "a", "note"], ["make", "a", "note"], ["save", "a", "note"], ["add", "a", "note"], ["note", "that"],
     ["note", "down"], ["write", "this", "down"], ["write", "that", "down"], ["write", "down"], ["jot", "down"],
     ["save", "this", "as", "a", "note"], ["save", "that", "as", "a", "note"],
   ]
 
   private static let noteEnds: [[String]] = [
-    ["bunu", "not", "olarak", "kaydet"], ["not", "olarak", "kaydet"], ["not", "olarak", "ekle"],
-    ["notlarima", "ekle"], ["notlara", "ekle"], ["nota", "ekle"], ["bunu", "not", "al"], ["sunu", "not", "al"],
-    ["not", "alir", "misin"], ["not", "alabilir", "misin"], ["not", "al"], ["bunu", "not", "et"],
-    ["not", "eder", "misin"], ["not", "et"], ["bunu", "yaz"], ["sunu", "yaz"], ["bunu", "kaydet"], ["sunu", "kaydet"],
+    ["bunu", "not", "olarak", "kaydet"], ["not", "olarak", "kaydet"], ["not", "olarak", "ekle"], ["not", "olarak", "yaz"],
+    ["notlarima", "ekle"], ["notlara", "ekle"], ["notlara", "kaydet"], ["nota", "ekle"], ["nota", "yaz"],
+    ["bunu", "not", "al"], ["sunu", "not", "al"], ["not", "alir", "misin"], ["not", "alabilir", "misin"], ["not", "al"],
+    ["bunu", "not", "et"], ["not", "eder", "misin"], ["not", "et"], ["not", "dus"], ["bunu", "yaz"], ["sunu", "yaz"],
+    ["bunu", "kaydet"], ["sunu", "kaydet"],
     ["note", "that", "down"], ["write", "that", "down"], ["write", "this", "down"], ["as", "a", "note"],
   ]
 
   /// Words that only point at something said before ("bunu", "this").
   static let deictic: Set<String> = [
     "bunu", "sunu", "onu", "bu", "su", "o", "bunlari", "sunlari", "tekrar", "yine", "de", "da", "bir", "daha",
-    "ki", "this", "that", "it", "again", "these",
+    "ki", "this", "that", "it", "again", "these", "bununla", "sununla", "onunla", "ilgili", "hakkinda", "about",
   ]
 
   private static func notes(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
@@ -352,7 +451,8 @@ enum VoiceActionIntentBridge {
     guard var content else { return nil }
     content.trimLeading(["ki", "su", "sunu", "that", "this", "olarak"])
     if content.isOnly(deictic) {
-      if let previous = context.lastAssistantText ?? context.previousUserText, previous.count >= 3 {
+      // "Bunu not al": the last real answer, else what the user just said.
+      if let previous = context.usefulAnswer ?? context.previousUserText ?? context.lastAssistantText, previous.count >= 3 {
         return VoiceBridgeDecision(.saveNote(text: previous), "note trigger; content from the conversation")
       }
       return VoiceBridgeDecision(.ask(.note), "note trigger without content")
@@ -394,7 +494,7 @@ enum VoiceActionIntentBridge {
       var title: String?
       if !rest.isEmpty, !rest.isOnly(deictic) {
         title = reminderTitle(rest.text)
-      } else if let previous = context.previousUserText, previous.count >= 3 {
+      } else if let previous = context.recentSavedText ?? context.previousUserText, previous.count >= 3 {
         title = shortTitle(previous)
       }
       guard let title else {
@@ -419,7 +519,7 @@ enum VoiceActionIntentBridge {
       var title: String?
       if !rest.isEmpty, !rest.isOnly(deictic) {
         title = reminderTitle(rest.text)
-      } else if !rest.isEmpty, let previous = context.previousUserText, previous.count >= 3 {
+      } else if !rest.isEmpty, let previous = context.recentSavedText ?? context.previousUserText, previous.count >= 3 {
         title = shortTitle(previous)
       }
       return VoiceBridgeDecision(.notify(title: title, time: time), "notification trigger")
@@ -427,7 +527,7 @@ enum VoiceActionIntentBridge {
     return nil
   }
 
-  // MARK: 3. AutoLoom tasks
+  // MARK: 6. AutoLoom tasks
 
   private static let taskTriggers: [[String]] = [
     ["gorev", "olarak", "ekle"], ["gorev", "olarak", "kaydet"], ["gorev", "listesine", "ekle"],
@@ -450,14 +550,48 @@ enum VoiceActionIntentBridge {
     if !rest.isEmpty, !rest.isOnly(deictic) {
       return VoiceBridgeDecision(.createTask(title: capitalizedFirst(rest.text), time: time), "task trigger")
     }
-    guard let previous = context.previousUserText ?? context.lastAssistantText, previous.count >= 3 else {
+    // "Bununla ilgili bir görev oluştur": what was just saved, else what the
+    // user said before.
+    guard let previous = context.recentSavedText ?? context.previousUserText ?? context.lastAssistantText,
+          previous.count >= 3 else {
       return VoiceBridgeDecision(.ask(.task), "task trigger without content")
     }
     if time == nil { time = TimePhraseParser.parse(previous, now: now) }
     return VoiceBridgeDecision(.createTask(title: shortTitle(previous), time: time), "task trigger; content from the conversation")
   }
 
-  // MARK: 3. Calendar
+  // MARK: 7. The day at a glance
+
+  /// "Bugün ne yapmam gerekiyor?", "programım ne?": AutoLoom tasks, Apple
+  /// Reminders and the calendar together. Needs a day word, so "arabam
+  /// bozuldu, ne yapmam gerekiyor?" stays a question for the voice model.
+  private static func dayPlan(_ u: Utterance) -> VoiceBridgeDecision? {
+    guard u.count <= 8 else { return nil }
+    let tomorrow = u.containsAny(["yarin", "yarinki", "tomorrow"])
+    let range: VoiceIntent.CalendarRange = tomorrow ? .tomorrow : .today
+    let plans: [[String]] = [
+      ["programim", "ne"], ["programim", "nasil"], ["programimda", "ne", "var"], ["planim", "ne"],
+      ["whats", "my", "day", "look", "like"], ["what", "does", "my", "day", "look", "like"],
+      ["how", "does", "my", "day", "look"],
+    ]
+    if plans.contains(where: { u.range(of: $0) != nil }) {
+      return VoiceBridgeDecision(.dayPlan(range), "day plan question")
+    }
+    if u.keys == ["bugunku", "programim"] || u.keys == ["yarinki", "programim"] {
+      return VoiceBridgeDecision(.dayPlan(range), "day plan question")
+    }
+    guard tomorrow || u.containsAny(["bugun", "bugunku", "today"]) else { return nil }
+    let questions: [[String]] = [
+      ["ne", "yapmam", "gerekiyor"], ["ne", "yapmam", "lazim"], ["neler", "yapmam", "gerekiyor"],
+      ["neler", "yapmam", "lazim"], ["ne", "yapacagim"], ["neler", "yapacagim"], ["islerim", "neler"],
+      ["islerim", "ne"], ["ne", "islerim", "var"], ["what", "do", "i", "need", "to", "do"],
+      ["what", "do", "i", "have", "to", "do"], ["whats", "on", "my", "plate"],
+    ]
+    guard questions.contains(where: { u.range(of: $0) != nil }) else { return nil }
+    return VoiceBridgeDecision(.dayPlan(range), "day plan question")
+  }
+
+  // MARK: 7. Calendar
 
   private static let eventTriggers: [([String], String?)] = [
     (["takvimime", "ekle"], nil), (["takvime", "ekle"], nil), (["takvime", "kaydet"], nil), (["ajandama", "ekle"], nil),
@@ -501,8 +635,8 @@ enum VoiceActionIntentBridge {
     }
     let dayQuestions: [[String]] = [
       ["bugun", "ne", "var"], ["yarin", "ne", "var"], ["bugun", "neler", "var"], ["yarin", "neler", "var"],
-      ["bugun", "toplantim", "var", "mi"], ["yarin", "toplantim", "var", "mi"], ["bugun", "programim", "ne"],
-      ["bugunku", "programim"], ["what", "do", "i", "have", "today"], ["what", "do", "i", "have", "tomorrow"],
+      ["bugun", "toplantim", "var", "mi"], ["yarin", "toplantim", "var", "mi"],
+      ["what", "do", "i", "have", "today"], ["what", "do", "i", "have", "tomorrow"],
       ["whats", "on", "today"], ["whats", "on", "tomorrow"], ["any", "meetings", "today"], ["any", "meetings", "tomorrow"],
     ]
     if dayQuestions.contains(where: { u.starts(with: $0) }) {
@@ -511,13 +645,12 @@ enum VoiceActionIntentBridge {
     return nil
   }
 
-  // MARK: 3. Task questions
+  // MARK: 6. Task questions
 
   private static func taskQueries(_ u: Utterance) -> VoiceBridgeDecision? {
     let lists: [[String]] = [
       ["gorevlerim", "neler"], ["gorevlerim", "ne"], ["gorevlerimi", "oku"], ["gorevlerimi", "say"],
-      ["yapilacaklarim", "neler"], ["yapilacaklar", "listem"], ["bugun", "ne", "yapmam", "lazim"],
-      ["bugun", "ne", "yapmam", "gerekiyor"], ["hatirlaticilarim", "neler"], ["hatirlaticilarimi", "oku"],
+      ["yapilacaklarim", "neler"], ["yapilacaklar", "listem"], ["hatirlaticilarim", "neler"], ["hatirlaticilarimi", "oku"],
       ["animsaticilarim", "neler"], ["what", "are", "my", "tasks"], ["read", "my", "tasks"],
       ["whats", "on", "my", "to", "do", "list"], ["what", "are", "my", "reminders"], ["read", "my", "reminders"],
     ]
@@ -536,7 +669,7 @@ enum VoiceActionIntentBridge {
     return nil
   }
 
-  // MARK: 3. Routines
+  // MARK: Routines
 
   private static func routines(_ u: Utterance) -> VoiceBridgeDecision? {
     guard u.count <= 6 else { return nil }
@@ -586,7 +719,408 @@ enum VoiceActionIntentBridge {
     return nil
   }
 
-  // MARK: 4. Memory
+  // MARK: 8–10. Calls, messages and contacts
+
+  enum GrammaticalCase: Equatable {
+    case nominative
+    case accusative
+    case dative
+    case genitive
+  }
+
+  /// Family words people call by title, in their accusative, dative and
+  /// genitive forms, and the name they usually have in Contacts.
+  private static let relations: [(accusative: String, dative: String, genitive: String, name: String)] = [
+    ("annemi", "anneme", "annemin", "Annem"), ("babami", "babama", "babamin", "Babam"),
+    ("esimi", "esime", "esimin", "Eşim"), ("karimi", "karima", "karimin", "Karım"),
+    ("kocami", "kocama", "kocamin", "Kocam"), ("kardesimi", "kardesime", "kardesimin", "Kardeşim"),
+    ("abimi", "abime", "abimin", "Abim"), ("ablami", "ablama", "ablamin", "Ablam"),
+    ("oglumu", "ogluma", "oglumun", "Oğlum"), ("kizimi", "kizima", "kizimin", "Kızım"),
+    ("patronumu", "patronuma", "patronumun", "Patronum"), ("dedemi", "dedeme", "dedemin", "Dedem"),
+    ("anneannemi", "anneanneme", "anneannemin", "Anneannem"), ("babaannemi", "babaanneme", "babaannemin", "Babaannem"),
+  ]
+
+  /// Other names the same person often has in Contacts ("Annem" → "Anne").
+  static let relationAlternatives: [String: [String]] = [
+    "Annem": ["Anne", "Annecim", "Anneciğim"], "Babam": ["Baba", "Babacım", "Babacığım"], "Eşim": ["Eş"],
+    "Kardeşim": ["Kardeş"], "Abim": ["Abi"], "Ablam": ["Abla"], "Oğlum": ["Oğul"], "Dedem": ["Dede"],
+    "Anneannem": ["Anneanne"], "Babaannem": ["Babaanne"], "Mom": ["Mum", "Mother", "Mama"], "Dad": ["Father", "Papa"],
+  ]
+
+  private static let englishRelations: [[String]: String] = [
+    ["mom"]: "Mom", ["mum"]: "Mum", ["dad"]: "Dad", ["my", "mom"]: "Mom", ["my", "mum"]: "Mum", ["my", "dad"]: "Dad",
+    ["my", "wife"]: "Wife", ["my", "husband"]: "Husband", ["my", "brother"]: "Brother", ["my", "sister"]: "Sister",
+    ["my", "boss"]: "Boss",
+  ]
+
+  /// Folded case endings, longest first.
+  private static func caseSuffixes(_ grammaticalCase: GrammaticalCase) -> [String] {
+    switch grammaticalCase {
+    case .nominative: []
+    case .accusative: ["yi", "yu", "ni", "nu", "i", "u"]
+    case .dative: ["ye", "ya", "ne", "na", "e", "a"]
+    case .genitive: ["nin", "nun", "in", "un"]
+    }
+  }
+
+  private static func relationForm(
+    _ relation: (accusative: String, dative: String, genitive: String, name: String),
+    _ grammaticalCase: GrammaticalCase
+  ) -> String {
+    switch grammaticalCase {
+    case .nominative: Utterance.key(relation.name)
+    case .accusative: relation.accusative
+    case .dative: relation.dative
+    case .genitive: relation.genitive
+    }
+  }
+
+  /// Words that are never a person ("Yarın'a", "Google'ı", "İnternet'te").
+  private static let notPeople: Set<String> = [
+    "yarin", "bugun", "dun", "aksam", "sabah", "gece", "ogle", "hafta", "pazartesi", "sali", "carsamba", "persembe",
+    "cuma", "cumartesi", "pazar", "bu", "su", "o", "bura", "sura", "ora", "ev", "is", "not", "gorev", "takvim",
+    "liste", "defter", "hafiza", "internet", "google", "youtube", "fiyat", "haber", "mesaj", "hava",
+  ]
+
+  /// "Ahmet'i" → "Ahmet", "Ayşe'ye" → "Ayşe", "Ahmet Yılmaz'ı" → "Ahmet
+  /// Yılmaz", "annemi" → "Annem". Only names written as names (Turkish puts
+  /// an apostrophe before a name's ending) and family words: "bunu ara" or
+  /// "fiyatını ara" is not a person. Without the apostrophe the voice model
+  /// handles the request instead.
+  static func contactName(_ target: Utterance, _ grammaticalCase: GrammaticalCase) -> String? {
+    guard (1...3).contains(target.count) else { return nil }
+    if target.count == 1, let relation = relations.first(where: { relationForm($0, grammaticalCase) == target.keys[0] }) {
+      return relation.name
+    }
+    var words = target.words
+    if grammaticalCase == .nominative {
+      // An answer to "Kime yazayım?": "Ahmet", "Ahmet Yılmaz".
+      guard words.allSatisfy({ $0.first?.isUppercase ?? false }), !notPeople.contains(target.keys[0]) else { return nil }
+      return words.joined(separator: " ")
+    }
+    guard let last = words.last, let apostrophe = last.firstIndex(where: { $0 == "'" || $0 == "’" }) else { return nil }
+    let base = String(last[..<apostrophe])
+    let ending = Utterance.key(String(last[last.index(after: apostrophe)...]))
+    guard base.count >= 2, base.contains(where: \.isLetter), caseSuffixes(grammaticalCase).contains(ending),
+          !notPeople.contains(Utterance.key(base)) else { return nil }
+    words[words.count - 1] = base
+    guard words.dropLast().allSatisfy({ $0.first?.isUppercase ?? false }) else { return nil }
+    return words.joined(separator: " ")
+  }
+
+  /// "Ahmet", "Ahmet Yılmaz", "my wife": capitalised names or a family word.
+  private static func englishContactName(_ target: Utterance) -> String? {
+    guard (1...2).contains(target.count) else { return nil }
+    if let relation = englishRelations[target.keys] { return relation }
+    let excluded: Set<String> = [
+      "me", "it", "that", "this", "you", "back", "him", "her", "them", "us", "home", "a", "the", "off", "out", "up",
+    ]
+    guard !target.keys.contains(where: excluded.contains),
+          target.words.allSatisfy({ $0.first?.isUppercase ?? false }) else { return nil }
+    return target.text
+  }
+
+  private static let callVerbs: [[String]] = [
+    ["ara"], ["arar"], ["arasana"], ["arayabilir"], ["arayin"], ["telefonla", "ara"], ["telefonda", "ara"],
+  ]
+
+  /// "Ahmet'i ara", "Ahmet Yılmaz'ı arar mısın", "annemi ara", "call Ahmet".
+  private static func calls(_ u: Utterance) -> VoiceBridgeDecision? {
+    var w = u
+    w.trimTrailing(["lutfen", "please", "hemen", "simdi", "misin", "musun", "misiniz"])
+    for verb in callVerbs where w.ends(with: verb) && w.count > verb.count {
+      let target = w.dropping((w.count - verb.count)..<w.count)
+      if let name = contactName(target, .accusative) {
+        return VoiceBridgeDecision(.call(contact: name), "call trigger")
+      }
+    }
+    if w.starts(with: ["call"]) || w.starts(with: ["phone"]) || w.starts(with: ["ring"]) {
+      if let name = englishContactName(w.dropping(0..<1)) {
+        return VoiceBridgeDecision(.call(contact: name), "call trigger")
+      }
+    }
+    return nil
+  }
+
+  private static let messageVerbs: Set<String> = [
+    "yaz", "yazar", "yazsana", "yazabilir", "at", "atar", "atsana", "atabilir", "gonder", "gonderir", "gondersene",
+    "gonderebilir", "yolla", "yollar", "yollasana", "ilet", "iletir", "soyle", "soyler", "soylesene",
+  ]
+  private static let messageNouns: Set<String> = ["mesaj", "mesaji", "mesajla", "sms"]
+
+  /// "Ahmet'e 10 dakika gecikeceğim diye mesaj yaz", "Ahmet'e mesaj at:
+  /// geliyorum", "ona gecikeceğimi de yaz", "mesaj yaz", "text Ahmet that…".
+  private static func messages(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+    if let english = englishMessage(u, context) { return english }
+    var w = u
+    w.trimTrailing(["lutfen", "misin", "musun", "misiniz"])
+    guard w.count >= 2 else { return nil }
+    // "Mesaj yaz", "bir mesaj gönder": nobody named yet.
+    let bare = w.keys.filter { $0 != "bir" }
+    if bare.count == 2, messageNouns.contains(bare[0]), messageVerbs.contains(bare[1]) {
+      return VoiceBridgeDecision(.message(contact: nil, body: nil), "message trigger without a recipient")
+    }
+    // "Mesaj at Ahmet'e: geliyorum".
+    let lead = w.keys[0] == "bir" ? 1 : 0
+    if w.count > lead + 2, messageNouns.contains(w.keys[lead]), messageVerbs.contains(w.keys[lead + 1]) {
+      let rest = w.dropping(0..<(lead + 2))
+      for length in [2, 1] where rest.count >= length {
+        guard let name = contactName(rest.dropping(length..<rest.count), .dative) else { continue }
+        let body = rest.dropping(0..<length)
+        return VoiceBridgeDecision(
+          .message(contact: name, body: body.isEmpty ? nil : capitalizedFirst(body.text)), "message trigger")
+      }
+      return nil
+    }
+    // The recipient first: "ona", "anneme", "Ahmet'e", "Ahmet Yılmaz'a".
+    var recipient: String?
+    var start = 0
+    let toRecent = w.keys[0] == "ona"
+    if toRecent {
+      guard let recent = context.recentContact, w.keys[1] != "gore" else { return nil }
+      recipient = recent
+      start = ["da", "de"].contains(w.keys[1]) ? 2 : 1
+    } else {
+      for length in [2, 1] where w.count > length {
+        if let name = contactName(w.dropping(length..<w.count), .dative) {
+          recipient = name
+          start = length
+          break
+        }
+      }
+    }
+    guard let recipient, start < w.count else { return nil }
+    let restKeys = Array(w.keys[start...])
+    let restWords = Array(w.words[start...])
+    var body: [String] = []
+    var index = 0
+    if restKeys[index] == "bir", restKeys.count > 1 { index += 1 }
+    if index + 1 < restKeys.count, messageNouns.contains(restKeys[index]), messageVerbs.contains(restKeys[index + 1]) {
+      // "… mesaj at: 10 dakika gecikeceğim"
+      body = Array(restWords[(index + 2)...])
+    } else {
+      // "… 10 dakika gecikeceğim diye (mesaj) yaz"
+      guard let verb = restKeys.last, messageVerbs.contains(verb) else { return nil }
+      var keys = Array(restKeys.dropLast())
+      var words = Array(restWords.dropLast())
+      let fillers: Set<String> = ["mesaj", "mesaji", "mesajla", "sms", "olarak", "bir", "de", "da", "diye"]
+      while let last = keys.last, fillers.contains(last) {
+        keys.removeLast()
+        words.removeLast()
+      }
+      body = words
+      // "gecikeceğimi yaz": the message is "gecikeceğim".
+      let nominalised = ["ecegimi", "acagimi", "digimi", "dugumu", "tigimi", "tugumu"]
+      if let last = body.last, let key = keys.last, nominalised.contains(where: { key.hasSuffix($0) }) {
+        body[body.count - 1] = String(last.dropLast())
+      }
+    }
+    var text: String? = body.isEmpty ? nil : capitalizedFirst(body.joined(separator: " "))
+    if !body.isEmpty, body.map(Utterance.key).allSatisfy({ deictic.contains($0) }) {
+      // "Ahmet'e bunu yaz": the last real answer or what was just saved.
+      text = context.usefulAnswer ?? context.recentSavedText ?? context.lastAssistantText
+    }
+    return VoiceBridgeDecision(.message(contact: recipient, body: text), toRecent ? "message to the recent contact" : "message trigger")
+  }
+
+  private static func englishMessage(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+    let rest: Utterance
+    if u.starts(with: ["send", "a", "message", "to"]) || u.starts(with: ["send", "a", "text", "to"]) {
+      rest = u.dropping(0..<4)
+    } else if u.starts(with: ["text"]) || u.starts(with: ["message"]) {
+      rest = u.dropping(0..<1)
+    } else {
+      return nil
+    }
+    guard !rest.isEmpty else { return nil }
+    if ["them", "him", "her"].contains(rest.keys[0]), let recent = context.recentContact {
+      var body = rest.dropping(0..<1)
+      body.trimLeading(["that", "saying"])
+      return VoiceBridgeDecision(
+        .message(contact: recent, body: body.isEmpty ? nil : capitalizedFirst(body.text)), "message to the recent contact")
+    }
+    // The name is one or two capitalised words, or a family word.
+    for length in [2, 1] where rest.count >= length {
+      guard let name = englishContactName(rest.dropping(length..<rest.count)) else { continue }
+      var body = rest.dropping(0..<length)
+      body.trimLeading(["that", "saying", "to", "say"])
+      return VoiceBridgeDecision(
+        .message(contact: name, body: body.isEmpty ? nil : capitalizedFirst(body.text)), "message trigger")
+    }
+    return nil
+  }
+
+  /// "Ahmet'in numarası ne?", "annemin telefon numarası kaç", "what's
+  /// Ahmet's number".
+  private static func contactQuestions(_ u: Utterance) -> VoiceBridgeDecision? {
+    guard u.count <= 7 else { return nil }
+    let numberWords: Set<String> = ["numarasi", "numarasini", "telefonu", "telefonunu", "numarasina"]
+    let asks: Set<String> = ["ne", "nedir", "neydi", "kac", "ver", "soyle", "bul", "goster", "oku"]
+    if let index = u.keys.firstIndex(where: numberWords.contains), index >= 1,
+       index == u.count - 1 || asks.contains(u.keys[u.count - 1]) {
+      var end = index
+      if end > 1, u.keys[end - 1] == "telefon" { end -= 1 }
+      if let name = contactName(u.dropping(end..<u.count), .genitive) {
+        return VoiceBridgeDecision(.findContact(name), "contact question")
+      }
+    }
+    if u.ends(with: ["number"]) {
+      let prefix = u.starts(with: ["whats"]) ? 1 : u.starts(with: ["what", "is"]) ? 2 : 0
+      let suffix = u.ends(with: ["phone", "number"]) ? 2 : 1
+      guard prefix > 0, u.count - suffix > prefix else { return nil }
+      var words = Array(u.words[prefix..<(u.count - suffix)])
+      guard let last = words.last, last.hasSuffix("'s") || last.hasSuffix("’s") else { return nil }
+      words[words.count - 1] = String(last.dropLast(2))
+      if let target = Utterance(words.joined(separator: " ")), let name = englishContactName(target) {
+        return VoiceBridgeDecision(.findContact(name), "contact question")
+      }
+    }
+    return nil
+  }
+
+  // MARK: 11. Maps
+
+  private static let questionWords: Set<String> = [
+    "nasil", "ne", "neden", "nedir", "mi", "mu", "kac", "hangi", "how", "what", "why", "which",
+  ]
+
+  /// "Beni eve götür", "Kadıköy'e yol tarifi aç", "havalimanına nasıl
+  /// giderim", "en yakın benzinliğe götür", "take me to …". "Buraya yol
+  /// tarifi" needs the camera, so it stays with the voice model.
+  private static func directions(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+    var w = u
+    w.trimTrailing(["lutfen", "please", "misin", "musun", "hemen", "simdi"])
+    guard w.count >= 2, w.count <= 9 else { return nil }
+    let guided = w.containsAny(["gotur", "goturur", "gotursene", "git", "gidelim", "take", "navigate", "drive"])
+      || w.range(of: ["yol", "tarifi"]) != nil
+    // Nearby: "en yakın benzinlik", "en yakın eczane nerede", "nearest gas station".
+    if let near = w.range(of: ["en", "yakin"]) ?? w.range(of: ["nearest"]) ?? w.range(of: ["closest"]) {
+      let lead = w.dropping(near.lowerBound..<w.count)
+      let leads: [[String]] = [
+        ["bana"], ["beni"], ["bizi"], ["where", "is", "the"], ["wheres", "the"], ["find", "the"], ["find", "me", "the"],
+        ["take", "me", "to", "the"], ["navigate", "to", "the"], ["directions", "to", "the"],
+      ]
+      guard lead.isEmpty || leads.contains(where: { lead.keys == $0 }) else { return nil }
+      var place = w.dropping(0..<near.upperBound)
+      place.trimTrailing([
+        "gotur", "goturur", "nerede", "nerde", "bul", "goster", "ac", "git", "yol", "tarifi", "where", "is", "find",
+      ])
+      let located = w.containsAny(["nerede", "nerde", "bul", "goster", "where", "find"]) || guided
+      guard !place.isEmpty, place.count <= 3, located || w.count <= 3, !place.containsAny(questionWords) else { return nil }
+      return VoiceBridgeDecision(.nearby(placeName(place, stripDative: guided)), "nearby search")
+    }
+    // English destinations.
+    if ["take", "me", "home"] == w.keys || ["navigate", "home"] == w.keys || ["go", "home"] == w.keys {
+      return VoiceBridgeDecision(.directions("Home"), "directions home")
+    }
+    var destination: Utterance?
+    var dative = false
+    for prefix in [["take", "me", "to"], ["navigate", "to"], ["get", "directions", "to"], ["directions", "to"],
+                   ["how", "do", "i", "get", "to"], ["drive", "to"]] where w.starts(with: prefix) {
+      destination = w.dropping(0..<prefix.count)
+      break
+    }
+    // Turkish destinations.
+    if destination == nil {
+      if w.ends(with: ["gotur"]) || w.ends(with: ["goturur"]) || w.ends(with: ["gotursene"]) {
+        var rest = w.dropping((w.count - 1)..<w.count)
+        let hasObject = ["beni", "bizi"].contains(rest.keys.first ?? "")
+        rest.trimLeading(["beni", "bizi"])
+        // "Beni eve götür", "Kadıköy'e götür"; not "bu işi sonuna götür".
+        guard hasObject || rest.count == 1 else { return nil }
+        destination = rest
+        dative = true
+      } else if let range = w.range(of: ["yol", "tarifi"]) ?? w.range(of: ["yol", "tarifini"]) {
+        var rest = range.lowerBound > 0 ? w.dropping(range.lowerBound..<w.count) : w.dropping(0..<range.upperBound)
+        rest.trimTrailing(["icin"])
+        rest.trimLeading(["ac", "ver", "goster", "al", "baslat"])
+        destination = rest
+        dative = true
+      } else if w.ends(with: ["nasil", "giderim"]) || w.ends(with: ["nasil", "gidilir"]) || w.ends(with: ["nasil", "gidebilirim"]) {
+        destination = w.dropping((w.count - 2)..<w.count)
+        dative = true
+      }
+    }
+    guard let destination, !destination.isEmpty, destination.count <= 5, !destination.containsAny(questionWords) else {
+      return nil
+    }
+    // "Bu adrese yol tarifi aç": the address from the last answer. The
+    // model picks it out (strict JSON); Maps opens only after a tap.
+    if destination.containsAny(["adres", "adrese", "adresine", "address"]),
+       destination.containsAny(["bu", "su", "o", "this", "that"]) {
+      guard let answer = context.usefulAnswer ?? context.recentSavedText else { return nil }
+      return VoiceBridgeDecision(
+        .classify(.authorizedAction, query: "open_maps: directions to the address mentioned here: \(answer)"),
+        "directions to an address from the conversation", level: .model)
+    }
+    let visual: Set<String> = ["buraya", "suraya", "oraya", "bura", "sura", "ora", "here", "there", "this", "that", "bunun", "sunun"]
+    guard !destination.containsAny(visual) else { return nil }
+    if destination.count == 1 {
+      switch destination.keys[0] {
+      case "eve", "evime", "evimize", "home": return VoiceBridgeDecision(.directions("Home"), "directions home")
+      case "ise", "isyerime", "ofise", "isime", "work", "office": return VoiceBridgeDecision(.directions("Work"), "directions to work")
+      default: break
+      }
+    }
+    return VoiceBridgeDecision(.directions(placeName(destination, stripDative: dative)), "directions")
+  }
+
+  /// "Kadıköy'e" → "Kadıköy", "havalimanına" → "havalimanı", "benzinliğe"
+  /// → "benzinlik". Names without an apostrophe keep their ending
+  /// ("Antalya" is not "Antal" + "ya").
+  static func placeName(_ place: Utterance, stripDative: Bool) -> String {
+    var words = place.words
+    guard let last = words.last else { return place.text }
+    if let apostrophe = last.firstIndex(where: { $0 == "'" || $0 == "’" }) {
+      words[words.count - 1] = String(last[..<apostrophe])
+    } else if stripDative, last.first?.isLowercase ?? false {
+      let key = Utterance.key(last)
+      for suffix in caseSuffixes(.dative) where key.hasSuffix(suffix) && key.count - suffix.count >= 3 {
+        var base = String(last.dropLast(suffix.count))
+        if base.hasSuffix("ğ") { base = String(base.dropLast()) + "k" }
+        words[words.count - 1] = base
+        break
+      }
+    }
+    return words.joined(separator: " ")
+  }
+
+  // MARK: 12. Clipboard and share
+
+  /// "Bunu kopyala", "şunu kopyala: 1234", "copy this", "bunu paylaş".
+  private static func clipboard(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
+    guard u.count <= 12 else { return nil }
+    let current = context.usefulAnswer ?? context.recentSavedText ?? context.lastAssistantText
+    let copies: [[String]] = [
+      ["bunu", "panoya", "kopyala"], ["bunu", "kopyala"], ["sunu", "kopyala"], ["onu", "kopyala"], ["panoya", "kopyala"],
+      ["kopyalar", "misin"], ["kopyalayabilir", "misin"], ["kopyala"], ["copy", "this"], ["copy", "it"],
+      ["copy", "to", "clipboard"],
+    ]
+    if let trigger = copies.first(where: { u.starts(with: $0) }) {
+      let rest = u.dropping(0..<trigger.count)
+      if rest.isEmpty || rest.isOnly(deictic) {
+        return VoiceBridgeDecision(.copyText(current), "copy trigger")
+      }
+      // "Şunu kopyala: 1234 5678"
+      if trigger.first == "sunu" || trigger == ["kopyala"] {
+        return VoiceBridgeDecision(.copyText(rest.text), "copy trigger with text")
+      }
+      return nil
+    }
+    if u.count <= 3, u.ends(with: ["kopyala"]), u.dropping((u.count - 1)..<u.count).isOnly(deictic) {
+      return VoiceBridgeDecision(.copyText(current), "copy trigger")
+    }
+    let shares: [[String]] = [
+      ["bunu", "paylas"], ["sunu", "paylas"], ["onu", "paylas"], ["paylasir", "misin"], ["paylas"],
+      ["share", "this"], ["share", "it"],
+    ]
+    if u.count <= 4, let trigger = shares.first(where: { u.starts(with: $0) }), u.dropping(0..<trigger.count).isOnly(deictic) {
+      return VoiceBridgeDecision(.shareText(current), "share trigger")
+    }
+    return nil
+  }
+
+  // MARK: 5. Memory
 
   private static let memoryStarts: [[String]] = [
     ["bunu", "hatirla"], ["sunu", "hatirla"], ["hatirla", "ki"], ["hatirla"], ["unutma", "ki"], ["unutma"],
@@ -728,7 +1262,43 @@ enum VoiceActionIntentBridge {
     case .eventTime(let title):
       guard let time = TimePhraseParser.parse(u.text, now: now), time.hasTime else { return nil }
       return VoiceBridgeDecision(.createEvent(title: title, time: time), "answer: event time")
+    case .messageBody(let contact):
+      var body = u
+      body.trimTrailing(["diye", "yaz", "gonder", "de", "da"])
+      guard !body.isEmpty else { return nil }
+      return VoiceBridgeDecision(.message(contact: contact, body: capitalizedFirst(body.text)), "answer: message text")
+    case .messageRecipient(let body):
+      var who = u
+      who.trimTrailing(["yaz", "gonder", "at", "yolla", "mesaj", "mesaji"])
+      guard let name = contactName(who, .dative) ?? contactName(who, .nominative) else { return nil }
+      return VoiceBridgeDecision(.message(contact: name, body: body), "answer: message recipient")
+    case .chooseContact(let action, let names):
+      guard let chosen = chooseName(u, among: names) else { return nil }
+      switch action {
+      case .call: return VoiceBridgeDecision(.call(contact: chosen), "answer: which contact")
+      case .message(let body): return VoiceBridgeDecision(.message(contact: chosen, body: body), "answer: which contact")
+      case .find: return VoiceBridgeDecision(.findContact(chosen), "answer: which contact")
+      }
     }
+  }
+
+  /// "Ahmet Kaya", "Kaya", "ikincisi", "the first one". "Ahmet" alone does
+  /// not choose between two Ahmets.
+  static func chooseName(_ u: Utterance, among names: [String]) -> String? {
+    let ordinals: [(words: Set<String>, index: Int)] = [
+      (["birinci", "birincisi", "ilk", "ilki", "first"], 0), (["ikinci", "ikincisi", "second"], 1),
+      (["ucuncu", "ucuncusu", "third"], 2), (["dorduncu", "dorduncusu", "fourth"], 3),
+    ]
+    for ordinal in ordinals where u.containsAny(ordinal.words) && ordinal.index < names.count {
+      return names[ordinal.index]
+    }
+    let spoken = Set(u.keys)
+    let scored = names.map { name -> (name: String, score: Int) in
+      let parts = name.split(separator: " ").map { Utterance.key(String($0)) }
+      return (name, parts.filter(spoken.contains).count)
+    }
+    guard let best = scored.max(by: { $0.score < $1.score }), best.score > 0 else { return nil }
+    return scored.filter({ $0.score == best.score }).count == 1 ? best.name : nil
   }
 
   // MARK: Helpers
@@ -763,6 +1333,112 @@ enum VoiceActionIntentBridge {
   static func capitalizedFirst(_ text: String) -> String {
     guard let first = text.first else { return text }
     return String(first).uppercased(with: Locale(identifier: "tr_TR")) + text.dropFirst()
+  }
+}
+
+/// Turkish endings for names in the app's own sentences ("Ahmet'e",
+/// "Ayşe'ye", "Tolga'ya", "Anneme"; "Ahmet Yılmaz mı").
+enum TurkishSuffix {
+  private static let vowels = "aeıioöuü"
+
+  private static func lastVowel(_ word: String) -> Character? {
+    word.lowercased(with: Locale(identifier: "tr_TR")).last(where: { vowels.contains($0) })
+  }
+
+  /// A family word ("Annem") takes the ending without an apostrophe.
+  private static func joined(_ name: String, _ suffix: String) -> String {
+    let familyWords: Set<String> = [
+      "Annem", "Babam", "Eşim", "Karım", "Kocam", "Kardeşim", "Abim", "Ablam", "Oğlum", "Kızım", "Patronum",
+      "Dedem", "Anneannem", "Babaannem",
+    ]
+    return familyWords.contains(name) ? name + suffix : name + "'" + suffix
+  }
+
+  static func dative(_ name: String) -> String {
+    guard let vowel = lastVowel(name) else { return name }
+    let endsWithVowel = name.lowercased(with: Locale(identifier: "tr_TR")).last.map { vowels.contains($0) } ?? false
+    return joined(name, (endsWithVowel ? "y" : "") + ("aıou".contains(vowel) ? "a" : "e"))
+  }
+
+  static func accusative(_ name: String) -> String {
+    guard let vowel = lastVowel(name) else { return name }
+    let endsWithVowel = name.lowercased(with: Locale(identifier: "tr_TR")).last.map { vowels.contains($0) } ?? false
+    let ending: String
+    switch vowel {
+    case "a", "ı": ending = "ı"
+    case "e", "i": ending = "i"
+    case "o", "u": ending = "u"
+    default: ending = "ü"
+    }
+    return joined(name, (endsWithVowel ? "y" : "") + ending)
+  }
+
+  /// The question particle after a name: "mı", "mi", "mu" or "mü".
+  static func question(_ name: String) -> String {
+    guard let vowel = lastVowel(name) else { return "mi" }
+    switch vowel {
+    case "a", "ı": return "mı"
+    case "o", "u": return "mu"
+    case "ö", "ü": return "mü"
+    default: return "mi"
+    }
+  }
+}
+
+/// Near matches of the assistant's name for the spellings a speech
+/// recogniser produces ("Oto lum", "Otoloom", "Autolum" for "AutoLoom";
+/// "Carvis" for "Jarvis"). Only names of five letters or more are matched
+/// loosely, so short words are never taken for a name.
+enum AddressMatcher {
+  static func names(assistantName: String) -> [String] {
+    var names = ["jarvis", "autoloom"]
+    if let configured = Utterance(assistantName)?.keys.joined(), !configured.isEmpty { names.insert(configured, at: 0) }
+    return names.map(phonetic).filter { $0.count >= 5 }
+  }
+
+  static func matches(_ word: String, names: [String]) -> Bool {
+    let spoken = phonetic(word)
+    guard spoken.count >= 4 else { return false }
+    return names.contains { name in
+      let allowed = name.count <= 6 ? 1 : 2
+      guard abs(name.count - spoken.count) <= allowed else { return false }
+      return distance(spoken, name) <= allowed
+    }
+  }
+
+  /// A rough sound key: "AutoLoom", "Oto lum" and "Otoloom" → "otolum";
+  /// "Carvis" → "jarvis".
+  static func phonetic(_ word: String) -> String {
+    var text = Utterance.key(word).filter { $0.isLetter }
+    let rules: [(String, String)] = [
+      ("ph", "f"), ("au", "o"), ("ou", "u"), ("oo", "u"), ("c", "j"), ("z", "s"), ("w", "v"), ("y", "i"), ("q", "k"),
+      ("x", "ks"),
+    ]
+    for (from, to) in rules {
+      text = text.replacingOccurrences(of: from, with: to)
+    }
+    var collapsed = ""
+    for character in text where character != collapsed.last {
+      collapsed.append(character)
+    }
+    return collapsed
+  }
+
+  /// Levenshtein distance.
+  static func distance(_ a: String, _ b: String) -> Int {
+    let a = Array(a)
+    let b = Array(b)
+    if a.isEmpty { return b.count }
+    if b.isEmpty { return a.count }
+    var previous = Array(0...b.count)
+    for i in 1...a.count {
+      var current = [i] + Array(repeating: 0, count: b.count)
+      for j in 1...b.count {
+        current[j] = min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1))
+      }
+      previous = current
+    }
+    return previous[b.count]
   }
 }
 
@@ -878,12 +1554,34 @@ struct Utterance: Equatable {
     return addressed
   }
 
-  /// Removes leading "tamam", "peki", "şimdi", "bir de"… Returns whether
-  /// anything was removed.
+  /// Removes the assistant's name when the speech recogniser spelled it
+  /// differently: the first one or two words, or the last word, close enough
+  /// to a name (see `AddressMatcher`). Returns whether a name was removed.
+  mutating func stripNearAddress(assistantName: String) -> Bool {
+    let names = AddressMatcher.names(assistantName: assistantName)
+    var addressed = false
+    for length in [2, 1] where count > length {
+      if AddressMatcher.matches(keys[0..<length].joined(), names: names) {
+        remove(0..<length)
+        addressed = true
+        break
+      }
+    }
+    if !addressed, count > 2, let last = keys.last, AddressMatcher.matches(last, names: names) {
+      remove((count - 1)..<count)
+      addressed = true
+    }
+    if addressed { trimTrailing(["lutfen", "please", "artik"]) }
+    return addressed
+  }
+
+  /// Removes leading "tamam", "peki", "şimdi", "lütfen", "bir de"… Returns
+  /// whether anything was removed.
   @discardableResult
   mutating func stripDiscourse() -> Bool {
     let words: Set<String> = [
-      "tamam", "evet", "peki", "simdi", "sey", "bak", "hmm", "ee", "eee", "ayrica", "so", "now", "also", "and", "well",
+      "tamam", "evet", "peki", "simdi", "sey", "bak", "hmm", "ee", "eee", "ayrica", "lutfen", "hadi", "haydi",
+      "so", "now", "also", "and", "well", "please",
     ]
     var removed = false
     while count > 1 {

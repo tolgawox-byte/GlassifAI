@@ -797,6 +797,11 @@ final class MemoryStore: ObservableObject {
   ) -> NoteRecord? {
     let cleaned = String(content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(20_000))
     guard !cleaned.isEmpty, let context else { return nil }
+    // The same words again within a minute (a command delivered twice, or
+    // the app and a delegation both saving it) are one note.
+    if let recent = notes.first(where: { $0.content == cleaned && Date().timeIntervalSince($0.createdAt) < Self.duplicateWindow }) {
+      return recent
+    }
     let cleanedTitle = (title?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
       ?? Self.defaultTitle(for: cleaned)
     let note = NoteRecord(
@@ -849,6 +854,11 @@ final class MemoryStore: ObservableObject {
   ) -> TaskItem? {
     let cleaned = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
     guard !cleaned.isEmpty, let context else { return nil }
+    if let recent = tasks.first(where: {
+      !$0.completed && $0.title == cleaned && $0.dueAt == dueAt && Date().timeIntervalSince($0.createdAt) < Self.duplicateWindow
+    }) {
+      return recent
+    }
     let task = TaskItem(
       title: cleaned, notes: String(notes.prefix(2_000)), dueAt: dueAt,
       dueHasTime: dueAt == nil ? true : dueHasTime, priority: priority, source: source)
@@ -901,6 +911,45 @@ final class MemoryStore: ObservableObject {
     guard let id = task.notificationID else { return }
     UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
     task.notificationID = nil
+  }
+
+  /// A note or task with the same words saved again within this time is
+  /// the same one.
+  static let duplicateWindow: TimeInterval = 60
+
+  /// The home or work address the user asked AutoLoom to remember ("Hatırla:
+  /// ev adresim Bağdat Caddesi 12"), without the lead-in words.
+  func savedAddress(home: Bool) -> String? {
+    let leads = home
+      ? ["ev adresim", "evimin adresi", "my home address is", "home address is", "my home address", "evim"]
+      : ["is adresim", "isyerimin adresi", "isyeri adresim", "ofis adresim", "my work address is", "work address is",
+         "my office address is", "my office is", "isyerim", "ofisim"]
+    let otherPlace = home ? ["is adres", "isyer", "ofis", "work", "office"] : ["ev adres", "evim", "home"]
+    for record in memories where record.kind != .conversationSummary {
+      let folded = MemorySearch.fold(record.text)
+      for lead in leads {
+        guard let range = folded.range(of: lead) else { continue }
+        // "Ev adresim" must not match inside "iş adresim".
+        let before = folded[folded.startIndex..<range.lowerBound]
+        guard !otherPlace.contains(where: { before.hasSuffix($0 + " ") || before.hasSuffix($0) }) else { continue }
+        let offset = folded.distance(from: folded.startIndex, to: range.upperBound)
+        guard offset < record.text.count else { continue }
+        var address = String(record.text.dropFirst(offset))
+          .trimmingCharacters(in: CharacterSet(charactersIn: ":;,-–").union(.whitespacesAndNewlines))
+        for filler in ["şu", "su", "is", "=", ":"] where address.lowercased().hasPrefix(filler + " ") {
+          address = String(address.dropFirst(filler.count + 1))
+        }
+        // "Evim Kadıköy'de" → "Kadıköy".
+        var words = address.split(separator: " ").map(String.init)
+        if let last = words.last, let apostrophe = last.firstIndex(where: { $0 == "'" || $0 == "’" }) {
+          words[words.count - 1] = String(last[..<apostrophe])
+          address = words.joined(separator: " ")
+        }
+        address = address.trimmingCharacters(in: CharacterSet(charactersIn: ".").union(.whitespaces))
+        if address.count >= 3 { return address }
+      }
+    }
+    return nil
   }
 
   /// Open tasks due today or overdue.

@@ -131,7 +131,22 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   private var lastInterceptedTurn: Int?
   /// The last delegation the voice model made (to spot one that arrived
   /// before the final transcript of the same request).
-  private var recentDelegation: (at: Date, request: String)?
+  private var recentDelegation: (at: Date, request: String, handoffID: String)?
+  /// When the current user turn began, and whether the assistant was still
+  /// talking then (a barge-in).
+  private var userTurnOpenedAt: Date?
+  private var userTurnBargedIn = false
+  /// The user's last partial words, to tell when they stopped talking.
+  private var lastUserPartialAt = Date.distantPast
+  /// The answer began before the user's final transcript (the transcription
+  /// runs separately): the partial words are used once they are stable.
+  private var earlyFinalTask: Task<Void, Never>?
+  /// A turn handled from its partial words; its late final only corrects it.
+  private var earlyFinal: (text: String, handled: Bool, at: Date)?
+  /// This connection sends `turn.done`; the older transcript events finish
+  /// a turn only when it never does.
+  private var sawTurnDone = false
+  private var lastLegacyFinal: (text: String, at: Date)?
 
   /// - Parameters:
   ///   - greeting: a line said right after connecting (voice previews).
@@ -639,7 +654,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     }
     releaseAssistantAudio()
     noteActivity()
-    recentDelegation = (Date(), request)
+    recentDelegation = (Date(), request, handoffId)
     orchestrator.handleDelegation(handoffID: handoffId, text: request) { [weak self] text in
       let delivered = EmbeddedCodexBridge.completeDelegation(handoffId: handoffId, text: text)
       if !delivered {
@@ -864,6 +879,13 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     preHeldForCommand = false
     lastInterceptedTurn = nil
     recentDelegation = nil
+    earlyFinalTask?.cancel()
+    earlyFinalTask = nil
+    earlyFinal = nil
+    userTurnOpenedAt = nil
+    userTurnBargedIn = false
+    sawTurnDone = false
+    lastLegacyFinal = nil
   }
 
   // MARK: Voice action bridge
@@ -871,26 +893,50 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   /// The user's final words: an explicit command ("not al …", "yarın 10'da
   /// hatırlat …") is executed by the app; the model's own reply is muted and
   /// the app's result is spoken instead.
-  private func interceptIfCommand(_ text: String, assistantWasSpeaking: Bool) {
+  @discardableResult
+  private func interceptIfCommand(_ text: String, assistantWasSpeaking: Bool) -> Bool {
     defer { flushDeferredDelegations() }
     // "Dur" silences an answer; it is only a command when it answers a
     // question the app asked ("Hayır" to "Kaydedeyim mi?").
     let command = ConversationCommands.classify(
       text, assistantName: AssistantIdentity.name, assistantSpeaking: assistantWasSpeaking)
     let skip = command == .endConversation || (command == .stopSpeaking && orchestrator.pendingAction == nil)
-    guard !isPreviewSession, !pendingHangUp, !skip, !alreadyDelegated(text) else {
+    guard !isPreviewSession, !pendingHangUp, !skip, let decision = orchestrator.bridgeDecision(for: text) else {
       finishPreHold()
-      return
+      return false
+    }
+    // The model may have delegated these words before their final
+    // transcript arrived. Its delegation is taken over (stopped; the app's
+    // result answers it) unless it already did the action. It is never
+    // simply skipped: a delegation that only answered would leave the
+    // command undone.
+    var takenOver: String?
+    if let earlier = earlierDelegation(matching: text) {
+      switch orchestrator.takeOverDelegation(handoffID: earlier.handoffID) {
+      case .completedAction:
+        NSLog("[AutoLoom] command already done by the model's delegation")
+        finishPreHold()
+        return false
+      case .cancelled:
+        takenOver = earlier.handoffID
+        NSLog("[AutoLoom] early delegation taken over by the voice action bridge")
+      case .completedOther, .unknown:
+        break
+      }
     }
     let turn = userTurnSerial
-    let handled = orchestrator.interceptVoiceTurn(text) { [weak self] result in
+    let handled = orchestrator.interceptVoiceTurn(text, decision: decision) { [weak self] result in
       self?.interceptionResultReady(result, turn: turn)
     }
     guard handled else {
       finishPreHold()
-      return
+      return false
     }
     interception = TurnInterception(turn: turn)
+    if let takenOver {
+      answeredHandoffs.insert(takenOver)
+      interception?.handoffID = takenOver
+    }
     lastInterceptedTurn = turn
     holdAssistantAudio()
     interceptionTimer?.cancel()
@@ -913,16 +959,73 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       self.interception = nil
       self.releaseHeldAudio()
     }
+    return true
   }
 
-  /// The model already delegated this very request (its delegation came
-  /// before the final transcript): it runs that way, not twice.
-  private func alreadyDelegated(_ text: String) -> Bool {
-    guard let recent = recentDelegation, Date().timeIntervalSince(recent.at) < 3 else { return false }
+  // MARK: Final transcripts
+
+  /// The model answers before the user's final transcript arrived. Once the
+  /// partial words have been still for a moment, they are handled as the
+  /// final words, so a command is never lost to a late transcript.
+  private func scheduleEarlyFinal() {
+    earlyFinalTask?.cancel()
+    let opened = userTurnOpenedAt
+    earlyFinalTask = Task { @MainActor [weak self] in
+      for _ in 0..<16 {
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard let self, !Task.isCancelled, self.userTurnOpen, self.userTurnOpenedAt == opened else { return }
+        if Date().timeIntervalSince(self.lastUserPartialAt) >= 1.2 {
+          self.finalizeUserTurnEarly()
+          return
+        }
+      }
+    }
+  }
+
+  private func finalizeUserTurnEarly() {
+    let text = userTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard userTurnOpen, !text.isEmpty else { return }
+    NSLog("[AutoLoom] user turn finished from its partial transcript (the final one is late)")
+    userTurnOpen = false
+    userTranscript = text
+    noteActivity()
+    userTurnSerial += 1
+    orchestrator.noteUserTurn(text)
+    handleEndCommand(text, assistantWasSpeaking: userTurnBargedIn)
+    let handled = interceptIfCommand(text, assistantWasSpeaking: userTurnBargedIn)
+    earlyFinal = (text, handled, Date())
+  }
+
+  /// Older event shapes: the user's final words when this connection never
+  /// sends `turn.done`. Each turn is handled once.
+  private func finalizeLegacyUserTurn(_ raw: String) {
+    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !sawTurnDone, !userTurnOpen, !text.isEmpty else { return }
+    if let last = lastLegacyFinal, !Self.wordsDiffer(last.text, text), Date().timeIntervalSince(last.at) < 10 { return }
+    lastLegacyFinal = (text, Date())
+    userTurnOpenedAt = Date()
+    userTurnEndedAt = CACurrentMediaTime()
+    noteActivity()
+    userTurnSerial += 1
+    orchestrator.noteUserTurn(text)
+    handleEndCommand(text, assistantWasSpeaking: false)
+    interceptIfCommand(text, assistantWasSpeaking: false)
+  }
+
+  private static func wordsDiffer(_ a: String, _ b: String) -> Bool {
+    MemorySearch.tokens(a) != MemorySearch.tokens(b)
+  }
+
+  /// A delegation the model made for these words before their final
+  /// transcript: made while the user was still talking, or within a few
+  /// seconds with mostly the same words.
+  private func earlierDelegation(matching text: String) -> (at: Date, request: String, handoffID: String)? {
+    guard let recent = recentDelegation, Date().timeIntervalSince(recent.at) < 8 else { return nil }
+    if let opened = userTurnOpenedAt, recent.at >= opened { return recent }
     let spoken = Set(MemorySearch.tokens(text))
-    guard !spoken.isEmpty else { return false }
+    guard !spoken.isEmpty else { return nil }
     let delegated = Set(MemorySearch.tokens(recent.request))
-    return Double(spoken.intersection(delegated).count) / Double(spoken.count) >= 0.5
+    return Double(spoken.intersection(delegated).count) / Double(spoken.count) >= 0.5 ? recent : nil
   }
 
   private func finishPreHold() {
@@ -1120,6 +1223,11 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           userTranscript = ""
           assistantCaption = ""
           stopWordMutedTurn = false
+          userTurnOpenedAt = Date()
+          userTurnBargedIn = assistantWasSpeaking
+          earlyFinalTask?.cancel()
+          earlyFinalTask = nil
+          earlyFinal = nil
           // A new request: later delegations belong to it, and an unfinished
           // command result must not keep the new answer muted.
           lastInterceptedTurn = nil
@@ -1131,6 +1239,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           }
         }
         userTranscript += text
+        lastUserPartialAt = Date()
         noteActivity()
         handleUserSpeech(assistantWasSpeaking: assistantWasSpeaking)
         // "Not al…", "benim adım…": hold the model's reply from the start.
@@ -1146,6 +1255,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
           assistantTurnOpen = true
           assistantCaption = ""
           recordResponseLatency()
+          // Answering a turn whose final transcript has not arrived yet.
+          if userTurnOpen { scheduleEarlyFinal() }
         }
         // A muted reply is neither shown nor counted as speaking.
         if holdsAssistantAudio {
@@ -1162,7 +1273,31 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
          let role = turn["role"] as? String,
          let text = turn["transcript"] as? String {
         if role == "user" {
+          sawTurnDone = true
+          earlyFinalTask?.cancel()
+          earlyFinalTask = nil
+          if let early = earlyFinal, !userTurnOpen, Date().timeIntervalSince(early.at) < 20 {
+            // The final words of a turn already handled from its partial
+            // transcript: they only correct the text, unless the partial
+            // words were no command and the final ones are.
+            earlyFinal = nil
+            userTranscript = text
+            if !early.handled, Self.wordsDiffer(early.text, text) {
+              interceptIfCommand(text, assistantWasSpeaking: false)
+            }
+            return
+          }
+          earlyFinal = nil
+          if let legacy = lastLegacyFinal, !userTurnOpen, Date().timeIntervalSince(legacy.at) < 10,
+             !Self.wordsDiffer(legacy.text, text) {
+            // Already handled from the older transcript event.
+            lastLegacyFinal = nil
+            userTranscript = text
+            return
+          }
           let assistantWasSpeaking = assistantTurnOpen || isAssistantAudioSuppressed
+          // A turn without partial words starts now.
+          if !userTurnOpen { userTurnOpenedAt = Date() }
           userTurnOpen = false
           userTranscript = text
           state = .thinking
@@ -1212,6 +1347,10 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     case "user_transcription_text":
       let text = (payload["text"] ?? payload["transcript"]) as? String ?? userTranscript
       userTranscript = text
+      // Older event shape: its final text is the user's turn when this
+      // connection never sends `turn.done`.
+      let isFinal = (payload["is_final"] ?? payload["final"] ?? payload["isFinal"]) as? Bool ?? false
+      if isFinal { finalizeLegacyUserTurn(text) }
     case "live_captioning_text":
       assistantCaption = (payload["text"] ?? payload["transcript"]) as? String ?? assistantCaption
     case "error":
@@ -1246,6 +1385,10 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
         }
       }
       guard role == "user" || role == "assistant" else { return }
+      // Older event shape: the assistant's message closes the user's turn.
+      if role == "assistant", streamingCaptionRole == "user" {
+        finalizeLegacyUserTurn(streamingCaptionText)
+      }
       let text = parts.compactMap { part -> String? in
         if let text = part as? String { return text }
         guard let part = part as? [String: Any] else { return nil }
