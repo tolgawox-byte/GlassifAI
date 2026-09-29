@@ -11,6 +11,9 @@ enum MemoryKind: String, CaseIterable, Codable, Identifiable {
   case person = "PERSON"
   case place = "PLACE"
   case vehicle = "VEHICLE"
+  /// Something the user is working on ("AutoLoom projesi", "the kitchen
+  /// renovation").
+  case project = "PROJECT"
   case episode = "EPISODE"
   case note = "NOTE"
   case taskContext = "TASK_CONTEXT"
@@ -27,6 +30,7 @@ enum MemoryKind: String, CaseIterable, Codable, Identifiable {
     case .person: L.t("Person", "Kişi")
     case .place: L.t("Place", "Yer")
     case .vehicle: L.t("Vehicle", "Araç")
+    case .project: L.t("Project", "Proje")
     case .episode: L.t("Moment", "An")
     case .note: L.t("Note", "Not")
     case .taskContext: L.t("Task context", "Görev bağlamı")
@@ -43,6 +47,7 @@ enum MemoryKind: String, CaseIterable, Codable, Identifiable {
     case .person: "person.2"
     case .place: "mappin.and.ellipse"
     case .vehicle: "car"
+    case .project: "folder"
     case .episode: "clock.arrow.circlepath"
     case .note: "note.text"
     case .taskContext: "checklist"
@@ -67,6 +72,8 @@ enum MemoryKind: String, CaseIterable, Codable, Identifiable {
       " parked", " i left", " i put", " yesterday", " today ", " i saw", " i bought",
     ]
     if episode.contains(where: { words.contains($0) }) { return .episode }
+    let project = [" proje", " project", "sprint", " repo ", "repository", "milestone", "teslim tarihi", "deadline"]
+    if project.contains(where: { words.contains($0) }) { return .project }
     return .fact
   }
 }
@@ -76,6 +83,7 @@ enum MemoryCategory: String, CaseIterable, Codable, Identifiable {
   case people
   case places
   case vehicles
+  case projects
   case other
 
   var id: String { rawValue }
@@ -85,6 +93,7 @@ enum MemoryCategory: String, CaseIterable, Codable, Identifiable {
     case .people: L.t("People", "Kişiler")
     case .places: L.t("Places", "Yerler")
     case .vehicles: L.t("Vehicles", "Araçlar")
+    case .projects: L.t("Projects", "Projeler")
     case .other: L.t("Other", "Diğer")
     }
   }
@@ -94,6 +103,7 @@ enum MemoryCategory: String, CaseIterable, Codable, Identifiable {
     case .people: "person.2"
     case .places: "mappin.and.ellipse"
     case .vehicles: "car"
+    case .projects: "folder"
     case .other: "square.grid.2x2"
     }
   }
@@ -108,6 +118,8 @@ enum MemoryCategory: String, CaseIterable, Codable, Identifiable {
       "nissan", "chevrolet", "jeep", "porsche", "lexus", "renault", "fiat", "peugeot", "volvo", "mazda", "subaru",
     ]
     if vehicles.contains(where: { words.contains($0) }) { return .vehicles }
+    let projects = [" proje", " project", "sprint", " repo ", "repository", "milestone", "teslim tarihi", "deadline"]
+    if projects.contains(where: { words.contains($0) }) { return .projects }
     let people = [
       "annem", "babam", "esim", "karim", "kocam", "kardesim", "abim", "ablam", "oglum", "kizim", "arkadasim",
       "patronum", "doktorum", "komsum", "dogum gunu", "numarasi", "telefonu",
@@ -675,6 +687,7 @@ final class MemoryStore: ObservableObject {
     case .person: .people
     case .place: .places
     case .vehicle: .vehicles
+    case .project: .projects
     default: nil
     }
   }

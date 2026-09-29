@@ -365,7 +365,7 @@ enum AssistantInstructions {
     case .deepReasoning:
       text += "\nThink the problem through carefully, then give the conclusion first in plain spoken language, followed by the key reason."
     case .localMemory:
-      text += "\nYou classify one memory request for the user's on-device memory. operation: save (the user explicitly asked to remember something), recall (they ask about something saved), forget (they ask to forget or delete something saved), list (they ask what is saved), or none. For save, put the fact to remember in \"text\" in the user's language, complete and self-contained, and a short \"title\"; kind is FACT, PREFERENCE, EPISODE or TASK_CONTEXT. For recall and forget, put the search words in \"query\". Never save anything the user did not ask to save."
+      text += "\nYou classify one memory request for the user's on-device memory. operation: save (the user explicitly asked to remember something), recall (they ask about something saved), forget (they ask to forget or delete something saved), list (they ask what is saved), or none. For save, put the fact to remember in \"text\" in the user's language, complete and self-contained, and a short \"title\"; kind is FACT, PREFERENCE, EPISODE, PROJECT (something the user is working on) or TASK_CONTEXT. For recall and forget, put the search words in \"query\". Never save anything the user did not ask to save."
     case .authorizedAction:
       text += """
 
@@ -551,7 +551,7 @@ enum AssistantTools {
           "operation": ["type": "string", "enum": ["save", "recall", "forget", "list", "none"]],
           "text": ["type": "string"],
           "title": ["type": "string"],
-          "kind": ["type": "string", "enum": ["FACT", "PREFERENCE", "EPISODE", "TASK_CONTEXT"]],
+          "kind": ["type": "string", "enum": ["FACT", "PREFERENCE", "EPISODE", "PROJECT", "TASK_CONTEXT"]],
           "query": ["type": "string"],
           "reply": ["type": "string"],
         ],

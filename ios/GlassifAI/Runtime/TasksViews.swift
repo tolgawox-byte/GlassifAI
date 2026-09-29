@@ -378,9 +378,43 @@ struct TasksTabView: View {
     }
     .contentShape(Rectangle())
     .onTapGesture { editingTask = task }
+    .swipeActions(edge: .leading) {
+      if !task.completed {
+        Button { postponeToTomorrow(task) } label: {
+          Label(L.t("Tomorrow", "Yarına"), systemImage: "arrow.turn.up.right")
+        }
+        .tint(.orange)
+        Button { editingTask = task } label: {
+          Label(L.t("Reschedule", "Ertele"), systemImage: "calendar")
+        }
+        .tint(.blue)
+      }
+    }
     .swipeActions(edge: .trailing) {
       Button(role: .destructive) { store.deleteTask(task) } label: {
         Label(L.t("Delete", "Sil"), systemImage: "trash")
+      }
+    }
+  }
+
+  /// "Yarına": the same time tomorrow (or tomorrow without a time), with a
+  /// new alert when the task has a time.
+  private func postponeToTomorrow(_ task: TaskItem) {
+    let calendar = Calendar.current
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
+    var next = tomorrow
+    var hasTime = false
+    if let due = task.dueAt, task.dueHasTime {
+      let parts = calendar.dateComponents([.hour, .minute], from: due)
+      next = calendar.date(bySettingHour: parts.hour ?? 9, minute: parts.minute ?? 0, second: 0, of: tomorrow) ?? tomorrow
+      hasTime = true
+    }
+    store.updateTask(task, title: task.title, notes: task.notes, dueAt: next, dueHasTime: hasTime)
+    guard hasTime, next > Date() else { return }
+    let title = task.title
+    Task {
+      if let id = try? await LocalNotifications.schedule(title: title, body: L.t("AutoLoom task", "AutoLoom görevi"), at: next) {
+        store.setNotificationID(task, id)
       }
     }
   }

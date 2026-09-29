@@ -227,24 +227,28 @@ enum VoiceActionIntentBridge {
     guard !utterance.isEmpty else { return nil }
     if context.addressedOnly && !addressed && context.awaiting == nil { return nil }
 
-    // 3–12. Explicit native actions and explicit memory. Messages come
-    // before notes: "Ahmet'e bunu yaz" is a message, "bunu yaz" a note.
-    if let decision = profile(utterance)
-      ?? translation(utterance, context)
-      ?? messages(utterance, context)
-      ?? notes(utterance, context)
-      ?? reminders(utterance, context, now)
-      ?? tasks(utterance, context, now)
-      ?? dayPlan(utterance)
-      ?? calendar(utterance, now)
-      ?? taskQueries(utterance)
-      ?? routines(utterance)
-      ?? calls(utterance)
-      ?? contactQuestions(utterance)
-      ?? directions(utterance, context)
-      ?? clipboard(utterance, context)
-      ?? memory(utterance, context) {
-      return decision
+    // 3–12. Explicit native actions and explicit memory, in priority order.
+    // Messages come before notes: "Ahmet'e bunu yaz" is a message, "bunu
+    // yaz" a note.
+    let parsers: [(Utterance) -> VoiceBridgeDecision?] = [
+      { profile($0) },
+      { translation($0, context) },
+      { messages($0, context) },
+      { notes($0, context) },
+      { reminders($0, context, now) },
+      { tasks($0, context, now) },
+      { dayPlan($0) },
+      { calendar($0, now) },
+      { taskQueries($0) },
+      { routines($0) },
+      { calls($0) },
+      { contactQuestions($0) },
+      { directions($0, context) },
+      { clipboard($0, context) },
+      { memory($0, context) },
+    ]
+    for parser in parsers {
+      if let decision = parser(utterance) { return decision }
     }
     // An answer to the bridge's own question ("Neyi not alayım?").
     if let awaiting = context.awaiting {
@@ -1010,7 +1014,8 @@ enum VoiceActionIntentBridge {
       return VoiceBridgeDecision(.nearby(placeName(place, stripDative: guided)), "nearby search")
     }
     // English destinations.
-    if ["take", "me", "home"] == w.keys || ["navigate", "home"] == w.keys || ["go", "home"] == w.keys {
+    let homeCommands: [[String]] = [["take", "me", "home"], ["navigate", "home"], ["go", "home"]]
+    if homeCommands.contains(w.keys) {
       return VoiceBridgeDecision(.directions("Home"), "directions home")
     }
     var destination: Utterance?
@@ -1357,12 +1362,15 @@ enum TurkishSuffix {
   static func dative(_ name: String) -> String {
     guard let vowel = lastVowel(name) else { return name }
     let endsWithVowel = name.lowercased(with: Locale(identifier: "tr_TR")).last.map { vowels.contains($0) } ?? false
-    return joined(name, (endsWithVowel ? "y" : "") + ("aıou".contains(vowel) ? "a" : "e"))
+    let buffer = endsWithVowel ? "y" : ""
+    let ending = "aıou".contains(vowel) ? "a" : "e"
+    return joined(name, buffer + ending)
   }
 
   static func accusative(_ name: String) -> String {
     guard let vowel = lastVowel(name) else { return name }
     let endsWithVowel = name.lowercased(with: Locale(identifier: "tr_TR")).last.map { vowels.contains($0) } ?? false
+    let buffer = endsWithVowel ? "y" : ""
     let ending: String
     switch vowel {
     case "a", "ı": ending = "ı"
@@ -1370,7 +1378,7 @@ enum TurkishSuffix {
     case "o", "u": ending = "u"
     default: ending = "ü"
     }
-    return joined(name, (endsWithVowel ? "y" : "") + ending)
+    return joined(name, buffer + ending)
   }
 
   /// The question particle after a name: "mı", "mi", "mu" or "mü".
@@ -1434,7 +1442,10 @@ enum AddressMatcher {
     for i in 1...a.count {
       var current = [i] + Array(repeating: 0, count: b.count)
       for j in 1...b.count {
-        current[j] = min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1))
+        let cost = a[i - 1] == b[j - 1] ? 0 : 1
+        let deletion = previous[j] + 1
+        let insertion = current[j - 1] + 1
+        current[j] = Swift.min(deletion, insertion, previous[j - 1] + cost)
       }
       previous = current
     }

@@ -1038,7 +1038,9 @@ extension AssistantOrchestrator {
     }
     let spoken = MemorySearch.fold(name)
     let exact = matches.filter { MemorySearch.fold($0.name) == spoken }
-    guard let match = matches.count == 1 ? matches.first : (exact.count == 1 ? exact.first : nil) else {
+    var chosen: ContactsLookup.Match? = matches.count == 1 ? matches.first : nil
+    if chosen == nil, exact.count == 1 { chosen = exact.first }
+    guard let match = chosen else {
       return askToChoose(matches.prefix(4).map(\.name), spokenName: name, action: .find)
     }
     recentContact = (match.name, Date())

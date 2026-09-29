@@ -85,6 +85,8 @@ enum AssistantPresence: Equatable {
 enum OrbMood: Equatable {
   /// Very slow breathing.
   case idle
+  /// The wake phrase was heard: a quick, focused pulse.
+  case wake
   /// A rotating arc while the conversation connects.
   case connecting
   /// Follows the microphone's energy.
@@ -108,6 +110,7 @@ enum OrbMood: Equatable {
   var color: Color {
     switch self {
     case .idle: AutoLoomTheme.electricBlue.opacity(0.8)
+    case .wake: Color(red: 0.36, green: 0.86, blue: 1.0)
     case .connecting: AutoLoomTheme.electricBlue
     case .listening: Color(red: 0.25, green: 0.78, blue: 1.0)
     case .thinking: Color(red: 0.55, green: 0.44, blue: 1.0)
@@ -168,6 +171,7 @@ struct OrbPainter {
   static func breathing(for mood: OrbMood) -> (speed: Double, depth: Double) {
     switch mood {
     case .idle: (0.18, 0.03)
+    case .wake: (1.6, 0.02)
     case .connecting: (0.8, 0.035)
     case .listening: (0.45, 0.03)
     case .thinking, .searching, .looking: (0.35, 0.025)
@@ -195,6 +199,7 @@ struct OrbPainter {
 
     // Behind the core.
     switch mood {
+    case .wake: wakePulse(&context, center, radius)
     case .connecting: connectingArc(&context, center, radius)
     case .looking: radar(&context, center, radius)
     case .speaking: voiceRings(&context, center, radius)
@@ -206,8 +211,10 @@ struct OrbPainter {
     default: break
     }
 
-    // Core with a soft highlight.
-    let coreRadius = radius * 0.34 * (1 + breathe * 0.8 + level * 0.3)
+    // Core with a soft highlight; on wake it pops once.
+    let pop: Double = mood == .wake ? 0.2 * sin(min(1, elapsed / 0.5) * Double.pi) : 0
+    let scale: Double = 1 + breathe * 0.8 + level * 0.3 + pop
+    let coreRadius = radius * 0.34 * scale
     let highlight = CGPoint(x: center.x - coreRadius * 0.3, y: center.y - coreRadius * 0.36)
     context.fill(
       circle(center, coreRadius),
@@ -230,6 +237,19 @@ struct OrbPainter {
     case .searching: orbit(&context, center, radius, count: 3, period: 1.3)
     case .saving: checkMark(&context, center, radius)
     default: break
+    }
+  }
+
+  /// Two rings that close in on the core: attention, focused.
+  private func wakePulse(_ context: inout GraphicsContext, _ center: CGPoint, _ radius: CGFloat) {
+    for delay in [0.0, 0.16] {
+      let progress = min(1, max(0, (elapsed - delay) / 0.55))
+      guard progress > 0, progress < 1 else { continue }
+      let eased = 1 - pow(1 - progress, 3)
+      context.stroke(
+        circle(center, radius * (0.95 - 0.5 * eased)),
+        with: .color(mood.color.opacity(0.8 * (1 - progress))),
+        lineWidth: radius * (0.035 - 0.02 * progress))
     }
   }
 

@@ -50,6 +50,17 @@ enum ConversationCommands {
       rest.removeFirst(nameWords.count)
       named = true
     }
+    if !named {
+      // The recogniser's own spelling of the name ("Oto lum, kapat").
+      let names = AddressMatcher.names(assistantName: assistantName)
+      for length in [2, 1] where rest.count > length {
+        if AddressMatcher.matches(rest.prefix(length).joined(), names: names) {
+          rest.removeFirst(length)
+          named = true
+          break
+        }
+      }
+    }
     while let last = rest.last, ["lütfen", "please", "artık"].contains(last) {
       rest.removeLast()
     }
@@ -115,8 +126,11 @@ enum ConversationTimeout: Int, CaseIterable, Identifiable {
 /// The words said when a new conversation is ready ("Bağlandım,
 /// dinliyorum."). Said only once the connection really works.
 enum GreetingStyle: String, CaseIterable, Identifiable {
-  case minimal
+  case here
+  case listening
   case normal
+  case howCanIHelp
+  case minimal
   case jarvis
   case custom
 
@@ -131,8 +145,11 @@ enum GreetingStyle: String, CaseIterable, Identifiable {
 
   var label: String {
     switch self {
-    case .minimal: L.t("Minimal", "Kısa")
-    case .normal: L.t("Normal", "Normal")
+    case .here: L.t("“I'm here.”", "“Buradayım.”")
+    case .listening: L.t("“I'm listening.”", "“Dinliyorum.”")
+    case .normal: L.t("“Connected, I'm listening.”", "“Bağlandım, dinliyorum.”")
+    case .howCanIHelp: L.t("“How can I help?”", "“Nasıl yardımcı olabilirim?”")
+    case .minimal: L.t("“Connected.”", "“Bağlandım.”")
     case .jarvis: L.t("Jarvis style", "Jarvis tarzı")
     case .custom: L.t("Custom", "Özel")
     }
@@ -140,6 +157,9 @@ enum GreetingStyle: String, CaseIterable, Identifiable {
 
   func text(turkish: Bool, custom: String) -> String? {
     switch self {
+    case .here: return turkish ? "Buradayım." : "I'm here."
+    case .listening: return turkish ? "Dinliyorum." : "I'm listening."
+    case .howCanIHelp: return turkish ? "Nasıl yardımcı olabilirim?" : "How can I help?"
     case .minimal: return turkish ? "Bağlandım." : "Connected."
     case .normal: return turkish ? "Bağlandım, dinliyorum." : "Connected, I'm listening."
     case .jarvis: return turkish ? "Bağlantı hazır. Sizi dinliyorum." : "Connection ready. I'm listening."

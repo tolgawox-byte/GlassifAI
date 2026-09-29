@@ -156,6 +156,10 @@ struct AssistantHomeView: View {
       orbFlash = .success
     }
     .onChange(of: connection.deviceName) { _, name in audioRoute.glassesName = name }
+    .onChange(of: wake.detections) { _, _ in
+      // The wake phrase was heard: a quick, focused pulse.
+      orbFlash = .wake
+    }
     .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
   }
 
@@ -175,6 +179,12 @@ struct AssistantHomeView: View {
       if captureSource == .glasses {
         statusRow
           .transition(.opacity)
+      } else {
+        HStack {
+          ConnectionStatusPill(status: sourceStatus)
+          Spacer(minLength: 0)
+        }
+        .transition(.opacity)
       }
     }
     .padding(.top, 6)
@@ -211,6 +221,16 @@ struct AssistantHomeView: View {
       Spacer(minLength: 0)
     }
     .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: status)
+  }
+
+  /// "iPhone Camera" or "Camera Off", in the same pill as the glasses.
+  private var sourceStatus: GlassesUserStatus {
+    if captureSource == .off {
+      return GlassesUserStatus(title: L.t("Camera Off", "Kamera kapalı"), detail: nil, tone: .idle, showsTryAgain: false)
+    }
+    return GlassesUserStatus(
+      title: L.t("iPhone Camera", "iPhone kamerası"), detail: nil, tone: cameraIsLive ? .connected : .working,
+      showsTryAgain: false)
   }
 
   /// A small indicator of the camera source; tap to switch.
@@ -446,12 +466,60 @@ struct AssistantHomeView: View {
       .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.06)))
       .transition(.opacity)
     } else if !voice.isActive && orchestrator.typedQuestion == nil {
-      Text(idleHint)
-        .font(.subheadline)
-        .foregroundStyle(.white.opacity(0.75))
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
+      VStack(spacing: 12) {
+        Text(idleHint)
+          .font(.subheadline)
+          .foregroundStyle(.white.opacity(0.75))
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: .infinity)
+        suggestionChips
+        if !orchestrator.recentActivity.isEmpty {
+          RecentActivityStrip(items: orchestrator.recentActivity)
+            .transition(.opacity)
+        }
+      }
     }
+  }
+
+  private struct IdleSuggestion: Identifiable {
+    let title: String
+    let request: String
+    var id: String { title }
+  }
+
+  /// A few things to ask, shown while nothing is happening.
+  private var suggestions: [IdleSuggestion] {
+    var items = [
+      IdleSuggestion(title: L.t("My day", "Bugünüm"), request: L.t("What do I need to do today?", "Bugün ne yapmam gerekiyor?")),
+      IdleSuggestion(title: L.t("My tasks", "Görevlerim"), request: L.t("What are my tasks?", "Görevlerim neler?")),
+    ]
+    if captureSource != .off {
+      items.insert(
+        IdleSuggestion(title: L.t("What's in front of me?", "Önümde ne var?"), request: L.t("What am I looking at?", "Önümde ne var?")),
+        at: 0)
+    }
+    return items
+  }
+
+  private var suggestionChips: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 8) {
+        ForEach(suggestions) { suggestion in
+          Button { orchestrator.submitTyped(suggestion.request) } label: {
+            Text(suggestion.title)
+              .font(.footnote.weight(.semibold))
+              .foregroundStyle(.white)
+              .padding(.horizontal, 13)
+              .padding(.vertical, 7)
+              .background(.ultraThinMaterial, in: Capsule())
+              .overlay(Capsule().strokeBorder(AutoLoomTheme.electricBlue.opacity(0.4)))
+          }
+          .buttonStyle(PressableButtonStyle(scale: 0.96))
+        }
+      }
+      .frame(maxWidth: .infinity)
+    }
+    .scrollBounceBehavior(.basedOnSize)
   }
 
   private var idleHint: String {
