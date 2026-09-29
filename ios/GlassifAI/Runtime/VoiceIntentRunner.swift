@@ -139,6 +139,7 @@ extension VoiceIntent {
     case .saveMemory: "SAVE_MEMORY"
     case .createTask: "CREATE_TASK"
     case .createReminder: "CREATE_REMINDER"
+    case .locationReminder: "CREATE_LOCATION_REMINDER"
     case .notify: "SCHEDULE_NOTIFICATION"
     case .createEvent: "CREATE_EVENT"
     case .call: "CALL"
@@ -166,7 +167,7 @@ extension VoiceIntent {
   var actionSignature: String? {
     switch self {
     case .saveNote: DeviceActionKind.saveNote.rawValue
-    case .createReminder: DeviceActionKind.createReminder.rawValue
+    case .createReminder, .locationReminder: DeviceActionKind.createReminder.rawValue
     case .notify: DeviceActionKind.scheduleNotification.rawValue
     case .createEvent: DeviceActionKind.createEvent.rawValue
     case .saveMemory, .setName: "memory.save"
@@ -629,6 +630,10 @@ extension AssistantOrchestrator {
     case .createReminder(let title, let time):
       return await stageAction(.createReminder, title: title, time: time, decision: decision, transcript: transcript, traceID: traceID)
 
+    case .locationReminder(let title, let place, let arriving):
+      return await createLocationReminder(
+        title: title, place: place, arriving: arriving, decision: decision, transcript: transcript, traceID: traceID)
+
     case .notify(let title, let time):
       return await stageAction(
         .scheduleNotification, title: title ?? L.t("Reminder", "Hatırlatma"), time: time,
@@ -989,10 +994,23 @@ extension AssistantOrchestrator {
   /// Reminders, notifications and events: validated plan, permission, then
   /// the SAFE action runs (an ambiguous time is asked first). Success is
   /// reported only after iOS confirmed it.
+  /// "Eve varınca hatırlat": the same path as a timed reminder.
+  func stageLocationReminder(
+    title: String,
+    trigger: LocationTrigger,
+    decision: VoiceBridgeDecision,
+    transcript: String,
+    traceID: UUID
+  ) async -> IntentOutcome {
+    await stageAction(
+      .createReminder, title: title, time: nil, trigger: trigger, decision: decision, transcript: transcript, traceID: traceID)
+  }
+
   private func stageAction(
     _ kind: DeviceActionKind,
     title: String,
     time: ParsedTime?,
+    trigger: LocationTrigger? = nil,
     decision: VoiceBridgeDecision,
     transcript: String,
     traceID: UUID
@@ -1002,6 +1020,7 @@ extension AssistantOrchestrator {
     guard ToolRegistry.allows(kind) else { return toolOff(kind) }
     var plan = DeviceActionPlan(kind: kind)
     plan.title = title
+    plan.trigger = trigger
     if let time {
       plan.date = time.date
       plan.hasTime = time.hasTime

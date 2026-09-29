@@ -84,6 +84,8 @@ enum VoiceIntent: Equatable {
   case forgetMemory(String)
   case visualMemory(String)
   case createReminder(title: String, time: ParsedTime?)
+  /// "Eve varınca süt almayı hatırlat": Apple Reminders rings at the place.
+  case locationReminder(title: String, place: LocationTrigger.Place, arriving: Bool)
   case notify(title: String?, time: ParsedTime)
   case createTask(title: String, time: ParsedTime?)
   case createEvent(title: String, time: ParsedTime?)
@@ -184,6 +186,7 @@ enum VoiceIntent: Equatable {
     case .copyText: "copyText"
     case .shareText: "shareText"
     case .routine(let routine): "routine(\(routine.rawValue))"
+    case .locationReminder(_, let place, let arriving): "locationReminder(\(place.rawValue), \(arriving ? "arrive" : "leave"))"
     case .takePhoto(let label, let note, _): "takePhoto(\(label?.rawValue ?? "-")\(note != nil ? "+note" : ""))"
     case .startRecording(let note): note != nil ? "startRecording(+note)" : "startRecording"
     case .stopRecording: "stopRecording"
@@ -729,6 +732,22 @@ enum VoiceActionIntentBridge {
     let time = TimePhraseParser.parse(u.text, now: now)
     if let range = firstTrigger(reminderTriggers, in: u) {
       var rest = u.dropping(range)
+      if time == nil, let place = placeTrigger(in: rest) {
+        var content = rest.dropping(place.range)
+        content.removeKeys(titleFillers)
+        content.trimLeading(["to", "that", "about", "me", "for"])
+        content.trimTrailing(["diye", "icin", "to"])
+        var title: String?
+        if !content.isEmpty, !content.isOnly(deictic) {
+          title = reminderTitle(content.text)
+        } else if let previous = context.recentSavedText ?? context.previousUserText, previous.count >= 3 {
+          title = shortTitle(previous)
+        }
+        if let title {
+          return VoiceBridgeDecision(
+            .locationReminder(title: title, place: place.place, arriving: place.arriving), "location reminder")
+        }
+      }
       if let time { rest.removeTimeWords(time) }
       rest.removeKeys(titleFillers)
       rest.trimLeading(["to", "that", "about", "me", "for"])

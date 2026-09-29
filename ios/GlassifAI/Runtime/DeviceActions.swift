@@ -1,4 +1,5 @@
 import Contacts
+import CoreLocation
 import EventKit
 import Foundation
 import UIKit
@@ -117,6 +118,34 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
 }
 
 /// A validated action ready to run or to confirm.
+/// "Eve varınca hatırlat": Apple Reminders rings when the user arrives at
+/// (or leaves) a place whose address they asked AutoLoom to remember.
+struct LocationTrigger: Equatable {
+  enum Place: String, Equatable {
+    case home
+    case work
+  }
+
+  let place: Place
+  /// True when arriving, false when leaving.
+  let arriving: Bool
+  /// The saved address, found on the map when the reminder is saved.
+  var address: String?
+
+  var label: String {
+    switch (place, arriving) {
+    case (.home, true): L.t("when you arrive home", "eve varınca")
+    case (.home, false): L.t("when you leave home", "evden çıkınca")
+    case (.work, true): L.t("when you arrive at work", "işe varınca")
+    case (.work, false): L.t("when you leave work", "işten çıkınca")
+    }
+  }
+
+  var englishLabel: String {
+    "when the user \(arriving ? "arrives at" : "leaves") \(place == .home ? "home" : "work")"
+  }
+}
+
 struct DeviceActionPlan: Equatable {
   var kind: DeviceActionKind
   var title: String?
@@ -136,6 +165,8 @@ struct DeviceActionPlan: Equatable {
   var memoryID: UUID?
   /// The note to delete (delete_note).
   var noteID: UUID?
+  /// A reminder that rings at a place instead of a time.
+  var trigger: LocationTrigger?
   /// The planner's short explanation (used for `none`).
   var reply: String = ""
   /// Planned by the model in a turn that also brought camera, web or agent
@@ -162,6 +193,9 @@ struct DeviceActionPlan: Equatable {
     let when = whenText
     switch kind {
     case .createReminder:
+      if let trigger {
+        return L.t("Reminder", "Anımsatıcı") + " \"\(title ?? "")\" — " + trigger.label
+      }
       return L.t("Reminder", "Anımsatıcı") + " \"\(title ?? "")\"" + (when.map { " — \($0)" } ?? L.t(" (no time)", " (saatsiz)"))
     case .createEvent:
       return L.t("Event", "Etkinlik") + " \"\(title ?? "")\" — \(when ?? "")" + (location.map { " @ \($0)" } ?? "")
@@ -630,12 +664,34 @@ final class DeviceActionExecutor {
       reminder.dueDateComponents = Calendar.current.dateComponents(fields, from: date)
       if plan.hasTime { reminder.addAlarm(EKAlarm(absoluteDate: date)) }
     }
+    if let trigger = plan.trigger {
+      let alarm = try await Self.locationAlarm(for: trigger)
+      reminder.addAlarm(alarm)
+    }
     try store.save(reminder, commit: true)
     guard !reminder.calendarItemIdentifier.isEmpty else {
       throw ExecutionError.failed("iOS did not confirm the reminder.")
     }
-    let when = plan.whenText.map { " for \($0)" } ?? ""
+    let when = plan.whenText.map { " for \($0)" } ?? plan.trigger.map { " (\($0.englishLabel); Apple Reminders rings there)" } ?? ""
     return "Reminder saved in \(calendar.title)\(when): \(plan.title ?? "")."
+  }
+
+  /// A Reminders alarm at the saved address (150 m), found on the map now.
+  static func locationAlarm(for trigger: LocationTrigger) async throws -> EKAlarm {
+    guard let address = trigger.address, !address.isEmpty else {
+      throw ExecutionError.failed("The address for this place is not saved.")
+    }
+    let placemarks = try? await CLGeocoder().geocodeAddressString(address)
+    guard let location = placemarks?.first?.location else {
+      throw ExecutionError.failed("The saved address could not be found on the map, so the place reminder was not saved.")
+    }
+    let structured = EKStructuredLocation(title: trigger.place == .home ? L.t("Home", "Ev") : L.t("Work", "İş"))
+    structured.geoLocation = location
+    structured.radius = 150
+    let alarm = EKAlarm()
+    alarm.structuredLocation = structured
+    alarm.proximity = trigger.arriving ? .enter : .leave
+    return alarm
   }
 
   private func listReminders() async throws -> String {

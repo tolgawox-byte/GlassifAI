@@ -76,7 +76,7 @@ Everything is stored on this iPhone (`dealer.json` in Application Support); noth
 | Undo of the last local action ("son yaptığını geri al"): note, task, memory, shopping item, timer, parking spot, damage, odometer | **EXPERIMENTAL** | Ten minutes; calls, messages and shares are never undone |
 | Modes (Automatic, General, Dealer, Daily life, Travel, Shopping, Translation, DIY, Accessibility) | **EXPERIMENTAL** | One line in the voice instructions; never changes permissions |
 | Shortcuts: new task, remember, start dealer session, today's briefing, shopping list | **PHYSICAL TEST REQUIRED** | App Intents; Siri phrases need a device |
-| Location-based reminders ("eve varınca hatırlat") | **UNAVAILABLE** | Not built in this version (needs Always location permission) |
+| Place reminders ("eve varınca hatırlat", "işten çıkınca …", "when I get home") | **PHYSICAL TEST REQUIRED** | Home and work from the saved addresses; an Apple Reminders location alarm (150 m) that Reminders rings; AutoLoom needs no location permission for it |
 | QR code / barcode reading ("QR kodu oku") | **PHYSICAL TEST REQUIRED** | Vision on the phone, on the current camera image; read out only, never opened; no Wi-Fi password read or shown |
 | Receipts and expenses, flight status | **UNAVAILABLE** | Not built; no bank or airline connection |
 | Long document reader (multi-page capture) | **PARTIAL** | One view at a time via "vision_read"; a document specialist is used when connected |

@@ -207,6 +207,23 @@ final class AutoLoomDailyLifeTests: XCTestCase {
     XCTAssertNotEqual(decide("QR kod nasıl okunur?"), .readCode)
   }
 
+  func testPlaceRemindersInsteadOfATime() {
+    XCTAssertEqual(
+      decide("Eve varınca süt almayı hatırlat"), .locationReminder(title: "Süt al", place: .home, arriving: true))
+    XCTAssertEqual(
+      decide("işten çıkınca Ahmet'i aramayı hatırlat"), .locationReminder(title: "Ahmet'i ara", place: .work, arriving: false))
+    XCTAssertEqual(
+      decide("remind me to call mom when I get home"), .locationReminder(title: "Call mom", place: .home, arriving: true))
+    // A time wins over a place; other places are not guessed.
+    if case .locationReminder? = decide("yarın 10'da eve gidince hatırlat") { XCTFail("a time was given") }
+    if case .locationReminder? = decide("pazara gidince ekmek almayı hatırlat") { XCTFail("only home and work") }
+    var plan = DeviceActionPlan(kind: .createReminder)
+    plan.title = "Süt al"
+    plan.trigger = LocationTrigger(place: .home, arriving: true, address: "Moda Cd. 5, Kadıköy")
+    XCTAssertTrue(plan.summary.contains(L.t("when you arrive home", "eve varınca")))
+    if case .failure = DeviceActionParser.validate(plan, now: Date()) { XCTFail("a place reminder needs no time") }
+  }
+
   func testUndoTakesBackTheLastLocalActionOnly() async throws {
     LocalUndo.shared.clear()
     XCTAssertEqual(decide("Son yaptığını geri al"), .undoLast)
