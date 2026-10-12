@@ -1,0 +1,2 @@
+com.marcoiannello.GlassifAI: 1520
+com.marcoiannello.GlassifAI: 1520
