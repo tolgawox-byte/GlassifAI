@@ -147,6 +147,10 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   /// a turn only when it never does.
   private var sawTurnDone = false
   private var lastLegacyFinal: (text: String, at: Date)?
+  /// Bumped by every start and stop. A start that was still waiting on the
+  /// network when the user stopped (or started again) checks it after each
+  /// step and quietly gives up, so it can never tear down the newer call.
+  private var startGeneration = 0
 
   /// - Parameters:
   ///   - greeting: a line said right after connecting (voice previews).
@@ -159,6 +163,20 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     reason: VoiceStartReason? = nil
   ) async {
     guard !isActive else { return }
+    startGeneration += 1
+    let generation = startGeneration
+    func superseded() -> Bool { generation != startGeneration }
+    // A call that failed without hanging up never keeps its peer or data
+    // channel underneath the new one.
+    if peer != nil || dataChannel != nil {
+      // tearDown() clears the preview settings; this start still needs them.
+      let preview = (isPreviewSession, voiceOverride, previewingVoice)
+      await tearDown()
+      guard !superseded() else { return }
+      isPreviewSession = preview.0
+      voiceOverride = preview.1
+      previewingVoice = preview.2
+    }
     // Every start path frees the wake phrase listener's microphone first.
     WakePhraseListener.shared.stopListening(reason: nil)
     let freshConversation = !isReconnecting && !isRestarting && !isPreviewSession
@@ -193,6 +211,11 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     do {
       self.forcesBuiltInAudio = forcesBuiltInAudio
       markPhase(.preparingAudio)
+      // A call without microphone access would look connected and hear
+      // nothing; say why instead (previews only speak, so they may go on).
+      if !isPreviewSession, AVAudioApplication.shared.recordPermission == .denied {
+        throw RealtimeError.microphoneDenied
+      }
       try configureAudioSession(prefersBluetoothHFP: prefersBluetoothHFP)
       let configuration = LKRTCConfiguration()
       configuration.sdpSemantics = .unifiedPlan
@@ -243,21 +266,35 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       markPhase(.connectingRealtime)
       let offer = try await createOffer(peer: peer, constraints: constraints)
       try await setLocalDescription(offer, peer: peer)
-      for _ in 0..<25 where peer.iceGatheringState != .complete {
-        try? await Task.sleep(nanoseconds: 100_000_000)
+      guard !superseded() else { return }
+      // No STUN/TURN servers are configured, so only host candidates exist;
+      // they appear within milliseconds. With continual gathering the state
+      // never reaches "complete", so waiting for it always cost 2.5 s.
+      var waitedMs = 0
+      var candidateSeenAtMs: Int?
+      while peer.iceGatheringState != .complete, waitedMs < 2_500 {
+        if candidateSeenAtMs == nil, Self.containsCandidate(peer.localDescription?.sdp) { candidateSeenAtMs = waitedMs }
+        if let seen = candidateSeenAtMs, waitedMs - seen >= 200 { break }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        waitedMs += 50
       }
+      guard !superseded() else { return }
       let localSDP = peer.localDescription?.sdp ?? offer.sdp
       let answerSDP = try await createDirectRealtimeCall(sdp: localSDP)
+      guard !superseded() else { return }
       let answer = LKRTCSessionDescription(type: .answer, sdp: answerSDP)
       try await setRemoteDescription(answer, peer: peer)
+      guard !superseded() else { return }
 
       markPhase(.waitingForDataChannel, detail: "session accepted")
       for _ in 0..<100 where channel.readyState != .open {
         try? await Task.sleep(nanoseconds: 100_000_000)
+        if superseded() { return }
       }
       guard channel.readyState == .open else { throw RealtimeError.connectionTimedOut }
       markPhase(.routingAudio, detail: "data channel open")
       let route = await waitForAudioRoute(prefersGlasses: prefersBluetoothHFP && !forcesBuiltInAudio)
+      guard !superseded() else { return }
       readyRoute = route
       state = .listening
       if let connectStartedAt {
@@ -281,6 +318,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
         ChimePlayer.shared.play(.reconnected)
       }
     } catch {
+      // A start the user already replaced must not tear down the new call.
+      guard !superseded() else { return }
       await tearDown()
       let message = LogSanitizer.sanitize(error.localizedDescription)
       lastRealtimeError = message
@@ -374,6 +413,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   }
 
   func stop() async {
+    // A start still waiting on the network gives up instead of finishing.
+    startGeneration += 1
     let endsConversation = !isPreviewSession && (isActive || callAudio != nil)
     callAudio = nil
     sendEvent(["type": "session.close"])
@@ -1374,9 +1415,16 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     case "live_captioning_text":
       assistantCaption = (payload["text"] ?? payload["transcript"]) as? String ?? assistantCaption
     case "error":
-      let message = LogSanitizer.sanitize((event["message"] as? String) ?? "ChatGPT Live reported an error.")
+      // Recorded for Diagnostics, with the nested message and code. A live
+      // call is not marked failed while its microphone and connection stay
+      // open: if the service really ended it, the data channel closes and the
+      // call reconnects (`dataChannelClosed`).
+      let nested = event["error"] as? [String: Any] ?? payload["error"] as? [String: Any]
+      let text = (event["message"] as? String) ?? (nested?["message"] as? String) ?? "ChatGPT Live reported an error."
+      let code = (nested?["code"] as? String) ?? (event["code"] as? String)
+      let message = LogSanitizer.sanitize(code.map { "\(text) (\($0))" } ?? text, limit: 240)
       lastRealtimeError = message
-      state = .failed(message)
+      NSLog("[AutoLoom] realtime error event: %@", message)
     case "goodbye", "close_ready":
       Task { await stop() }
     default:
@@ -1455,8 +1503,38 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     case "listening", "listening_intently", "connected", "idle": state = .listening
     case "thinking": state = .thinking
     case "speaking": state = .speaking
-    case "halted": state = .disconnected
+    // The service halted the conversation: hang up for real, so the screen,
+    // the microphone and the wake phrase agree.
+    case "halted": Task { await stop() }
     default: break
+    }
+  }
+
+  /// "a=candidate" lines in an SDP.
+  nonisolated static func containsCandidate(_ sdp: String?) -> Bool {
+    sdp?.contains("a=candidate:") ?? false
+  }
+
+  /// The data channel of the live call closed without the app closing it.
+  fileprivate func dataChannelClosed(_ channel: LKRTCDataChannel) {
+    guard channel === dataChannel, isConnected else { return }
+    handleMidCallFailure(
+      reason: "data channel closed",
+      userMessage: "The voice connection was interrupted. Tap to reconnect.")
+  }
+
+  /// ICE failure on the current peer only: a late callback from a peer that
+  /// was already replaced is ignored.
+  fileprivate func iceFailed(on connection: LKRTCPeerConnection) async {
+    guard connection === peer else { return }
+    if isConnected {
+      handleMidCallFailure(
+        reason: "ICE connection failed",
+        userMessage: "The voice connection was interrupted. Tap to reconnect.")
+    } else {
+      await tearDown()
+      lastRealtimeError = "ICE connection failed"
+      state = .failed("The voice connection was interrupted. Tap to reconnect.")
     }
   }
 }
@@ -1468,17 +1546,7 @@ extension GlassifAIRealtimeSession: LKRTCPeerConnectionDelegate {
   nonisolated func peerConnectionShouldNegotiate(_ peerConnection: LKRTCPeerConnection) {}
   nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange newState: LKRTCIceConnectionState) {
     if newState == .failed {
-      Task { @MainActor in
-        if isConnected {
-          handleMidCallFailure(
-            reason: "ICE connection failed",
-            userMessage: "The voice connection was interrupted. Tap to reconnect.")
-        } else {
-          await tearDown()
-          lastRealtimeError = "ICE connection failed"
-          state = .failed("The voice connection was interrupted. Tap to reconnect.")
-        }
-      }
+      Task { @MainActor in await iceFailed(on: peerConnection) }
     }
   }
   nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange newState: LKRTCIceGatheringState) {}
@@ -1488,7 +1556,10 @@ extension GlassifAIRealtimeSession: LKRTCPeerConnectionDelegate {
 }
 
 extension GlassifAIRealtimeSession: LKRTCDataChannelDelegate {
-  nonisolated func dataChannelDidChangeState(_ dataChannel: LKRTCDataChannel) {}
+  nonisolated func dataChannelDidChangeState(_ dataChannel: LKRTCDataChannel) {
+    guard dataChannel.readyState == .closed else { return }
+    Task { @MainActor in dataChannelClosed(dataChannel) }
+  }
   nonisolated func dataChannel(_ dataChannel: LKRTCDataChannel, didReceiveMessageWith buffer: LKRTCDataBuffer) {
     let data = buffer.data
     Task { @MainActor in handleDataChannelData(data) }
@@ -1523,9 +1594,13 @@ private enum RealtimeError: LocalizedError {
   case invalidResponse
   case connectionTimedOut
   case signalingFailed(String)
+  case microphoneDenied
 
   var errorDescription: String? {
     switch self {
+    case .microphoneDenied:
+      L.t("Microphone access is off for AutoLoom. Turn it on in iPhone Settings → Privacy → Microphone.",
+          "AutoLoom'un mikrofon izni kapalı. iPhone Ayarlar → Gizlilik → Mikrofon'dan aç.")
     case .peerCreationFailed: "The voice connection could not be created."
     case .audioTrackFailed: "The microphone could not join the voice connection."
     case .dataChannelFailed: "The ChatGPT event channel could not be created."

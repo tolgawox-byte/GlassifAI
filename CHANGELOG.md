@@ -2,6 +2,66 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — phase 1: audit, PC companion, P0 fixes] — branch `autoloom-glasses-jarvis-v1`
+
+Rollback tag: `rollback-146a169-before-jarvis-ultimate`. CI results: `TEST_REPORT.md`. Not device-verified; new physical tests PC1–PC8, SEC1, AU1, VC1–VC3, DAT1, CAM1 in `docs/PHYSICAL_TEST_MATRIX.md`.
+
+### Added
+- **Audit and research**: `JARVIS_AUDIT.md`, `JARVIS_FEATURE_RESEARCH.md`, `JARVIS_IMPLEMENTATION_PLAN.md`, `JARVIS_FEATURE_MATRIX.md`.
+  - They come from seven review streams: realtime bridge, camera/DAT, audio, features, security/CI, and two GitHub research streams covering about 117 sources, with code read in about 80 of them.
+- **JARVIS PC Companion** (`pc-companion/`, Windows, Node.js 22.18+, no runtime dependencies). Pairing and transport:
+  - QR pairing with a one-time code;
+  - HTTPS with the PC's own P-256 key, pinned by the phone;
+  - hashed device tokens.
+
+  Path policy: shared folders with real-path containment, secret files never read, safe write rules. Tools:
+  - search, read and document text (docx/xlsx/pptx/odt/html/rtf; PDF best effort);
+  - project overview;
+  - create, edit, rename and trash with undo;
+  - allowlisted programs and commands.
+
+  Task engine:
+  - approvals bound to the exact action;
+  - the model channel (MCP) cannot approve;
+  - timeouts, bounded retries, and a kill-tree on cancel.
+
+  Also a REST API, server-sent events and a hash-chained audit log. 71 tests and tsc strict; the new workflow `pc-companion.yml` runs them on `windows-latest` with a read-only token. See `docs/PC_COMPANION.md`.
+- **Phone side of the PC companion**:
+  - `jarvis-pc://` pairing links (from the Camera app or pasted) and a pinned URLSession transport;
+  - the paired PC becomes the "Bilgisayar" skill, and "Bilgisayarda …" / "Bilgisayarımda …" reach it by voice;
+  - one approval card showing the PC's own description (tap for destructive/execute, the user's own "evet" for plain file changes), with the result spoken or shown;
+  - Settings → Computer (PC) with real reachability, approvals, tasks (stop, undo), shared folders and unpair;
+  - the privacy wipe also forgets the PC.
+- iOS tests:
+  - `AutoLoomPCCompanionTests`, including a cross-check that the phone computes the same key pin as the PC code;
+  - `testTheVoiceModelCannotConfirmAnActionItself`.
+
+### Security
+- **The voice model can no longer confirm actions itself.** A `TASK: confirm_action` delegation is refused. Only the user's own words (parsed by the voice action bridge) or a tap confirm. The model's "no" still cancels.
+- **CI least privilege:**
+  - the build job runs with a read-only token and `persist-credentials: false`;
+  - every action is pinned to a commit SHA;
+  - a separate 10-line job holds the only write token, to publish screenshots;
+  - IPA artifacts are kept 30 days;
+  - PC-companion-only pushes no longer start the macOS build.
+- The in-app Licenses screen and `THIRD_PARTY_NOTICES.md` list LiveKit WebRTC as MIT (checked at the pinned revision) and add Project Nayuki's QR generator (MIT).
+
+### Fixed
+- **Offline cold launch no longer signs out.** Network errors, timeouts, 429 and 5xx from the token endpoint keep the stored session; only 400/401/403 sign out. A logout can no longer be undone by a refresh that was already running.
+- **Realtime call lifecycle:**
+  - A start that was still waiting on the network when the user stopped can no longer tear down the next call (generation token).
+  - A leftover peer is closed before a new start.
+  - A server `error` event is recorded with its nested message and code, instead of showing "failed" while the microphone stays live.
+  - `halted` hangs up properly.
+  - A data channel that closes during a live call reconnects (within the existing budget).
+  - A late ICE failure from an older peer is ignored.
+  - A denied microphone is reported before connecting.
+  - The fixed 2.5 s ICE wait is gone: the offer is sent 200 ms after the first host candidate.
+- **Truthful camera answers:** the instructions now say whether the image came from the iPhone camera or the glasses.
+- **DAT version honesty:** `sdkUpdateRequired` (the glasses need a newer toolkit than DAT 0.5.0) and `deviceUpdateRequired` show a clear alert at the first read, not only on change.
+- **Tapped agent and skill results** are shown in the answer card instead of being discarded.
+- The model is no longer told to delegate `confirm_action` (instructions and staged prompts).
+
 ## [AutoLoom Jarvis v1.5 — Ultimate Jarvis expansion] — branch `autoloom-glasses-jarvis-v1`
 
 Final CI run [36600758014](https://github.com/tolgawox-byte/GlassifAI/actions/runs/36600758014) on `a4e0eb3`: iOS 321/323 (2 skipped), Rust 8/8; tag `baseline-a4e0eb3-jarvis-v1.5`. Rollback tag: `rollback-405e461-before-jarvis-expansion`. Not device-verified; `docs/PHYSICAL_TEST_MATRIX.md` lists the checks.

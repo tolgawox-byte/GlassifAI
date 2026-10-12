@@ -217,6 +217,7 @@ struct PrivacySettingsView: View {
         DocumentStore.shared.deleteEverything()
         UserRoutineStore.shared.deleteEverything()
         SkillStore.shared.deleteEverything()
+        PCCompanionStore.shared.deleteEverything()
         Task { await SpotlightIndexer.shared.removeAll() }
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()
@@ -681,7 +682,7 @@ struct LicensesView: View {
         VStack(alignment: .leading, spacing: 10) {
           Text("• Meta Wearables Device Access Toolkit and camera-access sample code — Meta Wearables Developer Terms and Acceptable Use Policy (wearables.developer.meta.com). Upstream notices are preserved in the NOTICE file of the source repository.")
           Text("• OpenAI Codex (codex-api, codex-http-client, codex-protocol crates) — Apache License 2.0.")
-          Text("• LiveKit WebRTC XCFramework — Apache License 2.0 (BSD-style WebRTC license for the underlying WebRTC code).")
+          Text("• LiveKit WebRTC XCFramework — MIT License (\"WebRTC SDKs\"); the underlying WebRTC code is under Google's BSD-style license and bundles BoringSSL, libvpx, Opus, libyuv and Abseil under their own permissive licenses.")
         }
         .font(.footnote)
         Text("Code licenses are separate from service terms. Using ChatGPT and Meta services remains subject to OpenAI's and Meta's own terms.")

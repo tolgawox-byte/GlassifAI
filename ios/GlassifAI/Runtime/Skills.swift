@@ -68,11 +68,18 @@ final class MCPClient {
   }
 
   func callTool(_ name: String, arguments: [String: Any]) async throws -> (text: String, isError: Bool) {
+    let result = try await callToolResult(name, arguments: arguments)
+    return (result.text, result.isError)
+  }
+
+  /// The text parts, the error flag, and `structuredContent` when the server
+  /// sends one (the PC companion reports a task's state there).
+  func callToolResult(_ name: String, arguments: [String: Any]) async throws -> (text: String, isError: Bool, structured: [String: Any]?) {
     let result = try await request("tools/call", params: ["name": name, "arguments": arguments])
     let texts = (result["content"] as? [[String: Any]] ?? []).compactMap { item -> String? in
       (item["type"] as? String) == "text" ? item["text"] as? String : nil
     }
-    return (texts.joined(separator: "\n"), result["isError"] as? Bool ?? false)
+    return (texts.joined(separator: "\n"), result["isError"] as? Bool ?? false, result["structuredContent"] as? [String: Any])
   }
 
   private func request(_ method: String, params: [String: Any]) async throws -> [String: Any] {
@@ -168,8 +175,13 @@ struct SkillServer: Codable, Equatable, Identifiable {
   var tools: [MCPTool] = []
   var policies: [String: SkillPolicy] = [:]
   var lastSync: Date?
+  /// The JARVIS PC Companion: its self-signed key, pinned at pairing (see
+  /// PCCompanion.swift). Optional so older skills.json files still decode.
+  var pinnedKey: String?
+  var companion: Bool?
 
   var host: String { url.host ?? url.absoluteString }
+  var isCompanion: Bool { companion == true && pinnedKey != nil }
 
   func policy(for tool: String) -> SkillPolicy { policies[tool] ?? .ask }
 }
@@ -194,6 +206,9 @@ struct SkillCallRequest: Equatable {
   /// The arguments as JSON text (shown to the user before sending).
   var arguments: String
   var risk: DeviceActionKind.Risk
+  /// Set when the PC companion holds this task for its owner's approval:
+  /// confirming sends that approval, nothing else.
+  var pcApproval: PCApprovalRequest? = nil
 }
 
 enum SkillCredentialStore {
@@ -280,7 +295,7 @@ final class SkillStore: ObservableObject {
     guard let server = servers.first(where: { $0.id == id }) else { return nil }
     syncing = id
     defer { syncing = nil }
-    let client = makeClient(server.url, SkillCredentialStore.load(id))
+    let client = client(for: server)
     do {
       _ = try await client.initialize()
       let tools = try await client.listTools()
@@ -321,6 +336,28 @@ final class SkillStore: ObservableObject {
 
   func server(_ id: UUID) -> SkillServer? { servers.first { $0.id == id } }
 
+  /// The paired JARVIS PC Companion, added by pairing only (never by hand or
+  /// by a model): only its pinned key is accepted for its address.
+  func addCompanion(name: String, url: URL, pin: String, token: String) -> UUID? {
+    var server = SkillServer(name: name, url: url)
+    server.pinnedKey = pin
+    server.companion = true
+    guard SkillCredentialStore.save(token, for: server.id) else { return nil }
+    servers.append(server)
+    persist()
+    return server.id
+  }
+
+  /// A client for the server: the pinned transport for the PC companion,
+  /// the normal one (or a test's) for everything else.
+  func client(for server: SkillServer) -> MCPClient {
+    let token = SkillCredentialStore.load(server.id)
+    if let pin = server.pinnedKey, server.isCompanion {
+      return MCPClient(endpoint: server.url, token: token, send: PCTransport.sender(pin: pin))
+    }
+    return makeClient(server.url, token)
+  }
+
   static func describe(_ error: Error) -> String {
     switch error as? MCPError {
     case .http(let code)?: return "HTTP \(code)"
@@ -345,11 +382,23 @@ final class SkillStore: ObservableObject {
 // MARK: Voice: "Notion ile bugünkü görevlerimi listele", "ask Notion to …"
 
 extension VoiceActionIntentBridge {
+  /// Turkish location endings after a folded name: "-da", "-ımda", "-daki" …
+  static let locativeSuffixes: Set<String> = [
+    "da", "de", "ta", "te", "imda", "imde", "umda", "umde", "daki", "deki", "taki", "teki", "imdaki", "imdeki",
+  ]
+
   static func skill(_ u: Utterance, _ context: VoiceBridgeContext) -> VoiceBridgeDecision? {
     guard !context.skillNames.isEmpty, u.count >= 3, u.count <= 30 else { return nil }
     for name in context.skillNames {
       let nameKeys = name.split(separator: " ").map { Utterance.key(String($0)) }
       guard !nameKeys.isEmpty else { continue }
+      // "Bilgisayarda AutoLoom projesini bul", "bilgisayarımda …": the
+      // location form of a one-word name (the paired PC is "Bilgisayar").
+      if nameKeys.count == 1, let first = u.keys.first, first.count > nameKeys[0].count, first.hasPrefix(nameKeys[0]),
+         locativeSuffixes.contains(String(first.dropFirst(nameKeys[0].count))), u.count > 2 {
+        let request = u.dropping(0..<1)
+        return VoiceBridgeDecision(.skill(server: name, request: request.text), "skill \(name)")
+      }
       // "Notion ile …", "Notion'a sor: …"
       if u.starts(with: nameKeys), u.count > nameKeys.count + 1 {
         let next = u.keys[nameKeys.count]
@@ -408,9 +457,13 @@ extension AssistantOrchestrator {
       return answer(
         "Bu istek için uygun bir araç bulamadım.", "I couldn't match that request to one of the skill's tools.", failed: "no tool chosen")
     }
-    guard let risk = SkillRisk.risk(for: tool, policy: server.policy(for: tool.name)) else {
+    guard let policyRisk = SkillRisk.risk(for: tool, policy: server.policy(for: tool.name)) else {
       return answer("Bu araç engelli.", "That tool is blocked.", failed: "blocked")
     }
+    // The PC companion holds anything that changes files, starts a program
+    // or runs a command until its owner approves it there, with its own
+    // description: the request itself is sent at once (one approval, not two).
+    let risk: DeviceActionKind.Risk = server.isCompanion ? .safe : policyRisk
     let call = SkillCallRequest(
       serverID: server.id, serverName: server.name, host: server.host, tool: tool.name, arguments: plan.arguments, risk: risk)
     ActionTraceLog.shared.update(traceID) { $0.parsed = "tool \(tool.name) · risk \(risk.rawValue)" }
@@ -426,14 +479,30 @@ extension AssistantOrchestrator {
 
   /// Sends the call; the reply is untrusted content from that service.
   func runSkillCall(_ call: SkillCallRequest) async -> String {
+    // The user's tap or own yes on a task the PC holds: approve exactly that one.
+    if let approval = call.pcApproval {
+      return await PCCompanionStore.shared.approveAndWait(approval)
+    }
     guard let server = SkillStore.shared.server(call.serverID), server.enabled else {
       return "The skill is no longer available. Tell the user."
     }
     let arguments = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any] ?? [:]
-    let client = SkillStore.shared.makeClient(server.url, SkillCredentialStore.load(server.id))
+    let client = SkillStore.shared.client(for: server)
     do {
       _ = try await client.initialize()
-      let result = try await client.callTool(call.tool, arguments: arguments)
+      let result = try await client.callToolResult(call.tool, arguments: arguments)
+      if server.isCompanion, let approval = PCApprovalRequest(structured: result.structured) {
+        // One card with the PC's own description of the task; the PC runs
+        // it only after the approval names this exact action.
+        var action = DeviceActionPlan(kind: .skillCall)
+        action.skill = SkillCallRequest(
+          serverID: server.id, serverName: server.name, host: server.host, tool: call.tool, arguments: call.arguments,
+          risk: approval.needsTap ? .strongConfirm : .confirm, pcApproval: approval)
+        action.text = approval.summary
+        let staged = await stage(action)
+        Task { await PCCompanionStore.shared.refresh() }
+        return staged.speakable
+      }
       let origin = "the MCP skill \(server.name) (\(server.host))"
       if result.isError {
         return "The skill reported an error:\n" + UntrustedContent.wrap(String(result.text.prefix(1_500)), origin: origin)
@@ -502,11 +571,23 @@ struct SkillsView: View {
               .font(.caption)
             }
           }
-          Button(L.t("Remove this skill", "Bu beceriyi kaldır"), role: .destructive) { store.remove(server.id) }
+          if server.isCompanion {
+            Button(L.t("Unpair this PC", "Bu bilgisayarla eşleşmeyi kaldır"), role: .destructive) {
+              Task { await PCCompanionStore.shared.unpair() }
+            }
+          } else {
+            Button(L.t("Remove this skill", "Bu beceriyi kaldır"), role: .destructive) { store.remove(server.id) }
+          }
         } header: {
           Text(server.name)
         } footer: {
-          Text(L.t("Say “\(server.name) ile …” or “ask \(server.name) to …”.", "“\(server.name) ile …” ya da “ask \(server.name) to …” de."))
+          if server.isCompanion {
+            Text(L.t(
+              "Your PC (JARVIS PC Companion). Say “\(server.name)da …” or “\(server.name) ile …”. Reading runs at once; anything that changes files, opens a program or runs a command waits for your approval with the PC's own description.",
+              "Bilgisayarın (JARVIS PC Companion). “\(server.name)da …” ya da “\(server.name) ile …” de. Okuma hemen çalışır; dosya değiştiren, program açan veya komut çalıştıran her şey bilgisayarın kendi açıklamasıyla onayını bekler."))
+          } else {
+            Text(L.t("Say “\(server.name) ile …” or “ask \(server.name) to …”.", "“\(server.name) ile …” ya da “ask \(server.name) to …” de."))
+          }
         }
       }
       Section {

@@ -59,22 +59,22 @@ const META_TOOLS: Array<{ name: string; title: string; description: string; inpu
   {
     name: "get_task",
     title: "Görev durumu",
-    description: "Returns one PC task's state, progress, result summary, verification and error. Use it to answer 'is it done?' from facts.",
+    description:
+      "Returns one PC task's state, progress, result summary, verification and error. Without taskId: the most recent task. Use it to answer 'is it done?' from facts.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["taskId"],
       properties: { taskId: { type: "string", pattern: "^t_[A-Z0-9]{12}$" } },
     },
   },
   {
     name: "cancel_task",
     title: "Görevi durdur",
-    description: "Cancels a PC task that is waiting or running (a running command is stopped with its child processes).",
+    description:
+      "Cancels a PC task that is waiting or running (a running command is stopped with its child processes). Without taskId: the most recent unfinished task.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["taskId"],
       properties: { taskId: { type: "string", pattern: "^t_[A-Z0-9]{12}$" } },
     },
   },
@@ -240,14 +240,20 @@ async function callMetaTool(core: CompanionCore, device: PublicDevice, name: str
       return textResult(text, { tasks: tasks.map(toPublicTask) });
     }
     case "get_task": {
-      const task = core.tasks.get(String(args.taskId));
-      if (!task) return textResult("Görev bulunamadı.", { error: "task_not_found" }, true);
+      // "Başlattığım görevin durumu ne?": without an id, the newest task.
+      const task = args.taskId ? core.tasks.get(String(args.taskId)) : core.tasks.list({ limit: 1 })[0];
+      if (!task) return textResult(args.taskId ? "Görev bulunamadı." : "Henüz görev yok.", { error: "task_not_found" }, true);
       return textResult(describeTask(task), { task: toPublicTask(task) });
     }
     case "cancel_task": {
-      const task = await core.tasks.cancel(String(args.taskId), `mcp:${device.id}`);
+      // "Görevi durdur": without an id, the newest task that has not finished.
+      const target = args.taskId
+        ? core.tasks.get(String(args.taskId))
+        : core.tasks.list({ limit: 1, states: ["running", "pending", "awaiting_approval"] })[0];
+      if (!target) return textResult("Durdurulacak bir görev yok.", { error: "no_active_task" }, true);
+      const task = await core.tasks.cancel(target.id, `mcp:${device.id}`);
       const latest = isFinished(task.state) ? task : await core.tasks.waitForSettle(task.id, 5000);
-      return textResult(`Görev ${latest.id}: ${stateWord(latest.state)}.`, { task: toPublicTask(latest) });
+      return textResult(`Görev ${latest.id} (${latest.summary}): ${stateWord(latest.state)}.`, { task: toPublicTask(latest) });
     }
   }
   return textResult("Bilinmeyen araç.", { error: "unknown_tool" }, true);

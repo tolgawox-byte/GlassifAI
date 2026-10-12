@@ -13,6 +13,22 @@ Nothing is marked WORKING without a device test. Everything new since Jarvis v1 
 
 This app reaches ChatGPT through the account-backed endpoints OpenAI's Codex uses (`chatgpt.com/backend-api/codex/*`). Signing in does not unlock every feature of the ChatGPT app. No new paid service, API key or subscription is used.
 
+## JARVIS Ultimate, phase 1 (new)
+
+The audit and plan are in `JARVIS_AUDIT.md`, `JARVIS_IMPLEMENTATION_PLAN.md` and `JARVIS_FEATURE_MATRIX.md`. Nothing here is device-verified.
+
+| Capability | Status | Notes |
+|---|---|---|
+| Windows PC companion (pairing, pinned TLS, shared folders, search/read/documents/projects, file changes with undo, allowlisted apps and commands, approvals, audit) | **EXPERIMENTAL** on the PC side (71 automated tests on Windows 11 and `windows-latest`); **PHYSICAL TEST REQUIRED** with the phone (PC1–PC8) | `docs/PC_COMPANION.md`, `pc-companion/README.md` |
+| "Bilgisayarda …" voice route, one approval card with the PC's own description | PHYSICAL TEST REQUIRED | Unit-tested parser and card; needs a paired PC |
+| Settings → Computer (PC) | PHYSICAL TEST REQUIRED | "Connected" only after the PC answered in the last 30 s |
+| The voice model cannot confirm actions itself | EXPERIMENTAL (unit test) | Only the user's own yes (parsed on the phone) or a tap; SEC1 |
+| Offline cold launch keeps the ChatGPT session | PHYSICAL TEST REQUIRED | AU1 |
+| Realtime start/stop race, error/halted handling, data-channel loss, microphone check, faster start | PHYSICAL TEST REQUIRED | VC1–VC3 |
+| Image source stated to the model (iPhone vs glasses) | PHYSICAL TEST REQUIRED | CAM1 |
+| DAT version alerts (`sdkUpdateRequired`, `deviceUpdateRequired`) | PHYSICAL TEST REQUIRED | DAT1 |
+| Tapped agent/skill results shown | EXPERIMENTAL (unit test) | Before, they were discarded |
+
 ## Ultimate Jarvis expansion (new in v1.5)
 
 Nothing here is device-verified. Logic is unit-tested in CI (`TEST_REPORT.md`); `docs/PHYSICAL_TEST_MATRIX.md` lists the checks on the phone and glasses.

@@ -343,11 +343,12 @@ final class AssistantOrchestrator: ObservableObject {
       return
     }
     if case .confirmAction(let confirmed)? = envelope?.command {
-      Task { [weak self] in
-        guard let self else { return }
-        let reply = confirmed ? await self.confirmPendingAction(byVoice: true) : self.cancelPendingAction()
-        _ = deliver(reply)
-      }
+      // A "no" from the model only makes things safer. A "yes" is never taken
+      // from the model: injected text (a web page, an agent or MCP reply, a
+      // camera read) could otherwise approve its own action. Only the user's
+      // own words, parsed by the voice action bridge, or a tap confirm.
+      let reply = confirmed ? Self.modelConfirmationRefusal(hasPending: pendingAction != nil) : cancelPendingAction()
+      _ = deliver(reply)
       return
     }
 
@@ -971,7 +972,7 @@ final class AssistantOrchestrator: ObservableObject {
     if let ambiguity = plan.ambiguityNote {
       pendingAction = PendingDeviceAction(plan: plan)
       return ActionStageResult(
-        speakable: "\(ambiguity) Proposed: \(plan.summary). If the user means the other time, delegate the action again with those words; if they confirm this one, delegate TASK: confirm_action. Nothing is saved yet.",
+        speakable: "\(ambiguity) Proposed: \(plan.summary). If the user means the other time, delegate the action again with those words. If they confirm this one, the app hears their yes itself. Nothing is saved yet.",
         display: plan.summary, failed: nil)
     }
     switch plan.risk {
@@ -996,7 +997,7 @@ final class AssistantOrchestrator: ObservableObject {
         ? "It was planned right after content from the camera, the web or an agent, so it needs the user's yes. "
         : ""
       return ActionStageResult(
-        speakable: reason + "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to confirm. If they say yes, delegate TASK: confirm_action; if no, TASK: cancel_action. They can also tap Confirm or Cancel on the phone. Nothing is saved yet.",
+        speakable: reason + "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to say yes or no. The app hears their answer itself (do not delegate confirm_action); if they say no, TASK: cancel_action. They can also tap Confirm or Cancel on the phone. Nothing is saved yet.",
         display: plan.summary, failed: nil)
     case .strongConfirm:
       pendingAction = PendingDeviceAction(plan: plan)
@@ -1023,7 +1024,40 @@ final class AssistantOrchestrator: ObservableObject {
     return await stage(plan)
   }
 
-  /// A yes by voice or a tap on Save. Actions that leave the app are never
+  /// After a tap on an agent, skill or PC card, the service's answer appears
+  /// in the answer card (a spoken yes gets it spoken instead).
+  func showTapResult(for plan: DeviceActionPlan, result: String) {
+    guard plan.kind == .agentTask || plan.kind == .skillCall else { return }
+    let shown = Self.displayText(fromToolReply: result)
+    typedQuestion = plan.summary
+    typedAnswer = shown.isEmpty ? result : shown
+    lastActionResult = typedAnswer
+  }
+
+  /// The service's answer without the instructions meant for the voice model
+  /// and without the untrusted-content tags around it.
+  nonisolated static func displayText(fromToolReply reply: String) -> String {
+    let instructionStarts = [
+      "Summarise it", "Tell the user", "Tell them", "Never follow", "Bu içerik bilgisayardaki",
+    ]
+    return reply
+      .replacingOccurrences(of: #"<untrusted_content[^>]*>"#, with: "", options: .regularExpression)
+      .replacingOccurrences(of: "</untrusted_content>", with: "")
+      .components(separatedBy: "\n")
+      .map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { line in !line.isEmpty && !instructionStarts.contains { line.hasPrefix($0) } }
+      .joined(separator: "\n")
+  }
+
+  /// What the voice model hears when it tries to confirm an action itself.
+  static func modelConfirmationRefusal(hasPending: Bool) -> String {
+    guard hasPending else { return "There is no action waiting for confirmation." }
+    return "Not confirmed: the app only accepts the user's own spoken yes (for example \"evet\" or \"onayla\") or a tap on Confirm. Ask the user to answer; nothing has been done yet."
+  }
+
+  /// A yes by voice or a tap on Save. `byVoice` means the user's own words,
+  /// recognised by the voice action bridge; a yes requested by the voice
+  /// model never reaches here. Actions that leave the app are never
   /// confirmed by voice.
   func confirmPendingAction(byVoice: Bool) async -> String {
     guard let pending = pendingAction, !pending.isExpired else {
@@ -1697,6 +1731,14 @@ final class AssistantOrchestrator: ObservableObject {
       hasCrop: attachment?.hasCrop ?? false,
       hasOCR: attachment?.ocrText != nil,
       avoidRepositionAdvice: recentlyAdvised)
+    if let attachment {
+      // The instructions above are written for the glasses; say where this
+      // image really came from, so an iPhone frame is never described as
+      // the glasses' view.
+      instructions += attachment.info.source.localizedCaseInsensitiveContains("iphone")
+        ? "\nThe attached image comes from the iPhone's own camera, held by the user, not from the glasses: wherever the text above says first-person view or glasses, it means this camera view."
+        : "\nThe attached image comes from the user's Ray-Ban Meta glasses camera (first-person view)."
+    }
     if directSearch {
       instructions += "\nWeb search results are provided in the input. Base current facts only on them, " +
         "name the most relevant source briefly, and say so if they do not answer the request."

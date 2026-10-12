@@ -81,6 +81,7 @@ struct AppShellView: View {
           if let id { VisualMemoryDetail(recordID: id) } else { VisualMemoryGallery() }
         case .remoteAssist: RemoteAssistView()
         case .commandPalette: CommandPaletteView()
+        case .pcCompanion: PCCompanionView()
         }
       }
       .presentationDetents([.medium, .large])

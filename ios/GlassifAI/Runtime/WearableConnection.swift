@@ -798,7 +798,9 @@ final class WearableConnectionCoordinator: ObservableObject {
       }
       if id == ids.first {
         deviceName = device.nameOrId()
-        compatibility = String(describing: device.compatibility())
+        let current = device.compatibility()
+        compatibility = String(describing: current)
+        alertIfIncompatible(current)
         applyLink(device.linkState, source: "read")
       }
       if linkTokens[id] == nil {
@@ -845,9 +847,24 @@ final class WearableConnectionCoordinator: ObservableObject {
     guard id == devices.first else { return }
     compatibility = String(describing: value)
     record("compatibility \(compatibility)")
-    if value == .deviceUpdateRequired {
+    alertIfIncompatible(value)
+  }
+
+  /// The two ends that can be too old: the glasses' firmware (update in Meta
+  /// AI), or this app's Meta toolkit (DAT 0.5.0) after Meta's DAT 1.0
+  /// rollout, which only a new AutoLoom build fixes. Both are said plainly
+  /// instead of retrying a camera that cannot start.
+  private func alertIfIncompatible(_ value: Compatibility) {
+    switch value {
+    case .deviceUpdateRequired:
       userAlert = L.t("Your glasses need a software update in Meta AI before AutoLoom can use them.",
                       "AutoLoom'un kullanabilmesi için gözlüğün Meta AI'da güncellenmesi gerekiyor.")
+    case .sdkUpdateRequired:
+      userAlert = L.t(
+        "Your glasses need a newer AutoLoom build (Meta's toolkit in this build, DAT 0.5.0, is too old for them). Install the DAT 1.0 build; the iPhone camera still works.",
+        "Gözlüğün daha yeni bir AutoLoom sürümü istiyor (bu sürümdeki Meta araç seti, DAT 0.5.0, onun için eski). DAT 1.0 sürümünü yükle; iPhone kamerası çalışmaya devam eder.")
+    default:
+      break
     }
   }
 

@@ -16,6 +16,8 @@ final class AppNavigator: ObservableObject {
     case remoteAssist
     /// The command palette (every action, searchable).
     case commandPalette
+    /// The paired PC: a pairing QR code opened from the Camera, approvals, tasks.
+    case pcCompanion
 
     var id: String {
       switch self {
@@ -25,6 +27,7 @@ final class AppNavigator: ObservableObject {
       case .visualMemory(let id): "visual-\(id?.uuidString ?? "all")"
       case .remoteAssist: "remoteassist"
       case .commandPalette: "palette"
+      case .pcCompanion: "pccompanion"
       }
     }
   }

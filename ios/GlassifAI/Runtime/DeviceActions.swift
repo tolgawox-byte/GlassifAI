@@ -238,6 +238,11 @@ struct DeviceActionPlan: Equatable {
       return L.t("Ask your agent", "Ajanınıza sor") + ": \"\((text ?? "").prefix(120))\""
     case .skillCall:
       guard let skill else { return kind.label }
+      if let approval = skill.pcApproval {
+        // The PC's own description of the task it holds, not the model's.
+        let warnings = approval.warnings.isEmpty ? "" : " — " + approval.warnings.joined(separator: " ")
+        return L.t("On your PC: ", "Bilgisayarında: ") + approval.summary + warnings
+      }
       return L.t("Send to ", "Gönder: ") + skill.host + " · " + skill.tool + " " + String(skill.arguments.prefix(160))
     case .listReminders, .todayEvents, .upcomingEvents, .none:
       return kind.label

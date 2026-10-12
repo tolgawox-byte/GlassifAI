@@ -58,7 +58,7 @@ struct PendingActionCard: View {
     case .forgetMemory: L.t("Forget", "Unut")
     case .deleteNote: L.t("Delete", "Sil")
     case .agentTask: L.t("Send to agent", "Ajana gönder")
-    case .skillCall: L.t("Send", "Gönder")
+    case .skillCall: plan.skill?.pcApproval != nil ? L.t("Approve on PC", "Bilgisayarda onayla") : L.t("Send", "Gönder")
     default: L.t("Confirm", "Onayla")
     }
   }
@@ -70,8 +70,11 @@ struct PendingActionCard: View {
          .scheduleNotification, .findContact, .forgetMemory, .deleteNote, .agentTask, .skillCall, .none:
       Button(confirmTitle) {
         working = true
+        let staged = plan
         Task {
-          _ = await orchestrator.confirmPendingAction(byVoice: false)
+          let result = await orchestrator.confirmPendingAction(byVoice: false)
+          // Agent, skill and PC answers are shown, not discarded.
+          orchestrator.showTapResult(for: staged, result: result)
           working = false
         }
       }

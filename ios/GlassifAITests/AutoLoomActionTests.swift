@@ -210,6 +210,33 @@ final class AutoLoomActionTests: XCTestCase {
     orchestrator.endVoiceSession()
   }
 
+  /// Security: injected text must not be able to approve its own action, so
+  /// a confirm_action delegation from the voice model is never a yes.
+  func testTheVoiceModelCannotConfirmAnActionItself() async {
+    let orchestrator = AssistantOrchestrator.shared
+    orchestrator.cancelPendingAction()
+    var plan = DeviceActionPlan(kind: .agentTask)
+    plan.text = "list the files on my desktop"
+    let staged = await orchestrator.stage(plan)
+    XCTAssertTrue(staged.speakable.contains("Waiting for confirmation"), staged.speakable)
+    XCTAssertFalse(staged.speakable.contains("delegate TASK: confirm_action"), "the model is not told to confirm")
+    XCTAssertNotNil(orchestrator.pendingAction)
+    _ = orchestrator.beginVoiceSession()
+    let delivered = expectation(description: "delivered")
+    var reply = ""
+    orchestrator.handleDelegation(handoffID: "test-self-confirm-\(UUID())", text: "TASK: confirm_action") { text in
+      reply = text
+      delivered.fulfill()
+      return true
+    }
+    await fulfillment(of: [delivered], timeout: 5)
+    XCTAssertTrue(reply.contains("Not confirmed"), reply)
+    XCTAssertNotNil(orchestrator.pendingAction, "the action still waits for the user's own yes or a tap")
+    orchestrator.handleDelegation(handoffID: "test-model-no-\(UUID())", text: "TASK: cancel_action") { _ in true }
+    XCTAssertNil(orchestrator.pendingAction, "a no from the model only makes things safer")
+    orchestrator.endVoiceSession()
+  }
+
   // MARK: Helpers for tap-confirmed actions
 
   func testSystemURLsAreBuiltByTheApp() {

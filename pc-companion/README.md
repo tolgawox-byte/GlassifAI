@@ -4,7 +4,7 @@ A small, paired, audited helper that lets the AutoLoom Media Glasses (JARVIS) iP
 
 - Runtime: **Node.js 22.18 or newer** (24 LTS recommended). No third-party runtime packages; TypeScript is used only to type-check during development.
 - Transport: HTTPS with the companion's own ECDSA P-256 key. The phone pins that key (see [docs/PC_COMPANION.md](../docs/PC_COMPANION.md)).
-- Status: **EXPERIMENTAL**. 72 automated tests pass on Windows (see `test/`). The iPhone side still needs a device test.
+- Status: **EXPERIMENTAL**. 71 automated tests pass on Windows 11 and on GitHub's windows-latest runner (see `test/`). The iPhone side still needs a device test.
 
 ## Hızlı başlangıç (Türkçe)
 

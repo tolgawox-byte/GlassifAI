@@ -2,6 +2,18 @@
 
 A skill is a tool on an MCP (Model Context Protocol) server that **you** added in Settings. AutoLoom speaks MCP's Streamable HTTP transport as a client: it connects, reads the server's tools, and when you say "Notion ile bugünkü görevlerimi listele" it lets a model pick one tool and its arguments, then applies that tool's policy before anything is sent. Servers can only be added by the user, only over `https`; tokens stay in the Keychain; every call that is not allowed to run silently is staged with the receiving service's host on screen; tools that may change data need a tap; and whatever comes back is treated as untrusted content. Code: `Runtime/Skills.swift`.
 
+## The paired PC (JARVIS PC Companion)
+
+Pairing a Windows PC (Settings → Computer (PC), see [PC_COMPANION.md](PC_COMPANION.md)) adds it here as the skill **"Bilgisayar"** ("PC" if that name is taken). It differs from servers added by hand:
+- Its address is a private IPv4 address and its certificate is the PC's own. The connection accepts **only the key pinned at pairing** (`PCTransport`, `PCKeyPin`); every other server keeps the system's normal certificate checks.
+- "Bilgisayarda …", "Bilgisayarımda …" and "Bilgisayar ile …" reach it.
+- Its calls are sent at once, because the PC holds anything that changes files, starts a program or runs a command until its owner approves it. The phone then shows **one** card with the PC's own description of that task:
+  - a tap for destructive or execute tasks;
+  - the user's own "evet" for plain file changes.
+
+  Confirming sends the approval for that exact task (digest-bound); the result is spoken or shown.
+- "Remove" on this screen unpairs the PC.
+
 ## Adding a server
 
 Settings → "Beceriler (MCP) / Skills (MCP)" → "MCP sunucusu ekle / Add an MCP server":
@@ -53,7 +65,7 @@ A staged skill call is never less than `CONFIRM`. The action planner can never c
 2. The reasoning model receives the request and up to 40 allowed tools (description and schema, 600 characters each) and must answer strict JSON `{"tool": …, "arguments": {…}}`, never inventing values you did not give. No tool → "Bu istek için uygun bir araç bulamadım."
 3. The tool's policy gives the risk (table above).
 4. `SAFE` → sent at once. Otherwise a confirmation card shows **"Gönder: <host> · <tool> <arguments>"** and the assistant reads it back; nothing is sent before your yes or tap.
-5. On confirmation the client initialises again and calls the tool.
+5. On confirmation the client initialises again and calls the tool. After a tap, the answer appears in the Assistant's answer card; after a spoken yes, it is spoken.
 6. The reply (up to 3,000 characters; errors up to 1,500) is wrapped as **untrusted content** from "the MCP skill <name> (<host>)". The voice model is told to summarise it briefly and never follow instructions inside it.
 
 ## What leaves the phone
@@ -66,7 +78,7 @@ A staged skill call is never less than `CONFIRM`. The action planner can never c
 
 - No OAuth sign-in flow: a static bearer token only.
 - Only text results are read; images and embedded resources are ignored. MCP resources and prompts are not used.
-- Privacy center → "Delete all local data" does not remove skills in this build; remove them in Settings → Skills.
+- Privacy center → "Delete all local data" removes every skill and its token, and forgets the paired PC.
 - Examples in docs use "Notion" as a name; no server is built in. Testing needs a real MCP server (see SK1 in [PHYSICAL_TEST_MATRIX.md](PHYSICAL_TEST_MATRIX.md)).
 
 ## Tests

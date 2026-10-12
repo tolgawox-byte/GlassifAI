@@ -97,6 +97,10 @@ struct SettingsView: View {
           NavigationLink { SkillsView() } label: {
             row(L.t("Skills (MCP)", "Beceriler (MCP)"), "puzzlepiece.extension", value: "\(SkillStore.shared.enabledServers.count)")
           }
+          NavigationLink { PCCompanionView() } label: {
+            row(L.t("Computer (PC)", "Bilgisayar (PC)"), "desktopcomputer",
+                value: PCCompanionStore.shared.link == nil ? L.t("Not paired", "Eşleşmedi") : PCCompanionStore.shared.link?.name)
+          }
           NavigationLink { PerformanceView() } label: {
             row(L.t("Performance", "Performans"), "thermometer.medium", value: PerformanceGuard.shared.thermalTitle)
           }

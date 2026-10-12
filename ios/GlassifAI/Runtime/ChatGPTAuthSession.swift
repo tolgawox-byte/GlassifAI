@@ -62,6 +62,8 @@ final class ChatGPTAuthSession {
   private(set) var modelsError: String?
   private var pollingTask: Task<Void, Never>?
   private var refreshTask: Task<ChatGPTAuthTokens, Error>?
+  /// Bumped on logout so a refresh that was already running cannot sign back in.
+  private var authGeneration = 0
 
   var isAuthenticated: Bool {
     if case .authenticated = status { return true }
@@ -78,18 +80,66 @@ final class ChatGPTAuthSession {
   func restore() async {
     pollingTask?.cancel()
     status = .loading
+    let stored: ChatGPTAuthTokens?
     do {
-      guard try ChatGPTKeychain.load() != nil else {
-        status = .unauthenticated
-        return
-      }
+      stored = try ChatGPTKeychain.load()
+    } catch {
+      stored = nil
+    }
+    guard let stored else {
+      status = .unauthenticated
+      return
+    }
+    do {
       let tokens = try await freshTokens()
       try await finishAuthentication(tokens)
+    } catch ChatGPTAuthError.refreshUnavailable {
+      // Offline, or the sign-in service is down. The session is kept: notes,
+      // tasks and memory stay reachable, and the next request refreshes it.
+      if let user = Self.user(from: stored) {
+        status = .authenticated(user)
+        availableModels = []
+        modelCatalog = []
+        modelsError = L.t(
+          "Offline: models load when the connection returns.",
+          "Çevrimdışı: modeller bağlantı gelince yüklenecek.")
+      } else {
+        status = .unauthenticated
+      }
     } catch {
+      // The service rejected the session (revoked or expired refresh token).
       try? ChatGPTKeychain.delete()
       availableModels = []
       modelCatalog = []
       status = .unauthenticated
+    }
+  }
+
+  /// The signed-in user as recorded in stored tokens, without a network call.
+  private static func user(from tokens: ChatGPTAuthTokens) -> ChatGPTUser? {
+    guard let accountId = tokens.accountId, !accountId.isEmpty else { return nil }
+    let claims = jwtClaims(tokens.idToken) ?? jwtClaims(tokens.accessToken) ?? [:]
+    let auth = claims["https://api.openai.com/auth"] as? [String: Any]
+    return ChatGPTUser(
+      accountId: accountId,
+      email: claims["email"] as? String,
+      name: claims["name"] as? String,
+      plan: auth?["chatgpt_plan_type"] as? String)
+  }
+
+  /// Whether a failed token refresh means the session is gone (sign in
+  /// again) or only that the service could not be reached (keep it).
+  enum RefreshFailure: Equatable {
+    case rejected
+    case unavailable
+
+    /// `statusCode` is nil when the request never got an HTTP answer.
+    static func classify(statusCode: Int?) -> RefreshFailure {
+      guard let statusCode else { return .unavailable }
+      switch statusCode {
+      case 400, 401, 403: return .rejected
+      default: return .unavailable
+      }
     }
   }
 
@@ -140,6 +190,8 @@ final class ChatGPTAuthSession {
     pollingTask?.cancel()
     refreshTask?.cancel()
     refreshTask = nil
+    // A refresh still in flight must not save tokens again after this.
+    authGeneration += 1
     try? ChatGPTKeychain.delete()
     availableModels = []
     modelCatalog = []
@@ -158,6 +210,7 @@ final class ChatGPTAuthSession {
       return stored
     }
     guard let refreshToken = stored.refreshToken else { throw ChatGPTAuthError.notAuthenticated }
+    let generation = authGeneration
     let task = Task<ChatGPTAuthTokens, Error> {
       var request = URLRequest(url: ChatGPTAPI.issuer.appending(path: "oauth/token"))
       request.httpMethod = "POST"
@@ -170,18 +223,36 @@ final class ChatGPTAuthSession {
         "client_id": ChatGPTAPI.clientId,
         "scope": ChatGPTAPI.scope,
       ])
-      let (data, response) = try await URLSession.shared.data(for: request)
-      guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-        throw ChatGPTAuthError.refreshFailed
+      let data: Data
+      let response: URLResponse
+      do {
+        (data, response) = try await URLSession.shared.data(for: request)
+      } catch {
+        // No answer at all (offline, timeout, DNS): the session may still be valid.
+        throw ChatGPTAuthError.refreshUnavailable
       }
-      let raw = try JSONDecoder().decode(TokenResponse.self, from: data)
+      let code = (response as? HTTPURLResponse)?.statusCode
+      guard code == 200 else {
+        throw RefreshFailure.classify(statusCode: code) == .rejected
+          ? ChatGPTAuthError.refreshFailed
+          : ChatGPTAuthError.refreshUnavailable
+      }
+      guard let raw = try? JSONDecoder().decode(TokenResponse.self, from: data) else {
+        throw ChatGPTAuthError.refreshUnavailable
+      }
       let tokens = normalizedTokens(raw, previousRefreshToken: refreshToken)
+      guard generation == self.authGeneration else { throw ChatGPTAuthError.notAuthenticated }
       try ChatGPTKeychain.save(tokens)
       return tokens
     }
     refreshTask = task
     defer { refreshTask = nil }
-    return try await task.value
+    let tokens = try await task.value
+    // Signed in while offline: load the models now that the service answers.
+    if modelCatalog.isEmpty, isAuthenticated {
+      Task { [weak self] in await self?.loadModels(tokens) }
+    }
+    return tokens
   }
 
   private func beginPolling(_ pending: ChatGPTPendingLogin) {
@@ -360,6 +431,7 @@ private enum ChatGPTAuthError: LocalizedError {
   case deviceCodeFailed
   case tokenExchangeFailed
   case refreshFailed
+  case refreshUnavailable
   case missingAccount
   case modelsFailed
 
@@ -369,6 +441,7 @@ private enum ChatGPTAuthError: LocalizedError {
     case .deviceCodeFailed: "OpenAI could not start device sign-in. Try again."
     case .tokenExchangeFailed: "OpenAI could not finish sign-in. Try again."
     case .refreshFailed: "Your ChatGPT session expired. Sign in again."
+    case .refreshUnavailable: "ChatGPT could not be reached. Check the connection and try again."
     case .missingAccount: "The ChatGPT account identifier was missing."
     case .modelsFailed: "Your available ChatGPT models could not be loaded."
     }

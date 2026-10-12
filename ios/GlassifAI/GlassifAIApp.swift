@@ -64,8 +64,14 @@ struct GlassifAIApp: App {
           .preferredColorScheme(.dark)
           // Meta AI's registration and permission callbacks, whatever screen
           // is showing (sign-in may still be restoring after a cold launch).
+          // A jarvis-pc:// pairing code scanned with the Camera opens the PC
+          // screen; nothing is sent before the user confirms there.
           .onOpenURL { url in
-            WearableConnectionCoordinator.shared.handleOpenURL(url)
+            if url.scheme?.lowercased() == PCPairingOffer.scheme {
+              if PCCompanionStore.shared.receive(url) { AppNavigator.shared.show(.pcCompanion) }
+            } else {
+              WearableConnectionCoordinator.shared.handleOpenURL(url)
+            }
           }
       }
     }

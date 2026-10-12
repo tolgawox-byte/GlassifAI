@@ -172,6 +172,14 @@ describe("HTTPS API", () => {
     assert.match((res.body as { result: { content: Array<{ text: string }> } }).result.content[0].text, /tamamlandı/);
     assert.equal(await fs.readFile(path.join(t.roots.Projeler, "mcp.txt"), "utf8"), "model yazdı");
 
+    // "Başlattığım görevin durumu ne?" / "Görevi durdur" without an id.
+    res = await rpc("tools/call", { name: "get_task", arguments: {} });
+    assert.match((res.body as { result: { content: Array<{ text: string }> } }).result.content[0].text, /Projeler\/mcp\.txt/);
+    res = await rpc("tools/call", { name: "cancel_task", arguments: {} });
+    const nothing = (res.body as { result: { isError: boolean; content: Array<{ text: string }> } }).result;
+    assert.equal(nothing.isError, true);
+    assert.match(nothing.content[0].text, /Durdurulacak bir görev yok/);
+
     res = await rpc("tools/call", { name: "read_text", arguments: { path: "Projeler/../../etc" } });
     assert.equal((res.body as { result: { isError: boolean } }).result.isError, true);
     res = await rpc("no/such/method");
