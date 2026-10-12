@@ -1,0 +1,51 @@
+name: JARVIS PC Companion (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - autoloom-glasses-jarvis-v1
+    paths:
+      - "pc-companion/**"
+      - ".github/workflows/pc-companion.yml"
+
+# Read-only token: this job only tests code and publishes nothing.
+permissions:
+  contents: read
+
+concurrency:
+  group: pc-companion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: pc-companion
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      # Development tools only (TypeScript type-checker); the companion itself has no runtime dependencies.
+      - name: Install development tools
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit and integration tests
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test --test-reporter=spec "test/**/*.test.ts" 2>&1 | tee test.log
+          summary="$(grep -E '^ℹ (tests|pass|fail|skipped) ' test.log | tr '\n' ' ')"
+          echo "::notice title=PC companion tests::${summary}"

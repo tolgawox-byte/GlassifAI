@@ -1,0 +1,20 @@
+{
+  "name": "jarvis-pc-companion",
+  "version": "0.1.0",
+  "description": "JARVIS PC Companion: a paired, allowlisted and audited Windows helper for the AutoLoom Media Glasses (JARVIS) iPhone app.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "start": "node src/cli.ts start",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3"
+  }
+}

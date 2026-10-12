@@ -4,7 +4,8 @@ GlassifAI’s original application code and branding are released under the MIT 
 
 - **Meta Wearables Device Access Toolkit and camera-access sample code** — governed by the [Meta Wearables Developer Terms](https://wearables.developer.meta.com/terms) and [Acceptable Use Policy](https://wearables.developer.meta.com/acceptable-use-policy). The upstream notices are preserved in [`NOTICE`](NOTICE).
 - **OpenAI Codex** — Apache License 2.0. The pinned source and its license are preserved under [`vendor/codex`](vendor/codex).
-- **LiveKit WebRTC XCFramework** — Apache License 2.0.
+- **LiveKit WebRTC XCFramework** (`livekit/webrtc-xcframework` 144.7559.11, `46f2af8`) — MIT License ("Copyright (c) 2021 WebRTC SDKs"; checked 2026-10-12). The framework is a build of Google's WebRTC (BSD 3-Clause plus the WebRTC patent grant), which bundles further components such as BoringSSL (OpenSSL/ISC), libvpx, Opus, libyuv and Abseil under their own permissive licenses. Those notices still have to be added to the in-app Licenses screen (tracked in `JARVIS_IMPLEMENTATION_PLAN.md`).
+- **QR Code generator library** by Project Nayuki — MIT License. Used by the JARVIS PC Companion (`pc-companion/src/vendor/qrcodegen.ts`, from commit `3c6d0b3`) to draw the pairing QR code; adapted from TypeScript namespaces to module syntax, algorithm unchanged. Copyright (c) Project Nayuki; the full MIT notice is kept at the top of that file.
 
 AutoLoom Media Glasses is a modified version of GlassifAI. The GlassifAI MIT License and its copyright notice (Marco Iannello) are retained in [`LICENSE`](LICENSE) and shown in the app under Settings → Licenses. The AutoLoom Media name, the source logo (`assets/brand/LOGO 2.png`), and the app icon, brand mark, and launch assets derived from it are AutoLoom Media brand assets and are not licensed under the MIT License.
 
