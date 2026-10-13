@@ -31,6 +31,25 @@ struct CapturedFrame {
   var epoch: UInt64 = 0
 
   var ageSeconds: CFTimeInterval { CACurrentMediaTime() - arrivedAt }
+
+  /// Time a frame may have spent between the camera and the phone on top of
+  /// the arrival limit. A frame captured longer ago is old even when it has
+  /// only just arrived (Bluetooth can deliver frames in bursts).
+  static let transportAllowance: CFTimeInterval = 0.5
+
+  /// Fresh by arrival, and by capture time when the timestamp is on the host
+  /// clock (plan 1.12).
+  static func isFresh(
+    arrivedAt: CFTimeInterval, captureTime: CFTimeInterval?, maxAge: CFTimeInterval, now: CFTimeInterval
+  ) -> Bool {
+    guard now - arrivedAt <= maxAge else { return false }
+    guard let captureTime else { return true }
+    return now - captureTime <= maxAge + transportAllowance
+  }
+
+  func isFresh(maxAge: CFTimeInterval, now: CFTimeInterval = CACurrentMediaTime()) -> Bool {
+    Self.isFresh(arrivedAt: arrivedAt, captureTime: captureTime, maxAge: maxAge, now: now)
+  }
 }
 
 struct FrameMetricsSnapshot: Equatable {
@@ -331,7 +350,7 @@ final class FrameStore: @unchecked Sendable {
   }
 
   func freshFrame(maxAge: CFTimeInterval, source: FrameSourceKind? = nil) -> CapturedFrame? {
-    guard let frame = latestFrame(), frame.ageSeconds <= maxAge else { return nil }
+    guard let frame = latestFrame(), frame.isFresh(maxAge: maxAge) else { return nil }
     if let source, frame.source != source { return nil }
     return frame
   }
@@ -344,7 +363,7 @@ final class FrameStore: @unchecked Sendable {
     now: CFTimeInterval = CACurrentMediaTime()
   ) -> [CapturedFrame] {
     lock.lock(); defer { lock.unlock() }
-    return recent.filter { $0.source == source && $0.epoch == epoch && now - $0.arrivedAt <= maxAge }
+    return recent.filter { $0.source == source && $0.epoch == epoch && $0.isFresh(maxAge: maxAge, now: now) }
   }
 
   /// Changes whenever the store is reset (camera source switch, privacy wipe).

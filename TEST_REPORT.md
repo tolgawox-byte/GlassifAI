@@ -13,14 +13,15 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 | Run | Commit | Result | Notes |
 |---|---|---|---|
+| [38327327122](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38327327122) | `6385e03` | **BUILD PASS · iOS 342/344 (2 skipped) · Rust 13/13** | Phase 1b: structured voice-start errors, bridge timeouts and sideband budget, start ladder, audio-flow watchdog, WebRTC audio configuration, conversation-wide untrusted-content mark, memory-save gate, metadata strip, locked-phone intents, gateway and Remote Assist hardening. New: `AutoLoomSecurityHardeningTests`, `AutoLoomRealtimeReliabilityTests`, 5 Rust tests. 19 screenshots (`run-38327327122-6385e03`) |
 | [38324379853](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38324379853) | `2e32c2a` | **BUILD PASS · iOS 331/333 (2 skipped) · Rust 8/8** | Audit documents, iOS PC client (pairing, approvals), the model can no longer confirm its own actions, start/stop race, data-channel reconnect, mic permission, faster ICE, offline launch, DAT version alerts, image source named to the model, CI hardening. 23 screenshots (`ci-screenshots`, folder `run-38324379853-2e32c2a`) |
 | [38324379861](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38324379861) | `2e32c2a` | **PC companion 71/71** | `get_task`/`cancel_task` default to the newest task |
 | [38299661724](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38299661724) | `9f0f355` | **BUILD PASS · iOS 321/323 (2 skipped) · Rust 8/8** | Baseline before the iOS changes (the PC companion was added; no iOS change). 20 screenshots |
 | [38299661765](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38299661765) | `9f0f355` | **PC companion 71/71** | First run of the Windows companion |
 
-The screenshot step reports "not running after launch" for a few screens on both runs (6 on the baseline, 3 on `2e32c2a`): the simulator launch is retried and the screens are captured; it is not a crash (no crash report).
+The screenshot step reports "not running after launch" for a few screens on every run (6 on the baseline, 3 on `2e32c2a`, 7 on `6385e03`). Different screens each time and never a crash report, so it is the simulator's launch, not the app; those screens are simply missing from that run's set.
 
-The next commit adds `AutoLoomSecurityHardeningTests`, `AutoLoomRealtimeReliabilityTests` and five Rust tests (structured call errors, sideband budget and first-connect 404, timeouts). **Its run is pending**; its result is added here when it finishes.
+Phase 1c (next commit) adds tests for capture-time freshness, late photos, contact lookups, the bundled license texts and the privacy manifest. **Its run is pending**; its result is added here when it finishes.
 
 ### What CI cannot show
 

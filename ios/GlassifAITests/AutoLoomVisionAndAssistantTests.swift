@@ -170,6 +170,48 @@ final class AutoLoomVisionTests: XCTestCase {
     XCTAssertFalse(coordinator.deliver(makeJPEG(width: 32, height: 32)), "late photo must not be used")
   }
 
+  /// Plan 1.12: DAT photos carry no request id, so the late photo of a
+  /// capture that timed out must not answer the next request.
+  func testALatePhotoNeverAnswersTheNextRequest() async {
+    let coordinator = StillPhotoCoordinator()
+    let late = makeJPEG(width: 32, height: 32)
+    let own = makeJPEG(width: 720, height: 1280)
+    let timedOut = await coordinator.capture(timeout: 0.2) { true }
+    XCTAssertNil(timedOut)
+    let photo = await coordinator.capture(timeout: 3) {
+      DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+        XCTAssertFalse(coordinator.deliver(late), "the earlier capture's photo is set aside")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { coordinator.deliver(own) }
+      }
+      return true
+    }
+    XCTAssertEqual(photo?.width, 720, "the request gets its own photo")
+    XCTAssertEqual(coordinator.latePhotosSetAside, 1)
+
+    // A late photo is expected only for a while.
+    let expired = await coordinator.capture(timeout: 0.2) { true }
+    XCTAssertNil(expired)
+    let next = await coordinator.capture(timeout: 3) {
+      DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+        coordinator.deliver(own, now: CACurrentMediaTime() + StillPhotoCoordinator.lateWindow + 1)
+      }
+      return true
+    }
+    XCTAssertEqual(next?.width, 720, "after the window a photo answers the waiting request")
+  }
+
+  /// Plan 1.12: a frame captured long before it reached the phone is old.
+  func testFreshnessAlsoCountsFromCaptureTime() {
+    let now: CFTimeInterval = 1_000
+    XCTAssertTrue(CapturedFrame.isFresh(arrivedAt: now - 0.2, captureTime: nil, maxAge: 1, now: now))
+    XCTAssertTrue(CapturedFrame.isFresh(arrivedAt: now - 0.2, captureTime: now - 0.6, maxAge: 1, now: now))
+    XCTAssertTrue(CapturedFrame.isFresh(arrivedAt: now - 0.2, captureTime: now - 1.4, maxAge: 1, now: now),
+                  "half a second of transport is allowed")
+    XCTAssertFalse(CapturedFrame.isFresh(arrivedAt: now - 0.1, captureTime: now - 2.5, maxAge: 1, now: now),
+                   "arrived just now, captured 2.5 s ago: old")
+    XCTAssertFalse(CapturedFrame.isFresh(arrivedAt: now - 1.5, captureTime: nil, maxAge: 1, now: now))
+  }
+
   func testRefusedCaptureAndSecondCaptureInFlight() async {
     let coordinator = StillPhotoCoordinator()
     let refused = await coordinator.capture(timeout: 2) { false }

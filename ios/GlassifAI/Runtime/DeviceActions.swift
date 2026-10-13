@@ -698,6 +698,8 @@ final class DeviceActionExecutor {
   }
 
   private(set) var lastCreated: CreatedItem?
+  /// The names and numbers of the last contact lookup, for the screen only.
+  private(set) var lastContactDetails: String?
 
   /// Moves the item just saved; the original stays if this fails.
   func reschedule(_ item: CreatedItem, to date: Date, hasTime: Bool) async throws -> String {
@@ -749,13 +751,21 @@ final class DeviceActionExecutor {
       reminder.addAlarm(alarm)
     }
     try store.save(reminder, commit: true)
-    guard !reminder.calendarItemIdentifier.isEmpty else {
+    let identifier = reminder.calendarItemIdentifier
+    guard !identifier.isEmpty else {
       throw ExecutionError.failed("iOS did not confirm the reminder.")
     }
     lastCreated = CreatedItem(
-      kind: .createReminder, identifier: reminder.calendarItemIdentifier, title: plan.title ?? "", date: plan.date,
+      kind: .createReminder, identifier: identifier, title: plan.title ?? "", date: plan.date,
       hasTime: plan.hasTime, at: Date())
     let when = plan.whenText.map { " for \($0)" } ?? plan.trigger.map { " (\($0.englishLabel); Apple Reminders rings there)" } ?? ""
+    // Read it back (plan 2.2): "saved" only when Reminders returns it. If it
+    // does not, the user checks before trying again, so nothing is doubled.
+    // (Reminders always need full access, so reading back is allowed.)
+    guard store.calendarItem(withIdentifier: identifier) is EKReminder else {
+      return "The reminder was handed to \(calendar.title)\(when), but Reminders did not return it when the app checked. "
+        + "Ask the user to look in the Reminders app before trying again: \(plan.title ?? "")."
+    }
     return "Reminder saved in \(calendar.title)\(when): \(plan.title ?? "")."
   }
 
@@ -883,14 +893,29 @@ final class DeviceActionExecutor {
     return "Event saved in \(calendar.title): \(plan.title ?? "") on \(start.formatted(date: .abbreviated, time: .shortened))."
   }
 
+  /// A lookup answers the voice model with names and number labels only; the
+  /// numbers are shown on the phone (audit M2: the model's text goes to its
+  /// provider).
   private func findContact(_ name: String) async throws -> String {
+    lastContactDetails = nil
     let matches = try await ContactsLookup.find(name)
     guard !matches.isEmpty else { return "No contact named \(name) was found on this iPhone." }
-    let lines = matches.map { match -> String in
+    let screen = matches.map { match -> String in
       let phones = match.phones.prefix(3).map { "\($0.label) \($0.number)" }.joined(separator: ", ")
-      return "- \(match.name)" + (phones.isEmpty ? " (no phone number)" : ": \(phones)")
+      return match.name + (phones.isEmpty ? "" : ": \(phones)")
+    }.joined(separator: "\n")
+    lastContactDetails = screen
+    AssistantOrchestrator.shared.postNotice(screen)
+    return Self.contactSummaryForModel(matches)
+  }
+
+  nonisolated static func contactSummaryForModel(_ matches: [ContactsLookup.Match]) -> String {
+    let lines = matches.map { match -> String in
+      let labels = match.phones.prefix(3).map { $0.label }
+      return "- \(match.name)" + (labels.isEmpty ? " (no phone number)" : " (\(labels.joined(separator: ", ")))")
     }
-    return "Contacts found:\n" + lines.joined(separator: "\n")
+    return "Contacts found; their numbers are shown on the phone screen, not here:\n" + lines.joined(separator: "\n")
+      + "\nTell the user who was found and that the numbers are on the screen. Never say or invent a number."
   }
 
   // MARK: Tap-confirmed actions (called from the confirmation card)

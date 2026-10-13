@@ -256,6 +256,22 @@ struct StillPhoto {
 final class StillPhotoCoordinator: @unchecked Sendable {
   private let lock = NSLock()
   private var pending: (token: UUID, startedAt: CFTimeInterval, continuation: CheckedContinuation<StillPhoto?, Never>)?
+  /// Requests whose trigger the SDK accepted (their photo may come late).
+  private var triggered: Set<UUID> = []
+  /// One deadline per accepted capture that timed out: until it passes, the
+  /// next photo is taken to be that late one. DAT photos carry no request id,
+  /// so without this a late photo would answer a newer request (plan 1.12).
+  private var expectedLate: [CFTimeInterval] = []
+  private var setAside = 0
+
+  /// Late photos kept away from a newer request (diagnostics).
+  var latePhotosSetAside: Int {
+    lock.lock(); defer { lock.unlock() }
+    return setAside
+  }
+
+  /// How long a timed-out capture's photo is still expected.
+  static let lateWindow: CFTimeInterval = 12
 
   var isCapturing: Bool {
     lock.lock(); defer { lock.unlock() }
@@ -284,6 +300,7 @@ final class StillPhotoCoordinator: @unchecked Sendable {
             self.finish(token: token, with: nil)
             return
           }
+          self.markTriggered(token)
           try? await Task.sleep(nanoseconds: UInt64(max(timeout, 0.1) * 1_000_000_000))
           self.finish(token: token, with: nil)
         }
@@ -297,13 +314,25 @@ final class StillPhotoCoordinator: @unchecked Sendable {
   /// request; false means it was unsolicited or late and must be ignored for
   /// vision (for example a shutter-button photo).
   @discardableResult
-  func deliver(_ data: Data) -> Bool {
+  func deliver(_ data: Data, now: CFTimeInterval = CACurrentMediaTime()) -> Bool {
     lock.lock()
+    expectedLate.removeAll { $0 < now }
     guard let current = pending else {
+      // The late photo of a timed-out capture: nothing waits for it.
+      if !expectedLate.isEmpty { expectedLate.removeFirst() }
+      lock.unlock()
+      return false
+    }
+    if !expectedLate.isEmpty {
+      // Most likely the photo of an earlier capture that timed out; the
+      // current request keeps waiting for its own.
+      expectedLate.removeFirst()
+      setAside += 1
       lock.unlock()
       return false
     }
     pending = nil
+    triggered.remove(current.token)
     lock.unlock()
     let latency = Int(((CACurrentMediaTime() - current.startedAt) * 1_000).rounded())
     let size = StillPhotoProcessor.pixelSize(of: data)
@@ -320,8 +349,21 @@ final class StillPhotoCoordinator: @unchecked Sendable {
     lock.lock()
     let current = pending
     pending = nil
+    if let current { expectLateIfTriggered(current.token) }
     lock.unlock()
     current?.continuation.resume(returning: nil)
+  }
+
+  private func markTriggered(_ token: UUID) {
+    lock.lock()
+    if pending?.token == token { triggered.insert(token) }
+    lock.unlock()
+  }
+
+  /// Call with the lock held.
+  private func expectLateIfTriggered(_ token: UUID) {
+    guard triggered.remove(token) != nil else { return }
+    expectedLate.append(CACurrentMediaTime() + Self.lateWindow)
   }
 
   private func finish(token: UUID, with photo: StillPhoto?) {
@@ -331,6 +373,7 @@ final class StillPhotoCoordinator: @unchecked Sendable {
       return
     }
     pending = nil
+    if photo == nil { expectLateIfTriggered(token) }
     lock.unlock()
     current.continuation.resume(returning: photo)
   }

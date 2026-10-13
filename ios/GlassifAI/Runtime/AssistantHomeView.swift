@@ -22,6 +22,7 @@ struct AssistantHomeView: View {
   @ObservedObject private var timers = TimerCenter.shared
   @ObservedObject private var dealer = DealerStore.shared
   @ObservedObject private var sharing = RemoteAssistServer.shared
+  @ObservedObject private var pc = PCCompanionStore.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
@@ -126,6 +127,14 @@ struct AssistantHomeView: View {
       while !Task.isCancelled {
         metrics = FrameStore.shared.snapshot()
         try? await Task.sleep(nanoseconds: 1_000_000_000)
+      }
+    }
+    .task(id: pc.link != nil) {
+      // A paired PC's approvals and tasks stay current while Home is shown.
+      guard pc.link != nil else { return }
+      while !Task.isCancelled {
+        await pc.refresh()
+        try? await Task.sleep(nanoseconds: 20_000_000_000)
       }
     }
     .task(id: notice) {
@@ -312,6 +321,12 @@ struct AssistantHomeView: View {
       if sharing.isSharing {
         chip(L.t("Sharing your view", "Görüntün paylaşılıyor"), systemImage: "dot.radiowaves.left.and.right", tint: .red)
       }
+      if pc.link != nil, !pc.pendingApprovals.isEmpty || !pc.activeTasks.isEmpty {
+        Button { AppNavigator.shared.show(.pcCompanion) } label: {
+          chip(pcChipText, systemImage: "desktopcomputer", tint: pc.pendingApprovals.isEmpty ? .white : .orange)
+        }
+        .buttonStyle(.plain)
+      }
       if let vehicle = dealer.active {
         let missing = vehicle.remainingPhotos.count
         chip(vehicle.title + (missing > 0 ? " · \(missing) " + L.t("photos left", "foto eksik") : ""), systemImage: "car.fill")
@@ -349,6 +364,17 @@ struct AssistantHomeView: View {
   /// runs, so it can always be stopped here).
   private var showsCaptureControls: Bool {
     (captureSource == .glasses && glassesStream.streamingStatus == .streaming) || media.isRecording
+  }
+
+  /// The paired PC's approvals or running tasks; says so when the PC has
+  /// not answered for 30 s instead of showing an old state as current.
+  private var pcChipText: String {
+    let approvals = pc.pendingApprovals.count
+    var text = approvals > 0
+      ? L.t("PC: \(approvals) waiting for approval", "Bilgisayar: \(approvals) onay bekliyor")
+      : L.t("PC: \(pc.activeTasks.count) running", "Bilgisayar: \(pc.activeTasks.count) görev çalışıyor")
+    if !pc.isReachable { text += L.t(" · not answering", " · yanıt vermiyor") }
+    return text
   }
 
   private func chip(_ text: String, systemImage: String, tint: Color = .white) -> some View {

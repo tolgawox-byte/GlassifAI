@@ -997,8 +997,10 @@ final class AssistantOrchestrator: ObservableObject {
         if plan.kind == .saveNote, let saved = plan.text {
           recentSaved = (saved, Date(), MemoryStore.shared.notes.first { $0.content == saved }?.id)
         }
+        // A contact's numbers are shown, never sent to the voice model.
+        let display = plan.kind == .findContact ? (DeviceActionExecutor.shared.lastContactDetails ?? text) : text
         return ActionStageResult(
-          speakable: text + "\nTell the user naturally and briefly.", display: text, failed: nil)
+          speakable: text + "\nTell the user naturally and briefly.", display: display, failed: nil)
       } catch {
         let message = LogSanitizer.sanitize(error.localizedDescription)
         if let feedback = ActionFeedback.notSaved(plan) { postFeedback(feedback) }

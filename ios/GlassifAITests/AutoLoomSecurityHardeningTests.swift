@@ -151,6 +151,46 @@ final class AutoLoomSecurityHardeningTests: XCTestCase {
     XCTAssertFalse(taint.isTainted)
   }
 
+  /// Audit M2: a lookup the assistant makes on its own gives the voice model
+  /// names and number labels; the numbers stay on the phone's screen.
+  func testAContactLookupDoesNotHandTheNumbersToTheModel() {
+    let matches = [
+      ContactsLookup.Match(name: "Ahmet Yılmaz", phones: [(label: "mobile", number: "+90 532 111 22 33"), (label: "work", number: "0212 444 55 66")]),
+      ContactsLookup.Match(name: "Ahmet Kaya", phones: []),
+    ]
+    let text = DeviceActionExecutor.contactSummaryForModel(matches)
+    XCTAssertTrue(text.contains("Ahmet Yılmaz (mobile, work)"), text)
+    XCTAssertTrue(text.contains("Ahmet Kaya (no phone number)"), text)
+    for digits in ["532", "111 22 33", "0212", "444"] {
+      XCTAssertFalse(text.contains(digits), "no number reaches the model: \(digits)")
+    }
+  }
+
+  /// Plan 1.16: the binary carries the notices its BSD-style licenses ask
+  /// for, and a privacy manifest names the reasons for the APIs it uses.
+  func testTheAppShipsItsLicenseTextsAndPrivacyManifest() throws {
+    let text = try XCTUnwrap(ThirdPartyLicenses.text(), "AutoLoomThirdPartyLicenses.txt is bundled")
+    for needle in [
+      "The WebRTC project authors", "Additional IP Rights Grant (Patents)", "BoringSSL", "Cisco Systems",
+      "Xiph.Org", "The WebM Project authors", "The LibYuv Project Authors", "The CRC32C Authors", "OpenAI Codex",
+    ] {
+      XCTAssertTrue(text.contains(needle), needle)
+    }
+    let url = try XCTUnwrap(
+      Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"), "the privacy manifest is at the bundle root")
+    let manifest = try XCTUnwrap(
+      PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
+    XCTAssertEqual(manifest["NSPrivacyTracking"] as? Bool, false)
+    let apis = (manifest["NSPrivacyAccessedAPITypes"] as? [[String: Any]] ?? []).compactMap {
+      $0["NSPrivacyAccessedAPIType"] as? String
+    }
+    XCTAssertEqual(Set(apis), [
+      "NSPrivacyAccessedAPICategoryUserDefaults",
+      "NSPrivacyAccessedAPICategorySystemBootTime",
+      "NSPrivacyAccessedAPICategoryDiskSpace",
+    ])
+  }
+
   /// Audit finding M5: intents that read out personal data, or add a memory
   /// that reaches every future conversation, need an unlocked phone. Tasks,
   /// notes and the shopping list stay hands-free.

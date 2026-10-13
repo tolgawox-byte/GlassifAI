@@ -645,7 +645,7 @@ struct DiagnosticsView: View {
       "glasses: \(glassesStream?.lastStreamState ?? "—"); DAT \(GlassesSDKInfo.datVersion); device \(glassesStream?.deviceDescription ?? "—"); profile \(glassesStream?.streamProfile.rawValue ?? "—"); requested \(requestedStream); actual \(actualStream); transport note \(glassesStream?.transportNote ?? "none"); stream error \(glassesStream?.lastStreamError ?? "none")",
       "camera: \(metrics.source) \(metrics.inputResolution) \(metrics.pixelFormat) fps \(String(format: "%.1f", metrics.measuredFPS)) received \(metrics.framesReceived) rendered \(metrics.previewRendered) dropped \(metrics.previewDropped) failures \(metrics.previewFailures)",
       "glasses samples: \(metrics.glassesCompressed.map { $0 ? "compressed" : "raw" } ?? "—") \(metrics.glassesCodec) \(metrics.glassesSampleSize) raw \(metrics.rawSamples) compressed \(metrics.compressedSamples) decoded \(metrics.decodedFrames) decodeFail \(metrics.decodeFailures) copyFallback \(metrics.copyFailures) seq \(metrics.latestSequence)",
-      "photos: requested \(metrics.photosRequested) received \(metrics.photosReceived) failed \(metrics.photoFailures) last \(metrics.lastPhotoResolution) \(metrics.lastPhotoLatencyMs.map { "\($0) ms" } ?? ""); vision mode \(GlassesVisionCaptureMode.current.rawValue); last AI image \(metrics.lastVisionImage)",
+      "photos: requested \(metrics.photosRequested) received \(metrics.photosReceived) failed \(metrics.photoFailures) late set aside \(glassesStream?.stillPhotos.latePhotosSetAside ?? 0) last \(metrics.lastPhotoResolution) \(metrics.lastPhotoLatencyMs.map { "\($0) ms" } ?? ""); vision mode \(GlassesVisionCaptureMode.current.rawValue); last AI image \(metrics.lastVisionImage)",
       "assistant: \(AssistantIdentity.name); addressed-only \(AssistantPreferences.respondsOnlyWhenAddressed); invocations \(VoiceStartCoordinator.shared.events.map { "\($0.reason.rawValue)=\($0.outcome.rawValue)" }.joined(separator: ","))",
       "latency: processing \(ms(metrics.processingMedianMs))/\(ms(metrics.processingP95Ms)) capture→phone \(ms(metrics.transportMedianMs))/\(ms(metrics.transportP95Ms)) frame age \(metrics.lastFrameAgeMs.map(String.init) ?? "—") ms; preview \(metrics.previewMode)",
       "audio: mic \(audioRoute.inputSummary); speaker \(audioRoute.outputSummary); interrupted \(audioRoute.isInterrupted); last \(audioRoute.lastEvent)",
@@ -674,6 +674,41 @@ private extension String {
 
 // MARK: About & licenses
 
+/// The license texts of the open-source code compiled into the app
+/// (`AutoLoomThirdPartyLicenses.txt`, bundled as a resource). BSD-style
+/// licenses ask for their notice in the documentation of a binary.
+enum ThirdPartyLicenses {
+  static let resourceName = "AutoLoomThirdPartyLicenses"
+
+  static func text(in bundle: Bundle = .main) -> String? {
+    guard let url = bundle.url(forResource: resourceName, withExtension: "txt") else { return nil }
+    return try? String(contentsOf: url, encoding: .utf8)
+  }
+}
+
+struct ThirdPartyLicensesView: View {
+  /// Paragraphs, so a long text lays out lazily.
+  private let paragraphs: [String] = ThirdPartyLicenses.text()?.components(separatedBy: "\n\n") ?? []
+
+  var body: some View {
+    ScrollView {
+      LazyVStack(alignment: .leading, spacing: 10) {
+        if paragraphs.isEmpty {
+          Text("The license file is missing from this build.").foregroundStyle(.secondary)
+        }
+        ForEach(Array(paragraphs.enumerated()), id: \.offset) { item in
+          Text(item.element)
+            .font(.system(.caption2, design: .monospaced))
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      }
+      .padding(16)
+    }
+    .navigationTitle("Third-party licenses")
+  }
+}
+
 struct LicensesView: View {
   var body: some View {
     ScrollView {
@@ -689,9 +724,15 @@ struct LicensesView: View {
         VStack(alignment: .leading, spacing: 10) {
           Text("• Meta Wearables Device Access Toolkit and camera-access sample code — Meta Wearables Developer Terms and Acceptable Use Policy (wearables.developer.meta.com). Upstream notices are preserved in the NOTICE file of the source repository.")
           Text("• OpenAI Codex (codex-api, codex-http-client, codex-protocol crates) — Apache License 2.0.")
-          Text("• LiveKit WebRTC XCFramework — MIT License (\"WebRTC SDKs\"); the underlying WebRTC code is under Google's BSD-style license and bundles BoringSSL, libvpx, Opus, libyuv and Abseil under their own permissive licenses.")
+          Text("• LiveKit WebRTC XCFramework — packaging under the MIT License (\"WebRTC SDKs\"); the framework itself carries WebRTC's BSD 3-Clause license and patent grant, and bundles BoringSSL and Abseil (Apache License 2.0) and Opus, libvpx, libyuv, libsrtp and CRC32C (BSD-style licenses).")
         }
         .font(.footnote)
+        NavigationLink {
+          ThirdPartyLicensesView()
+        } label: {
+          Label("Full license texts (WebRTC, BoringSSL, Opus, Codex …)", systemImage: "doc.text")
+        }
+        .font(.footnote.weight(.semibold))
         Text("Code licenses are separate from service terms. Using ChatGPT and Meta services remains subject to OpenAI's and Meta's own terms.")
           .font(.footnote)
           .foregroundStyle(.secondary)

@@ -2,6 +2,34 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — phase 1c: fresh frames, late photos, licenses, privacy manifest] — branch `autoloom-glasses-jarvis-v1`
+
+Plan items 1.12, 1.16, 2.1 (part) and 2.2, and audit M2. CI results: `TEST_REPORT.md`. New physical test CAM2.
+
+### Added
+- **Home shows the paired PC** when it needs you or works for you: "Bilgisayar: 1 onay bekliyor" or "… görev çalışıyor". The state refreshes every 20 s while Home is on screen; " · yanıt vermiyor" is added once the PC has not answered for 30 s. Tapping opens the PC screen.
+
+### Fixed
+- **A frame captured long before it reached the phone is no longer "fresh"** (plan 1.12). Freshness still counts from arrival (at most 1 s for vision). When the frame's timestamp is on the phone's clock, the time since capture must also stay within that limit plus 0.5 s for the trip from the glasses. Bluetooth can deliver frames in bursts, so a just-arrived frame can show an old view.
+- **A late photo no longer answers the next request** (plan 1.12). DAT photos carry no request id. When a capture times out after the glasses accepted it, the next photo within 12 s is taken to be that late one. The new request waits for its own photo. Diagnostics count the photos set aside.
+- **Reminders are read back after saving** (plan 2.2). If Reminders does not return the new reminder, the reply says so and asks the user to check before trying again, so nothing is doubled. Events are not read back: with write-only calendar access iOS does not allow it.
+
+### Privacy
+- **Contact lookups the assistant makes on its own no longer send phone numbers to the voice model** (audit M2). The model gets names and number labels ("mobile, work"); the numbers are shown on the phone. When the user asks for a number to be read out, it still goes to the voice model, so it can be spoken. The privacy page now says so instead of "never uploaded".
+- **`PrivacyInfo.xcprivacy`**, derived from the code:
+  - required-reason APIs: UserDefaults (CA92.1), elapsed time from the system clock (35F9.1), and free disk space before recording video (E174.1);
+  - no tracking;
+  - data sent to the AI provider for the app's function: audio, photos and video, user content, contacts.
+
+  **The owner must review this before any App Store submission.**
+
+### Licenses
+- **The app now ships the full license texts of the open-source code compiled into it** (Settings → Licenses → Full license texts). BSD-style licenses require them for a binary. Sources:
+  - WebRTC's BSD 3-Clause license and patent grant, from the checksum-verified pinned framework;
+  - BoringSSL and Abseil (Apache 2.0), and Opus, libvpx (with its patent grant), libyuv, libsrtp and CRC32C, all taken at the revisions pinned in WebRTC's DEPS for branch 7559;
+  - the vendored OpenAI Codex license and NOTICE.
+- **`docs/RUST_CRATE_LICENSES.md`**: the declared license of every crates.io package in the bridge's lockfile, with the ones that need attention flagged.
+
 ## [JARVIS Ultimate — phase 1b: realtime reliability, injection containment] — branch `autoloom-glasses-jarvis-v1`
 
 Plan items 1.4–1.7 and 1.12–1.15 (`JARVIS_IMPLEMENTATION_PLAN.md`). CI results: `TEST_REPORT.md`. Not device-verified; new physical tests VC4, AU2, AU3, RA1, SEC2, SEC3 in `docs/PHYSICAL_TEST_MATRIX.md`.

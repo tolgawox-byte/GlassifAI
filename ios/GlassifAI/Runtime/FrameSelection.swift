@@ -157,7 +157,7 @@ enum FrameSelector {
     measure: (CVPixelBuffer) -> FrameQualityMetrics? = FrameQuality.measure
   ) -> FrameSelection? {
     let fresh = frames
-      .filter { now - $0.arrivedAt <= maxAge && now - $0.arrivedAt >= -0.5 }
+      .filter { $0.isFresh(maxAge: maxAge, now: now) && now - $0.arrivedAt >= -0.5 }
       .sorted { $0.arrivedAt < $1.arrivedAt }
     guard let newest = fresh.last else { return nil }
     func ageMs(_ frame: CapturedFrame) -> Int {
