@@ -54,7 +54,7 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 | 1.13 | EXIF stripped from stills sent to providers | DONE-CI | Pass-through stills keep their bytes only after a clean metadata strip; otherwise re-encoded | `testStillsSentToAModelCarryNoLocationOrCameraMetadata` (JPEG with GPS and camera tags) |
 | 1.14 | Session-wide untrusted-content taint; memory saves gated on the user's words | DONE-CI / DEVICE TEST | The mark lasts until the conversation ends; QR, translation, document, Live Vision, MCP and PC text set it; a model-delegated `save:` is refused while it is set (the user's own "hatırla …" through the bridge, or typed input, still saves); personal-data reads planned by the model wait for a yes; memories and the previous summary are quoted data blocks; outside text cannot pose as "[App message". **Not gated, on purpose**: a model-started Live Vision ("bakmaya devam et" reaches the app only through the model today; gating it would break "Bu ne? → Bakmaya devam et") — gate it once the bridge parses the start phrases | `testOutsideContentCannotPlantAMemoryTurnsLater`, `testOutsideTextCannotBreakOutOfItsWrapperOrPoseAsTheApp`, updated `testChangesPlannedAfterUntrustedContentWaitForAYes`; physical SEC2, SEC3 |
 | 1.15 | Remote Assist Wi-Fi only + TLS; OpenClaw HTTPS + hostname fix; authentication on personal-data intents | DONE-CI / NEXT (TLS) | Remote Assist: Wi-Fi only, local network only, four viewers, 10 s request timeout (done, CI); gateway: no token over plain HTTP except loopback/Tailscale, `fc`/`fd` host names not private (done, CI); briefing, vehicle and remember intents need an unlocked phone (done, CI). Still NEXT: Remote Assist TLS (a per-session certificate makes browsers warn; needs a device test of the viewer experience) | `testGatewayHostNamesAreNotMistakenForPrivateAddresses`, `testPersonalDataIntentsNeedAnUnlockedPhone`; physical RA1 |
-| 1.16 | Third-party notices and privacy copy | DONE-CI (app texts, manifest, crate list) / DONE-CI (Rust texts in the app) / IN CI (texts of the 6 MIT/BSD crates without a license file) / NEXT (dav1d, libaom, libjpeg-turbo) | Full texts of WebRTC (BSD-3 + patents), BoringSSL, Abseil, Opus, libvpx, libyuv, libsrtp, CRC32C and Codex ship in the app; `PrivacyInfo.xcprivacy` from the code (owner review before App Store); contacts wording corrected; `docs/RUST_CRATE_LICENSES.md` lists every crate's declared license. Rust crate texts are collected by CI; the six crates without a license file get their repositories' texts (`scripts/rust-license-supplements/`). Still NEXT: WebRTC components not yet listed (dav1d, libaom, libjpeg-turbo) | `testTheAppShipsItsLicenseTextsAndPrivacyManifest`; review |
+| 1.16 | Third-party notices and privacy copy | DONE-CI (app texts, manifest, crate list) / DONE-CI (Rust texts in the app) / DONE-CI (texts of the 6 MIT/BSD crates without a license file) / NEXT (dav1d, libaom, libjpeg-turbo) | Full texts of WebRTC (BSD-3 + patents), BoringSSL, Abseil, Opus, libvpx, libyuv, libsrtp, CRC32C and Codex ship in the app; `PrivacyInfo.xcprivacy` from the code (owner review before App Store); contacts wording corrected; `docs/RUST_CRATE_LICENSES.md` lists every crate's declared license. Rust crate texts are collected by CI; the six crates without a license file get their repositories' texts (`scripts/rust-license-supplements/`). Still NEXT: WebRTC components not yet listed (dav1d, libaom, libjpeg-turbo) | `testTheAppShipsItsLicenseTextsAndPrivacyManifest`; review |
 
 ## Phase 2 — Core experience (P1)
 
@@ -121,15 +121,15 @@ All of these wait on the owner supplying keys and approving costs.
    - AU1, VC1–VC4, AU2, AU3 (voice start, audio route, watchdog);
    - CAM1, CAM2, DAT1 (camera honesty and freshness, DAT version);
    - SEC1–SEC3 (approvals and injection);
-   - PC1–PC10 (companion), RA1 (Remote Assist).
+   - PC1–PC10 (companion), RA1 (Remote Assist);
+   - TK1 (task alert actions), SK1 and SK2 (MCP skills, a changed tool blocked).
 3. Owner decisions:
    - HFP before the camera stream (1.7), after AU2/AU3;
    - Remote Assist TLS (1.15);
    - App Store privacy answers from `PrivacyInfo.xcprivacy` (1.16).
    - Turn on GitHub private vulnerability reporting (Settings → Code security), which `SECURITY.md` now waits for.
 4. Remaining NEXT items:
-   - 2.2 list choice and voice complete/delete; 2.3 task snooze/recurrence with notification actions;
+   - 2.2 list choice and voice complete/delete; 2.3 task recurrence and undo (snooze and alert actions are done);
    - more than one waiting phone action (2.4);
    - 3.1 Live Vision images and an opt-in thumbnail; 3.2 memory supersession and inbox;
-   - check that CI's license output matches the app's Rust section now that the six crates have texts (1.16);
 5. DAT 1.x port (3.4) once DAT1 shows the glasses need it.

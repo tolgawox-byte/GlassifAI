@@ -14,7 +14,7 @@ Plan item 1.16. CI results: `TEST_REPORT.md`.
     - ts-rs and ts-rs-macros 11.1.0: MIT, "Copyright (c) 2020 Aleph Alpha GmbH".
   - **debugserver-types 0.5.0** declares MIT, but neither the crate nor its repository (at its commit or on the default branch) has a license file or a copyright notice. Its entry says so and gives the MIT terms; no copyright line was made up.
   - The texts and their sources are in `scripts/rust-license-supplements/` (`sources.json`).
-  - `scripts/rust-license-texts.py` uses a supplement only when the crate itself has no license file, so CI's output now matches the app's file.
+  - `scripts/rust-license-texts.py` uses a supplement only when the crate itself has no license file, so CI's output now matches the app's file. In run 38349904362 they were identical, character for character.
   - The app's file now has 272 distinct texts instead of 269.
 
 ### Fixed
