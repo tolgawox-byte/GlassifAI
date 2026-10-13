@@ -1,0 +1,42 @@
+{
+  "about": "License texts for crates whose published package contains no license file. Each text is the license file of the crate's repository at the exact commit the crate was published from (its .cargo_vcs_info.json), byte for byte, after the downloaded .crate matched Cargo.lock's checksum. Where no text exists anywhere, the entry's file says so instead of supplying one. scripts/rust-license-texts.py uses an entry only when the crate itself has no license file.",
+  "retrieved": "2026-10-13",
+  "crates": {
+    "Inflector 0.11.4": {
+      "file": "inflector-a4a95eac-LICENSE.md",
+      "label": "LICENSE.md of github.com/whatisinternet/inflector at a4a95eac, the commit the crate was published from",
+      "source": "https://github.com/whatisinternet/inflector/blob/a4a95eac75043f4bffb127c7c8ec886b5b106053/LICENSE.md",
+      "sha256": "03d1bd5bfbee8d44651e7f57faf9e5b4eda4233f0d4eda36a716f2f0533d230b"
+    },
+    "debugserver-types 0.5.0": {
+      "file": "debugserver-types-0.5.0-no-notice.txt",
+      "label": "note: no license file or copyright notice published (crate and github.com/Marwes/debugserver-types)",
+      "source": "https://github.com/Marwes/debugserver-types/tree/d444f163123af5b4fbce7375d1afead7e9b8a224",
+      "sha256": null
+    },
+    "schemafy_core 0.5.2": {
+      "file": "schemafy-5f835025-LICENSE",
+      "label": "LICENSE of github.com/Marwes/schemafy at 5f835025, the commit the crate was published from",
+      "source": "https://github.com/Marwes/schemafy/blob/5f835025d16d691f168315dda93efc52ae1e4e5e/LICENSE",
+      "sha256": "a11232911aa0d746688b560af367728021184084eeb6328a1922d60925c5eda0"
+    },
+    "schemafy_lib 0.5.2": {
+      "file": "schemafy-5f835025-LICENSE",
+      "label": "LICENSE of github.com/Marwes/schemafy at 5f835025, the commit the crate was published from",
+      "source": "https://github.com/Marwes/schemafy/blob/5f835025d16d691f168315dda93efc52ae1e4e5e/LICENSE",
+      "sha256": "a11232911aa0d746688b560af367728021184084eeb6328a1922d60925c5eda0"
+    },
+    "ts-rs 11.1.0": {
+      "file": "ts-rs-1dce5297-LICENSE",
+      "label": "LICENSE of github.com/Aleph-Alpha/ts-rs at 1dce5297, the commit the crate was published from",
+      "source": "https://github.com/Aleph-Alpha/ts-rs/blob/1dce5297090804082e9639d2b7d851ba815aa359/LICENSE",
+      "sha256": "db7f7f8e7236a2d0b41b855b2501b7b913caebbcda6ce498637a304ad1706ce1"
+    },
+    "ts-rs-macros 11.1.0": {
+      "file": "ts-rs-1dce5297-LICENSE",
+      "label": "LICENSE of github.com/Aleph-Alpha/ts-rs at 1dce5297, the commit the crate was published from",
+      "source": "https://github.com/Aleph-Alpha/ts-rs/blob/1dce5297090804082e9639d2b7d851ba815aa359/LICENSE",
+      "sha256": "db7f7f8e7236a2d0b41b855b2501b7b913caebbcda6ce498637a304ad1706ce1"
+    }
+  }
+}

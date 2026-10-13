@@ -2,6 +2,24 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — phase 1g: the last Rust crate notices] — branch `autoloom-glasses-jarvis-v1`
+
+Plan item 1.16. CI results: `TEST_REPORT.md`.
+
+### Licenses
+- **The six MIT/BSD crates that publish no license file now have their notices in the app** (Settings → Licenses → Full license texts).
+  - Each published crate records the git commit it was built from. The text is that repository's license file at that commit, byte for byte, after the downloaded crate matched the checksum in both lockfiles:
+    - Inflector 0.11.4: BSD-2-Clause, "Copyright 2017 Josh Teeter";
+    - schemafy_core and schemafy_lib 0.5.2: MIT, "Copyright (c) 2016 Markus Westerlind". This is the same text that schemafy 0.5.2 ships, so the app lists it once;
+    - ts-rs and ts-rs-macros 11.1.0: MIT, "Copyright (c) 2020 Aleph Alpha GmbH".
+  - **debugserver-types 0.5.0** declares MIT, but neither the crate nor its repository (at its commit or on the default branch) has a license file or a copyright notice. Its entry says so and gives the MIT terms; no copyright line was made up.
+  - The texts and their sources are in `scripts/rust-license-supplements/` (`sources.json`).
+  - `scripts/rust-license-texts.py` uses a supplement only when the crate itself has no license file, so CI's output now matches the app's file.
+  - The app's file now has 272 distinct texts instead of 269.
+
+### Fixed
+- **Memory settings no longer point at an error that does not exist.** The storage row said "Temporary (see error)" whenever the store was not on disk. That included screenshot mode's deliberate throwaway store, where there is no error (seen in run 38346329047's screenshots). It now says "Temporary (this session only)" unless an error was recorded. In that case the error is shown above it, as before.
+
 ## [CI — simulator boot failures reported and contained] — branch `autoloom-glasses-jarvis-v1`
 
 Phase 1c's run (38330128872) was red although every test passed. In that run:
@@ -15,7 +33,7 @@ Phase 1c's run (38330128872) was red although every test passed. In that run:
 - **A simulator-only failure is reported as one, and the step stays red.** `scripts/xcresult-classify.py` checks that every failure is the simulator's and none is a test's. If so, it adds an error annotation "Simulator infrastructure: Not a test failure …" with the device message and how many test cases ran out of how many exist in the source. The step stays red; it is never turned green. Test classes that did not run because of it run again on one simulator without clones, reported under "Rerun:".
 - **The Rust tests always run**, unless the run was cancelled.
 - The result summary moved from the shell script into `scripts/xcresult-summary.py`, so the rerun is summarised the same way.
-- **The missing screenshots were a false alarm, now fixed.** In run 38341978615 every app reported "not running after launch" was `running-active-Visible` in the simulator's own log, and the relaunch returned the same pid. The script's liveness check (`launchctl list` inside the simulator) missed running apps. It now checks the pid that `simctl launch` prints (`kill -0` on the Mac), with `launchctl` as fallback.
+- **The missing screenshots were a false alarm, now fixed.** In run 38341978615 every app reported "not running after launch" was `running-active-Visible` in the simulator's own log, and the relaunch returned the same pid. The script's liveness check (`launchctl list` inside the simulator) missed running apps. It now checks the pid that `simctl launch` prints (`kill -0` on the Mac), with `launchctl` as fallback. Run 38346329047 captured all 28 screens.
 - **Screenshot launches that end without a crash report now say why.** Every run has lost 3–8 screens this way, and phase 1e reached the script's limit of 8. The script now records what the simulator's process manager (runningboardd, SpringBoard, launchd) logged about the app: in the annotation and in `logs/<screen>.termination.txt`.
 
 ## [JARVIS Ultimate — phase 1f: MCP tool pinning, Rust licenses in the app, phase 1e test fix] — branch `autoloom-glasses-jarvis-v1`

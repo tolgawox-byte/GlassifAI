@@ -706,6 +706,14 @@ struct MemorySettingsView: View {
   @ObservedObject private var store = MemoryStore.shared
   @State private var confirmDeleteAll = false
 
+  /// "See error" only when there is one: screenshot mode keeps a throwaway
+  /// store on purpose, with no error to see.
+  private var storageLabel: String {
+    if store.isPersistent { return L.t("On this iPhone (SwiftData)", "Bu iPhone'da (SwiftData)") }
+    if store.storageError != nil { return L.t("Temporary (see error)", "Geçici (hataya bakın)") }
+    return L.t("Temporary (this session only)", "Geçici (yalnızca bu oturum)")
+  }
+
   var body: some View {
     Form {
       SwiftUI.Section(footer: Text(L.t(
@@ -715,8 +723,7 @@ struct MemorySettingsView: View {
         LabeledContent(L.t("Saved memories", "Kayıtlı anılar"), value: "\(store.memories.count)")
         LabeledContent(L.t("Notes", "Notlar"), value: "\(store.notes.count)")
         LabeledContent(L.t("AutoLoom tasks", "AutoLoom görevleri"), value: "\(store.tasks.count)")
-        LabeledContent(L.t("Storage", "Depolama"),
-                       value: store.isPersistent ? L.t("On this iPhone (SwiftData)", "Bu iPhone'da (SwiftData)") : L.t("Temporary (see error)", "Geçici (hataya bakın)"))
+        LabeledContent(L.t("Storage", "Depolama"), value: storageLabel)
       }
       SwiftUI.Section(
         header: Text(L.t("Conversation memory", "Konuşma hafızası")),

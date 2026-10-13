@@ -269,8 +269,17 @@ final class AutoLoomSecurityHardeningTests: XCTestCase {
       // The Rust crates of the native bridge (collected by CI, phase 1f).
       "Rust crates of the native bridge (iOS target)", "aws-lc-sys", "rustls", "option-ext 0.2.0 — MPL-2.0",
       "Mozilla Public License",
+      // The MIT/BSD crates that publish no license file: their repositories' texts (phase 1g).
+      "Copyright 2017 Josh Teeter", "Copyright (c) 2020 Aleph Alpha GmbH",
+      "neither the crate nor its repository contains a license file or a copyright notice",
     ] {
       XCTAssertTrue(text.contains(needle), needle)
+    }
+    for crate in [
+      "Inflector 0.11.4 — BSD-2-Clause", "debugserver-types 0.5.0 — MIT", "schemafy_core 0.5.2 — MIT",
+      "schemafy_lib 0.5.2 — MIT", "ts-rs 11.1.0 — MIT", "ts-rs-macros 11.1.0 — MIT",
+    ] {
+      XCTAssertTrue(text.contains(crate + ": ["), "\(crate) points at a text")
     }
     let url = try XCTUnwrap(
       Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"), "the privacy manifest is at the bundle root")

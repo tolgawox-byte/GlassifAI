@@ -13,6 +13,7 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 | Run | Commit | Result | Notes |
 |---|---|---|---|
+| [38346329047](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38346329047) | `544a6d6` | **BUILD PASS · iOS 352/354 (2 skipped, 0 failed) · Rust 13/13 · 28/28 screenshots** | Screenshot liveness fix. All 28 screens were captured (23 in the previous run). A contact sheet of the published images shows each screen with its demo data, with no launch screen or blank page. It also showed the memory settings' storage row reading "Temporary (see error)" in screenshot mode, where the store is a throwaway one on purpose and there is no error. Corrected in phase 1g. License step: 451 crates, 269 texts, as before. Unit tests 966 s |
 | [38341978615](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38341978615) | `13807e3` | **BUILD PASS · iOS 352/354 (2 skipped, 0 failed) · Rust 13/13** | Phase 1f on top of the CI change `fe447f0`. The phase 1e test that hung now passes (under 3 s). It also covers MCP tool pinning, a dropped tool losing its policy, and the Rust license texts in the app. 354 test cases ran, the same number of test methods `xcresult-classify.py` counts in the source. License step: 451 crates, 269 texts. 23 of 28 screenshots (see below for the 5 others) |
 | [38336561701](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38336561701) | `ef0778e` | **FAILED · iOS 350 passed, 2 skipped, 1 failed** · Rust step not reached | Phase 1e. `testATaskAlertCanCompleteOrSnoozeItsTask` hung for its full 180 s allowance. Root cause: it reached `UNUserNotificationCenter.notificationSettings()`, which never returns in the unit-test host (the existing `TimerCenter` already keeps tests away from the notification service for that reason). Fixed in phase 1f: the alert check and scheduling are injectable and the test replaces both; in the app the check gives up after 3 s. The screenshot step stopped after 8 launches that did not stay up (8 different screens, no crash report; see below). The new license step worked: 451 crates, 269 distinct texts |
 | [38333865610](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38333865610) | `2b5a83e` | **BUILD PASS · iOS 350/352 (2 skipped) · Rust 13/13** | Phase 1d: long PC task relay, approval inbox, activity log, search and timeline rows open their item, MCP transport (no redirects, 4 MB cap), capture age and metadata in diagnostics, failed requests no longer mark the conversation. Also re-verifies phase 1c and the Rust step 1c's run never reached. 21 screenshots (`run-38333865610-2b5a83e`), including the new approval inbox and license texts, checked by eye |
@@ -23,9 +24,9 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 | [38299661724](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38299661724) | `9f0f355` | **BUILD PASS · iOS 321/323 (2 skipped) · Rust 8/8** | Baseline before the iOS changes (the PC companion was added; no iOS change). 20 screenshots |
 | [38299661765](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38299661765) | `9f0f355` | **PC companion 71/71** | First run of the Windows companion |
 
-The screenshot step reports "not running after launch" for a few screens on every run (6 on the baseline, 3 on `2e32c2a`, 7 on `6385e03`). Different screens each time and never a crash report, so it is the simulator's launch, not the app; those screens are simply missing from that run's set.
+Until `544a6d6` the screenshot step reported "not running after launch" for a few screens on every run (6 on the baseline, 3 on `2e32c2a`, 7 on `6385e03`), different ones each time and never with a crash report. This was first put down to the simulator's launch. Run 38341978615 showed the real cause: the script's own liveness check missed apps that were running (see below). Run 38346329047 captured all 28 screens.
 
-The next push fixes the screenshot liveness check. **Its run is pending**; its result is added here when it finishes.
+Phase 1g (next push) adds the notices of the six Rust crates that publish no license file and corrects that storage label. **Its run is pending**; its result is added here when it finishes.
 
 ### Simulator infrastructure (investigated, not ignored)
 
@@ -46,7 +47,7 @@ The next push fixes the screenshot liveness check. **Its run is pending**; its r
     - the only exits were the previous screens' instances, closed by the script itself (force-quit);
     - the relaunch returned the same pid (for example `1768` twice).
   - So the apps were running. The script's liveness check (`launchctl list` inside the simulator) reported running apps as gone; nothing had crashed.
-  - Fixed (next commit): the check uses the pid that `simctl launch` prints, which is a process of the Mac, with `kill -0`; `launchctl` is only the fallback.
+  - Fixed in `544a6d6`: the check uses the pid that `simctl launch` prints, which is a process of the Mac, with `kill -0`; `launchctl` is only the fallback. Run 38346329047 captured all 28 screens.
 
 ### What CI cannot show
 
