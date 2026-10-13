@@ -18,6 +18,8 @@ final class AppNavigator: ObservableObject {
     case commandPalette
     /// The paired PC: a pairing QR code opened from the Camera, approvals, tasks.
     case pcCompanion
+    /// Everything waiting for the user's decision (phone and PC).
+    case approvals
 
     var id: String {
       switch self {
@@ -28,6 +30,7 @@ final class AppNavigator: ObservableObject {
       case .remoteAssist: "remoteassist"
       case .commandPalette: "palette"
       case .pcCompanion: "pccompanion"
+      case .approvals: "approvals"
       }
     }
   }

@@ -149,6 +149,11 @@ struct VisionFrameInfo: Equatable {
   /// Proof of origin: pipeline state and transport when the frame was taken
   /// (for example "ScreenLockedStreaming · HEVC (hvc1) decoded glasses sample").
   var pipeline: String?
+  /// Time since the camera captured the frame, when its timestamp is on the
+  /// phone's clock (plan 1.12; `frameAgeMs` counts from arrival).
+  var captureAgeMs: Int?
+  /// What metadata the sent image carries (plan 1.13).
+  var metadata: String?
 
   /// VIDEO, PHOTO, OCR+VIDEO or OCR+PHOTO.
   var sourceLabel: String {
@@ -159,9 +164,11 @@ struct VisionFrameInfo: Equatable {
     let quality = reencoded ? "JPEG q\(String(format: "%.2f", jpegQuality))" : "original JPEG"
     let sequenceText = sequence.map { " #\($0)" } ?? ""
     let latency = captureLatencyMs.map { ", captured in \($0) ms" } ?? ""
+    let captured = captureAgeMs.map { " (captured \($0) ms ago)" } ?? ""
     var text = "\(sourceLabel) \(source)\(sequenceText) \(pixelFormat) \(sourceWidth)×\(sourceHeight) → " +
       "\(encodedWidth)×\(encodedHeight)\(upscaled ? " (upscaled)" : ""), \(quality), \(jpegBytes / 1_024) KB, " +
-      "age \(frameAgeMs) ms\(latency), \(detail.label) profile, detail=\(imageDetail)"
+      "age \(frameAgeMs) ms\(captured)\(latency), \(detail.label) profile, detail=\(imageDetail)"
+    if let metadata { text += "; metadata \(metadata)" }
     if let selection { text += "; \(selection)" }
     if let crop { text += "; crop \(crop)" }
     if let ocr { text += "; OCR \(ocr)" }

@@ -212,6 +212,25 @@ final class AutoLoomJarvisExpansionTests: XCTestCase {
     XCTAssertTrue(GlobalSearch.run(GlobalSearch.parse("zzqqxx qqzzyy şeyi bul")).isEmpty)
   }
 
+  /// JARVIS plan 2.7: a search result opens its own record.
+  func testASearchResultKnowsWhichRecordToOpen() {
+    let id = UUID()
+    func result(_ resultID: String, _ kind: SearchResult.Kind) -> SearchResult {
+      SearchResult(id: resultID, kind: kind, title: "t", snippet: "", date: nil, score: 1)
+    }
+    XCTAssertEqual(GlobalSearchView.recordID(of: result("note:\(id.uuidString)", .note)), id)
+    XCTAssertEqual(GlobalSearchView.recordID(of: result("vehicle:\(id.uuidString)", .vehicle)), id)
+    XCTAssertNil(GlobalSearchView.recordID(of: result("task:\(id.uuidString)", .note)), "the kind must match")
+    XCTAssertNil(GlobalSearchView.recordID(of: result("custom-result-1", .note)), "other sources fall back to the summary")
+
+    // Timeline rows open the same screens.
+    let done = ActivityItem(id: "done-\(id.uuidString)", kind: .taskDone, at: Date(), title: "Lastikleri kontrol et")
+    let asResult = done.searchResult
+    XCTAssertEqual(asResult?.kind, .task)
+    XCTAssertEqual(asResult.flatMap { GlobalSearchView.recordID(of: $0) }, id)
+    XCTAssertNil(ActivityItem(id: "scene-1", kind: .scene, at: Date(), title: "Ofis").searchResult)
+  }
+
   // MARK: "Neler yapabilirsin?" (§76)
 
   func testCapabilitiesAreContextual() async {

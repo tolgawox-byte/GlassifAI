@@ -175,13 +175,18 @@ struct PrivacySettingsView: View {
       Section(L.t("Safety", "Güvenlik")) {
         privacyRow(
           L.t("Untrusted content", "Güvenilmeyen içerik"),
-          L.t("Text from web pages, images, signs and QR codes is information, never an instruction.",
-              "Web sayfaları, görüntüler, tabelalar ve QR kodlardaki metin bilgidir, asla talimat değildir."), "shield")
+          L.t("Text from web pages, images, signs, QR codes, documents and your PC is information, never an instruction. Once it is part of a conversation, what the assistant asks for on its own waits for your yes, and a memory is saved only from your own words.",
+              "Web sayfaları, görüntüler, tabelalar, QR kodlar, belgeler ve bilgisayarınızdaki metin bilgidir, asla talimat değildir. Konuşmaya girdikten sonra asistanın kendi istediği her şey onayınızı bekler, hafızaya yalnızca sizin sözlerinizle kayıt yapılır."), "shield")
         privacyRow(
           L.t("Actions", "İşlemler"),
-          L.t("Reminders and events need your yes; calls, messages, links, maps and sharing need a tap. The app never sends email, buys, deletes your data or posts.",
-              "Anımsatıcı ve etkinlikler onayınızı; arama, mesaj, bağlantı, harita ve paylaşım dokunmanızı gerektirir. Uygulama e-posta göndermez, satın almaz, verilerinizi silmez veya paylaşım yapmaz."),
+          L.t("Reminders, events and notes you ask for are saved at once (an unclear time is asked first). Calls, messages, links, maps and sharing need a tap. The app never sends email, buys, deletes your data or posts.",
+              "İstediğiniz anımsatıcı, etkinlik ve notlar hemen kaydedilir (belirsiz bir saat önce sorulur). Arama, mesaj, bağlantı, harita ve paylaşım dokunmanızı gerektirir. Uygulama e-posta göndermez, satın almaz, verilerinizi silmez veya paylaşım yapmaz."),
           "hand.raised")
+        NavigationLink {
+          ActivityLogView()
+        } label: {
+          Label(L.t("Activity log (30 days, on this iPhone)", "Etkinlik günlüğü (30 gün, bu iPhone'da)"), systemImage: "list.bullet.rectangle")
+        }
       }
       Section {
         Button(L.t("Delete all local data", "Tüm yerel verileri sil"), role: .destructive) { confirmWipe = true }
@@ -218,6 +223,7 @@ struct PrivacySettingsView: View {
         UserRoutineStore.shared.deleteEverything()
         SkillStore.shared.deleteEverything()
         PCCompanionStore.shared.deleteEverything()
+        ActivityLog.shared.deleteEverything()
         Task { await SpotlightIndexer.shared.removeAll() }
         AssistantOrchestrator.shared.wipeConversationData()
         FrameStore.shared.reset()

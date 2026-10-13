@@ -89,18 +89,50 @@ struct ActivityTimelineView: View {
       ForEach(groups.keys.sorted(by: >), id: \.self) { day in
         Section(day.formatted(date: .complete, time: .omitted)) {
           ForEach(groups[day] ?? []) { item in
-            HStack(spacing: 12) {
-              Image(systemName: item.systemImage)
-                .foregroundStyle(item.kind == .taskDone ? Color.green : AutoLoomTheme.electricBlue)
-                .frame(width: 22)
-              Text(item.title).lineLimit(2)
-              Spacer()
-              Text(item.at.formatted(date: .omitted, time: .shortened)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            // Opens the same screen as a search hit (plan 2.7).
+            if let result = item.searchResult {
+              NavigationLink { GlobalSearchView.destination(for: result) } label: { row(item) }
+            } else {
+              row(item)
             }
           }
         }
       }
     }
     .navigationTitle(L.t("Timeline", "Zaman çizelgesi"))
+  }
+
+  private func row(_ item: ActivityItem) -> some View {
+    HStack(spacing: 12) {
+      Image(systemName: item.systemImage)
+        .foregroundStyle(item.kind == .taskDone ? Color.green : AutoLoomTheme.electricBlue)
+        .frame(width: 22)
+      Text(item.title).lineLimit(2)
+      Spacer()
+      Text(item.at.formatted(date: .omitted, time: .shortened)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+    }
+  }
+}
+
+extension ActivityItem {
+  /// The same item as a search result, so it opens the same screen; nil for
+  /// scene lines, which have none.
+  var searchResult: SearchResult? {
+    let resultKind: SearchResult.Kind
+    switch kind {
+    case .note: resultKind = .note
+    case .taskCreated, .taskDone: resultKind = .task
+    case .memory: resultKind = .memory
+    case .visual: resultKind = .visualMemory
+    case .capture: resultKind = .capture
+    case .vehicle: resultKind = .vehicle
+    case .document: resultKind = .document
+    case .scene: return nil
+    }
+    // "task-<uuid>": the record id follows the first hyphen.
+    let parts = id.split(separator: "-", maxSplits: 1)
+    guard parts.count == 2 else { return nil }
+    return SearchResult(
+      id: "\(resultKind.rawValue):\(parts[1])", kind: resultKind, title: title, snippet: "", date: at, score: 0)
   }
 }

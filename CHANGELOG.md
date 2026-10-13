@@ -2,6 +2,30 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — phase 1d: long PC tasks reported later, approval inbox] — branch `autoloom-glasses-jarvis-v1`
+
+Plan items 4.8, 2.4 (part), 2.5, 2.7 and 3.1 (part). CI results: `TEST_REPORT.md`. New physical tests PC9, PC10.
+
+### Added
+- **Long PC tasks are reported when they finish** (plan 4.8, research F01). After an approval, the reply waits 10 s for the PC (was 25 s). A task that is still running is followed in the background for up to 30 minutes: polled every 2–10 s, backing off to 60 s while the PC cannot be reached. Its result is delivered when it finishes:
+  - spoken into the conversation if one is running;
+  - otherwise as an on-screen notice and a notification carrying only the PC's own one-line summary (no result text on the lock screen).
+
+  Running tasks reported by the PC's MCP tools are followed the same way, and the voice model is told not to ask the PC again. The PC's report marks the conversation as holding outside content. Unpairing and the privacy wipe stop the follow-up.
+- **Approval inbox** (plan 2.4, research F10): one screen with the action waiting on this iPhone and the tasks waiting for approval on the paired PC. Each item keeps its own Approve/Confirm and Deny/Cancel; nothing is approved in bulk. The Home chip opens it when the PC has approvals waiting. A note says when the PC has not answered for 30 s. Still one waiting action on the phone at a time.
+- **Search results open their item** (plan 2.7): a note, memory, conversation summary, task, visual memory, vehicle or document opens its own screen; shopping and photos open their list; a parking spot, or a record deleted since the search, shows what the result said. A task found by the Memory search, and every timeline row except scene lines, now open too.
+- **Activity log** (plan 2.5): Privacy center → Activity log keeps, on this iPhone only and for 30 days, what the app did for you — actions run, approvals given, refused or waiting, PC tasks, voice-start and audio problems — by kind only ("Reminder — done", "PC: run_command — approved by tap"), never what you said or what an item contained. It can be exported as text, and the privacy wipe deletes it.
+- CI screenshots: the approval inbox and the full license texts.
+- **What the AI saw** (plan 3.1, part): each vision task's record now names the image's capture age when the frame's timestamp is on the phone's clock, next to the arrival age, and what metadata the sent image carries (none for camera frames; "no location or camera details" for photos). Shown in the task trace and the copied diagnostics.
+
+### Security
+- **MCP servers you added** (audit L7): the app now uses its own ephemeral session for them (no cookies, no cache) and refuses redirects, so the bearer token can never follow one to another host. Answers are capped at 4 MB. The tool list a server sends (names, descriptions, inputs) reaches the tool-choice model wrapped as untrusted information. The PC companion keeps its own pinned session.
+
+### Fixed
+- **Privacy center copy matches the code**: explicit reminders, events and notes are saved at once (an unclear time is asked first); it used to say they need a yes. The untrusted-content line now explains the conversation-wide rule.
+- Approving a PC task on the PC screen is followed like an approval in the conversation, so its result is also reported when it finishes.
+- A camera, web or agent request that fetched nothing (camera off, web search off, the call failed) no longer marks the conversation as holding outside content: its reply is the app's own text.
+
 ## [JARVIS Ultimate — phase 1c: fresh frames, late photos, licenses, privacy manifest] — branch `autoloom-glasses-jarvis-v1`
 
 Plan items 1.12, 1.16, 2.1 (part) and 2.2, and audit M2. CI results: `TEST_REPORT.md`. New physical test CAM2.

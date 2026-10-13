@@ -641,6 +641,11 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       }
     }
     startReport = report
+    // Only the service's status and code (never a message body) are kept.
+    let status = lastDetail?.components(separatedBy: " — ").first.map { String($0.prefix(60)) }
+    let failure = [report.attempts.isEmpty ? nil : "\(report.attempts.count) step(s)", status]
+      .compactMap { $0 }.joined(separator: ", ")
+    ActivityLog.shared.record(.failure, L.t("Voice start failed", "Sesli başlatma başarısız") + (failure.isEmpty ? "" : " (\(failure))"))
     throw RealtimeError.signalingFailed(
       "Could not start ChatGPT voice. \(LogSanitizer.sanitize(lastDetail ?? lastError ?? "Unknown error"))")
   }
@@ -862,6 +867,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   private func handleAudioFlow(_ verdict: AudioFlowWatchdog.Verdict, generation: Int) {
     guard verdict.isProblem else { return }
     lastAudioFlowIssue = verdict.rawValue
+    ActivityLog.shared.record(.failure, L.t("Audio: ", "Ses: ") + verdict.rawValue)
     let retrying = !audioFlowRecoveryUsed
     if ConnectionFeedback.current != .off {
       LocalAnnouncer.shared.say(

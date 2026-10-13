@@ -154,29 +154,7 @@ struct PCCompanionView: View {
   private var approvalsSection: some View {
     if !store.pendingApprovals.isEmpty {
       Section {
-        ForEach(store.pendingApprovals) { task in
-          VStack(alignment: .leading, spacing: 6) {
-            Text(task.summary)
-              .font(.body.weight(.medium))
-              .fixedSize(horizontal: false, vertical: true)
-            Text(Self.riskTitle(task.risk))
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-            ForEach(task.warnings, id: \.self) { warning in
-              Label(warning, systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.orange)
-            }
-            HStack(spacing: 10) {
-              Button(L.t("Approve", "Onayla")) { Task { await store.approve(task) } }
-                .buttonStyle(.borderedProminent)
-              Button(L.t("Deny", "Reddet"), role: .destructive) { Task { await store.deny(task) } }
-                .buttonStyle(.bordered)
-            }
-            .disabled(store.busy)
-          }
-          .padding(.vertical, 4)
-        }
+        PCApprovalRows(store: store)
       } header: {
         Text(L.t("Waiting for your approval", "Onayını bekleyenler"))
       } footer: {
@@ -290,6 +268,38 @@ struct PCCompanionView: View {
     case "failed": .red
     case "cancelled": .secondary
     default: .blue
+    }
+  }
+}
+
+/// The PC's tasks waiting for approval, each with Approve and Deny. The PC
+/// runs exactly what is shown (the approval names the task's digest).
+struct PCApprovalRows: View {
+  @ObservedObject var store: PCCompanionStore
+
+  var body: some View {
+    ForEach(store.pendingApprovals) { task in
+      VStack(alignment: .leading, spacing: 6) {
+        Text(task.summary)
+          .font(.body.weight(.medium))
+          .fixedSize(horizontal: false, vertical: true)
+        Text(PCCompanionView.riskTitle(task.risk))
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+        ForEach(task.warnings, id: \.self) { warning in
+          Label(warning, systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(.orange)
+        }
+        HStack(spacing: 10) {
+          Button(L.t("Approve", "Onayla")) { Task { await store.approve(task) } }
+            .buttonStyle(.borderedProminent)
+          Button(L.t("Deny", "Reddet"), role: .destructive) { Task { await store.deny(task) } }
+            .buttonStyle(.bordered)
+        }
+        .disabled(store.busy)
+      }
+      .padding(.vertical, 4)
     }
   }
 }

@@ -262,7 +262,7 @@ No real secrets in the working tree or the full history of all refs: 296 pattern
 | M4 | Medium | OpenClaw token may travel over plain HTTP; hostnames starting "fc"/"fd" count as private | **FIXED (CI)**: host names are parsed properly; the token goes over plain HTTP only to loopback or Tailscale; home-network HTTP shows a warning |
 | M5 | Medium | Personal-data App Intents have no authentication policy (may run from a locked phone) | **FIXED (CI)**: briefing, find-vehicle and remember intents require an unlocked phone; tasks, notes and the shopping list stay hands-free |
 | M6–M9 | Medium | Privacy docs wrong in places; third-party notices incomplete (LiveKit was listed as Apache — **FIXED-NOW** to MIT; WebRTC/BoringSSL and Rust crate notices still missing); no `PrivacyInfo.xcprivacy`; private vulnerability reporting disabled while SECURITY.md points to it | Partly fixed; rest open |
-| L1–L12 | Low | IPv6/DNS gaps in URL safety, wrapper escaping (**FIXED (CI)**: any spelling of the tag is defused, origin escaped), log gaps, data-at-rest class C, wipe residue, Keychain survives uninstall, tokens deleted on any error (**FIXED-NOW**), URLSession.shared redirects, screenshot mode in Release, public CI artifacts growth | Mostly open (P2) |
+| L1–L12 | Low | IPv6/DNS gaps in URL safety, wrapper escaping (**FIXED (CI)**: any spelling of the tag is defused, origin escaped), log gaps, data-at-rest class C, wipe residue, Keychain survives uninstall, tokens deleted on any error (**FIXED-NOW**), URLSession.shared redirects (**IN CI**: ephemeral session, no redirects, 4 MB cap, tool list wrapped), screenshot mode in Release, public CI artifacts growth | Mostly open (P2) |
 
 ## 9. Tests and CI
 

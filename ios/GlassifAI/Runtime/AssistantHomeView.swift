@@ -322,7 +322,8 @@ struct AssistantHomeView: View {
         chip(L.t("Sharing your view", "Görüntün paylaşılıyor"), systemImage: "dot.radiowaves.left.and.right", tint: .red)
       }
       if pc.link != nil, !pc.pendingApprovals.isEmpty || !pc.activeTasks.isEmpty {
-        Button { AppNavigator.shared.show(.pcCompanion) } label: {
+        // Approvals open the inbox (phone and PC together); running tasks the PC screen.
+        Button { AppNavigator.shared.show(pc.pendingApprovals.isEmpty ? .pcCompanion : .approvals) } label: {
           chip(pcChipText, systemImage: "desktopcomputer", tint: pc.pendingApprovals.isEmpty ? .white : .orange)
         }
         .buttonStyle(.plain)

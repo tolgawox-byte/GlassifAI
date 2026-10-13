@@ -477,11 +477,14 @@ final class AssistantOrchestrator: ObservableObject {
     var kind: AssistantTaskKind?
     var sources: [WebSource] = []
     var failed: String?
+    /// False when the task stopped before anything from outside arrived (the
+    /// camera was off, the call failed): its text is the app's own.
+    var broughtContent = true
   }
 
   private func execute(taskID: UUID, envelope: DelegationEnvelope?, rawText: String) async -> Outcome {
     let outcome = await executeTask(taskID: taskID, envelope: envelope, rawText: rawText)
-    if let kind = ledger.record(taskID)?.kind ?? outcome.kind, kind.bringsUntrustedContent {
+    if outcome.broughtContent, let kind = ledger.record(taskID)?.kind ?? outcome.kind, kind.bringsUntrustedContent {
       taint.mark(turn: turnID, origin: kind.rawValue)
     }
     return outcome
@@ -541,12 +544,12 @@ final class AssistantOrchestrator: ObservableObject {
       if requested == .visualMemory && !MemoryStore.shared.visualMemoriesEnabled {
         return Outcome(
           speakable: "Visual memories are off. The user can turn them on in Settings, Memory, Visual memories. Nothing was saved.",
-          kind: requested)
+          kind: requested, broughtContent: false)
       }
       if requested.usesCamera && camera == .off {
         return Outcome(
           speakable: "The camera is turned off in the app, so nothing can be seen right now. The user can switch the camera to Ray-Ban or iPhone.",
-          kind: requested)
+          kind: requested, broughtContent: false)
       }
       if requested.usesWeb && !AssistantPreferences.webSearchEnabled {
         if requested == .visionPlusWeb {
@@ -555,7 +558,7 @@ final class AssistantOrchestrator: ObservableObject {
         } else {
           return Outcome(
             speakable: "Web search is turned off in the app settings, so no live information could be looked up.",
-            kind: requested)
+            kind: requested, broughtContent: false)
         }
       }
     }
@@ -611,20 +614,22 @@ final class AssistantOrchestrator: ObservableObject {
       }
       return try await runToolRouting(taskID: taskID, query: query, camera: camera)
     } catch let error as VisionUnavailable {
-      return Outcome(speakable: error.speakable, kind: kind, failed: error.reason)
+      return Outcome(speakable: error.speakable, kind: kind, failed: error.reason, broughtContent: false)
     } catch let error as ResponsesError {
-      if error == .cancelled { return Outcome(speakable: "", kind: kind, failed: "cancelled") }
+      if error == .cancelled { return Outcome(speakable: "", kind: kind, failed: "cancelled", broughtContent: false) }
       return Outcome(
         speakable: error.speakableSummary + " Tell the user briefly and offer to try again.",
         kind: kind,
-        failed: error.localizedDescription)
+        failed: error.localizedDescription,
+        broughtContent: false)
     } catch is CancellationError {
-      return Outcome(speakable: "", kind: kind, failed: "cancelled")
+      return Outcome(speakable: "", kind: kind, failed: "cancelled", broughtContent: false)
     } catch {
       return Outcome(
         speakable: "The request failed. Tell the user briefly and offer to try again.",
         kind: kind,
-        failed: LogSanitizer.sanitize(error.localizedDescription))
+        failed: LogSanitizer.sanitize(error.localizedDescription),
+        broughtContent: false)
     }
   }
 
@@ -999,14 +1004,17 @@ final class AssistantOrchestrator: ObservableObject {
         }
         // A contact's numbers are shown, never sent to the voice model.
         let display = plan.kind == .findContact ? (DeviceActionExecutor.shared.lastContactDetails ?? text) : text
+        ActivityLog.shared.record(.action, plan.kind.label + L.t(" — done", " — tamamlandı"))
         return ActionStageResult(
           speakable: text + "\nTell the user naturally and briefly.", display: display, failed: nil)
       } catch {
         let message = LogSanitizer.sanitize(error.localizedDescription)
         if let feedback = ActionFeedback.notSaved(plan) { postFeedback(feedback) }
+        ActivityLog.shared.record(.failure, plan.kind.label + L.t(" — failed", " — başarısız"))
         return ActionStageResult(speakable: message + " Tell the user.", display: nil, failed: message)
       }
     case .confirm:
+      ActivityLog.shared.record(.approval, plan.kind.label + L.t(" — waiting for a yes", " — onay bekliyor"))
       pendingAction = PendingDeviceAction(plan: plan)
       let reason = !plan.afterUntrustedContent ? ""
         : plan.kind.readsPersonalData
@@ -1016,6 +1024,7 @@ final class AssistantOrchestrator: ObservableObject {
         speakable: reason + "Waiting for confirmation: \(plan.summary). Read it back briefly and ask the user to say yes or no. The app hears their answer itself (do not delegate confirm_action); if they say no, TASK: cancel_action. They can also tap Confirm or Cancel on the phone. Nothing is saved yet.",
         display: plan.summary, failed: nil)
     case .strongConfirm:
+      ActivityLog.shared.record(.approval, plan.kind.label + L.t(" — waiting for a tap", " — dokunma bekliyor"))
       pendingAction = PendingDeviceAction(plan: plan)
       return ActionStageResult(
         speakable: "\(plan.summary) is ready on the phone screen. For safety the user must tap to confirm it there; a spoken yes is not enough. Tell the user briefly. Nothing has happened yet.",
@@ -1091,6 +1100,9 @@ final class AssistantOrchestrator: ObservableObject {
       return "For safety, this must be confirmed with a tap on the phone; a spoken yes is not enough."
     }
     pendingAction = nil
+    let label = pending.plan.kind.label
+    ActivityLog.shared.record(
+      .approval, label + (byVoice ? L.t(" — approved by voice", " — sesle onaylandı") : L.t(" — approved by tap", " — dokunarak onaylandı")))
     if pending.plan.kind == .agentTask {
       return await sendToAgent(pending.plan.text ?? "")
     }
@@ -1101,11 +1113,13 @@ final class AssistantOrchestrator: ObservableObject {
       let text = try await DeviceActionExecutor.shared.run(pending.plan)
       lastActionResult = text
       if let feedback = ActionFeedback.saved(pending.plan) { postFeedback(feedback) }
+      ActivityLog.shared.record(.action, label + L.t(" — done", " — tamamlandı"))
       return text + (byVoice ? " Tell the user it is done." : "")
     } catch {
       let message = LogSanitizer.sanitize(error.localizedDescription)
       lastActionResult = message
       if let feedback = ActionFeedback.notSaved(pending.plan) { postFeedback(feedback) }
+      ActivityLog.shared.record(.failure, label + L.t(" — failed", " — başarısız"))
       return message
     }
   }
@@ -1156,7 +1170,8 @@ final class AssistantOrchestrator: ObservableObject {
 
   @discardableResult
   func cancelPendingAction() -> String {
-    guard pendingAction != nil else { return "There was no action waiting." }
+    guard let pending = pendingAction else { return "There was no action waiting." }
+    ActivityLog.shared.record(.approval, pending.plan.kind.label + L.t(" — cancelled", " — iptal edildi"))
     pendingAction = nil
     lastActionResult = "Cancelled"
     return "Cancelled. Nothing was saved or sent."
@@ -1600,6 +1615,8 @@ final class AssistantOrchestrator: ObservableObject {
       frameAgeMs: selection.ageMs, captureLatencyMs: nil, reencoded: true, detail: detail)
     info.selection = selection.summary + (assist.note.map { "; \($0)" } ?? "")
     info.upscaled = encoded.width > frame.width
+    info.captureAgeMs = frame.captureTime.map { Int(((CACurrentMediaTime() - $0) * 1_000).rounded()) }
+    info.metadata = "none (encoded from camera pixels)"
     if frame.source == .glasses {
       let transport = glassesTransport()
       info.pipeline = "\(GlassesLifecycleMonitor.shared.state.rawValue) · \(transport) " +
@@ -1709,6 +1726,8 @@ final class AssistantOrchestrator: ObservableObject {
       jpegQuality: prepared.quality, jpegBytes: prepared.jpeg.count,
       frameAgeMs: 0, captureLatencyMs: still.latencyMs, reencoded: prepared.reencoded, detail: detail)
     info.selection = assist.note
+    info.metadata = StillPhotoProcessor.hasPrivateMetadata(prepared.jpeg)
+      ? "location or camera details present (unexpected)" : "no location or camera details"
     ledger.update(taskID) {
       $0.timeline.frameSelected = requestedAt.addingTimeInterval(Double(still.latencyMs) / 1_000)
     }

@@ -82,6 +82,7 @@ struct AppShellView: View {
         case .remoteAssist: RemoteAssistView()
         case .commandPalette: CommandPaletteView()
         case .pcCompanion: PCCompanionView()
+        case .approvals: ApprovalInboxView()
         }
       }
       .presentationDetents([.medium, .large])

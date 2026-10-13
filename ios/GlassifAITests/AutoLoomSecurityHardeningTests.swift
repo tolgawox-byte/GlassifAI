@@ -85,6 +85,29 @@ final class AutoLoomSecurityHardeningTests: XCTestCase {
                  "an older bridge without details still decodes")
   }
 
+  /// A camera request that saw nothing (camera off) brought nothing from
+  /// outside, so the conversation is not marked.
+  func testARequestThatFetchedNothingDoesNotMarkTheConversation() async {
+    let defaults = UserDefaults.standard
+    let previous = defaults.string(forKey: CaptureSource.defaultsKey)
+    defaults.set(CaptureSource.off.rawValue, forKey: CaptureSource.defaultsKey)
+    defer { defaults.set(previous, forKey: CaptureSource.defaultsKey) }
+    let orchestrator = AssistantOrchestrator.shared
+    orchestrator.finishConversation()
+    _ = orchestrator.beginVoiceSession()
+    let delivered = expectation(description: "delivered")
+    var reply = ""
+    orchestrator.handleDelegation(handoffID: "test-camera-off-\(UUID())", text: "TASK: vision | QUERY: what is this") { text in
+      reply = text
+      delivered.fulfill()
+      return true
+    }
+    await fulfillment(of: [delivered], timeout: 5)
+    XCTAssertTrue(reply.lowercased().contains("camera"), reply)
+    XCTAssertFalse(orchestrator.taint.isTainted, "nothing from outside arrived")
+    orchestrator.endVoiceSession()
+  }
+
   /// Audit M1 (multi-turn injection): text from a QR code arrives, the user
   /// talks on, and two turns later the voice model asks to save a memory
   /// that would reach every future conversation. It is refused.
@@ -164,6 +187,28 @@ final class AutoLoomSecurityHardeningTests: XCTestCase {
     for digits in ["532", "111 22 33", "0212", "444"] {
       XCTAssertFalse(text.contains(digits), "no number reaches the model: \(digits)")
     }
+  }
+
+  /// Plan 2.5: the activity log keeps 30 days on this iPhone, survives a
+  /// restart, and its titles are sanitized like every log line.
+  func testTheActivityLogKeepsThirtyDaysWithoutSecrets() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("activity-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let log = ActivityLog(directory: directory)
+    let now = Date()
+    log.record(.action, "Reminder — done", at: now.addingTimeInterval(-31 * 86_400))
+    log.record(.approval, "PC: run_command — approved by tap", at: now)
+    XCTAssertEqual(log.entries.map(\.title), ["PC: run_command — approved by tap"], "older than 30 days is dropped")
+
+    let reopened = ActivityLog(directory: directory)
+    XCTAssertEqual(reopened.entries.count, 1, "kept across a restart")
+    XCTAssertTrue(reopened.exportText.contains("\tapproval\tPC: run_command"), reopened.exportText)
+
+    log.record(.failure, "Voice start failed (Bearer abc.def.ghi)", at: now)
+    XCTAssertFalse(log.entries.last?.title.contains("abc.def") ?? true, "titles are sanitized")
+    log.deleteEverything()
+    XCTAssertTrue(log.entries.isEmpty)
+    XCTAssertTrue(ActivityLog(directory: directory).entries.isEmpty, "the wipe removes the file")
   }
 
   /// Plan 1.16: the binary carries the notices its BSD-style licenses ask

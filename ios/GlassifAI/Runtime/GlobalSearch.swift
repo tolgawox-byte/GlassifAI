@@ -261,21 +261,25 @@ struct GlobalSearchView: View {
       } else {
         Section(L.t("\(results.count) results", "\(results.count) sonuç")) {
           ForEach(results) { result in
-            HStack(alignment: .top, spacing: 12) {
-              Image(systemName: result.kind.systemImage)
-                .frame(width: 22)
-                .foregroundStyle(AutoLoomTheme.electricBlue)
-              VStack(alignment: .leading, spacing: 3) {
-                Text(result.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-                if !result.snippet.isEmpty {
-                  Text(result.snippet).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                }
-                if let date = result.date {
-                  Text(date.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.tertiary)
+            NavigationLink {
+              Self.destination(for: result)
+            } label: {
+              HStack(alignment: .top, spacing: 12) {
+                Image(systemName: result.kind.systemImage)
+                  .frame(width: 22)
+                  .foregroundStyle(AutoLoomTheme.electricBlue)
+                VStack(alignment: .leading, spacing: 3) {
+                  Text(result.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                  if !result.snippet.isEmpty {
+                    Text(result.snippet).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                  }
+                  if let date = result.date {
+                    Text(date.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.tertiary)
+                  }
                 }
               }
+              .padding(.vertical, 2)
             }
-            .padding(.vertical, 2)
           }
         }
       }
@@ -319,5 +323,79 @@ struct GlobalSearchView: View {
     var query = GlobalSearch.parse(text)
     if let kind { query.kinds = [kind] }
     results = GlobalSearch.run(query)
+  }
+}
+
+// MARK: Opening a result (plan 2.7)
+
+extension GlobalSearchView {
+  /// The record's UUID from a result id ("note:<uuid>"); nil for results
+  /// from other sources.
+  static func recordID(of result: SearchResult) -> UUID? {
+    let parts = result.id.split(separator: ":", maxSplits: 1)
+    guard parts.count == 2, parts[0] == Substring(result.kind.rawValue) else { return nil }
+    return UUID(uuidString: String(parts[1]))
+  }
+
+  /// The item itself where it has a screen, its list otherwise; a record
+  /// deleted since the search shows what the result said.
+  @ViewBuilder
+  static func destination(for result: SearchResult) -> some View {
+    let id = recordID(of: result)
+    switch result.kind {
+    case .note:
+      if let note = MemoryStore.shared.notes.first(where: { $0.id == id }) {
+        NoteDetailView(note: note)
+      } else {
+        SearchResultDetail(result: result)
+      }
+    case .memory, .conversation:
+      if let record = MemoryStore.shared.memories.first(where: { $0.id == id }) {
+        MemoryDetailView(record: record)
+      } else {
+        SearchResultDetail(result: result)
+      }
+    case .task:
+      if let task = MemoryStore.shared.tasks.first(where: { $0.id == id }) {
+        TaskEditorView(task: task)
+      } else {
+        SearchResultDetail(result: result)
+      }
+    case .visualMemory:
+      if let id { VisualMemoryDetail(recordID: id) } else { SearchResultDetail(result: result) }
+    case .vehicle:
+      if let id { VehicleDetailView(vehicleID: id) } else { SearchResultDetail(result: result) }
+    case .document:
+      if let id { DocumentDetailView(recordID: id) } else { SearchResultDetail(result: result) }
+    case .shopping:
+      ShoppingListView()
+    case .capture:
+      CapturesView()
+    case .parking:
+      SearchResultDetail(result: result)
+    }
+  }
+}
+
+/// What a search result said, for items without a screen of their own.
+struct SearchResultDetail: View {
+  let result: SearchResult
+
+  var body: some View {
+    List {
+      Section {
+        Label(result.title, systemImage: result.kind.systemImage)
+          .font(.headline)
+        if !result.snippet.isEmpty {
+          Text(result.snippet).textSelection(.enabled)
+        }
+        if let date = result.date {
+          Text(date.formatted(date: .long, time: .shortened)).foregroundStyle(.secondary)
+        }
+      } footer: {
+        Text(result.kind.title)
+      }
+    }
+    .navigationTitle(result.kind.title)
   }
 }

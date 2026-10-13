@@ -154,4 +154,45 @@ final class AutoLoomPCCompanionTests: XCTestCase {
     XCTAssertEqual(ChatGPTAuthSession.RefreshFailure.classify(statusCode: 401), .rejected)
     XCTAssertEqual(ChatGPTAuthSession.RefreshFailure.classify(statusCode: 400), .rejected)
   }
+  /// Plan 4.8: a PC task that outlasts the wait is followed and its result
+  /// is delivered when it finishes.
+  func testLongPCTasksAreReportedWhenTheyFinish() throws {
+    XCTAssertEqual(PCTaskRelay.runningTaskID(structured: ["state": "running", "taskId": "t_1"]), "t_1")
+    XCTAssertEqual(PCTaskRelay.runningTaskID(structured: ["state": "pending", "taskId": "t_2"]), "t_2")
+    XCTAssertNil(PCTaskRelay.runningTaskID(structured: ["state": "completed", "taskId": "t_3"]))
+    XCTAssertNil(PCTaskRelay.runningTaskID(structured: ["state": "awaiting_approval", "taskId": "t_4"]),
+                 "a task waiting for approval has its own card")
+    XCTAssertNil(PCTaskRelay.runningTaskID(structured: nil))
+    XCTAssertEqual(PCTaskRelay.nextDelay(after: 2, reached: true), 3)
+    XCTAssertEqual(PCTaskRelay.nextDelay(after: 10, reached: true), 10)
+    XCTAssertEqual(PCTaskRelay.nextDelay(after: 40, reached: false), 60)
+
+    let json = """
+      {"id":"t_9QKX2M9Q4ZB1","deviceId":"d_X","source":"mcp","tool":"run_command","args":{},
+      "argsDigest":"\(String(repeating: "cd", count: 32))","risk":"execute","summary":"Komut: npm-test (Projeler/AutoLoom)",
+      "warnings":[],"state":"completed","createdAt":"2026-10-12T10:00:00.000Z","updatedAt":"2026-10-12T10:01:00.000Z",
+      "finishedAt":"2026-10-12T10:01:00.000Z","resultText":"12 tests passed",
+      "approval":{"required":true,"decision":"approved"},"attempts":1,"maxAttempts":1,"timeoutMs":600000,
+      "undoAvailable":false}
+      """
+    let task = try JSONDecoder().decode(PCTask.self, from: Data(json.utf8))
+    XCTAssertTrue(PCTaskRelay.stillRunning(task).contains("will tell them when it finishes"))
+
+    let orchestrator = AssistantOrchestrator.shared
+    let previous = orchestrator.speakInConversation
+    var spoken: String?
+    orchestrator.speakInConversation = { text in
+      spoken = text
+      return true
+    }
+    defer {
+      orchestrator.speakInConversation = previous
+      // The report marked the conversation; later tests start clean.
+      orchestrator.finishConversation()
+    }
+    PCTaskRelay.deliver(task)
+    XCTAssertTrue(spoken?.contains("has finished") == true, spoken ?? "nothing spoken")
+    XCTAssertTrue(spoken?.contains("12 tests passed") == true, "the PC's own report reaches the conversation")
+    XCTAssertTrue(orchestrator.taint.isTainted, "the PC's report is outside content")
+  }
 }

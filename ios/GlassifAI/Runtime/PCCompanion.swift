@@ -470,6 +470,10 @@ final class PCCompanionStore: ObservableObject {
 
   private let fileURL: URL
   private var pollTask: Task<Void, Never>?
+  /// Long tasks followed until they finish (`relayUntilFinished`).
+  private var relays: [String: Task<Void, Never>] = [:]
+  /// Reports a followed task once it finished (replaceable in tests).
+  var deliverFinished: @MainActor (PCTask) -> Void = { PCTaskRelay.deliver($0) }
 
   init(directory: URL? = nil) {
     let base = directory ?? (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -580,10 +584,16 @@ final class PCCompanionStore: ObservableObject {
 
   /// A tap on Approve in the PC screen.
   func approve(_ task: PCTask) async {
+    ActivityLog.shared.record(.approval, "PC: \(task.tool)" + L.t(" — approved by tap", " — dokunarak onaylandı"))
     await perform { try await $0.approve(id: task.id, digest: task.argsDigest) }
+    // Reported when it finishes, as after an approval in the conversation.
+    if let current = tasks.first(where: { $0.id == task.id }), current.isActive, !current.awaitingApproval {
+      relayUntilFinished(task.id)
+    }
   }
 
   func deny(_ task: PCTask) async {
+    ActivityLog.shared.record(.approval, "PC: \(task.tool)" + L.t(" — denied", " — reddedildi"))
     await perform { try await $0.deny(id: task.id) }
   }
 
@@ -610,23 +620,61 @@ final class PCCompanionStore: ObservableObject {
   }
 
   /// The user's tap or own yes on a staged PC approval: approves exactly that
-  /// task and waits up to 25 seconds for its result. English text for the
-  /// voice model.
+  /// task and waits up to `PCTaskRelay.announceAfter` for its result; a
+  /// longer task is reported when it finishes. English text for the voice
+  /// model.
   func approveAndWait(_ request: PCApprovalRequest) async -> String {
     do {
       let client = try connection()
       var task = try await client.approve(id: request.taskID, digest: request.digest)
-      let deadline = Date().addingTimeInterval(25)
+      let deadline = Date().addingTimeInterval(PCTaskRelay.announceAfter)
       while !task.isFinished, Date() < deadline {
         try await Task.sleep(nanoseconds: 700_000_000)
         task = try await client.task(id: task.id)
       }
       await refresh()
+      // A long task goes on; its result is delivered when it finishes.
+      guard task.isFinished else {
+        relayUntilFinished(task.id)
+        return PCTaskRelay.stillRunning(task)
+      }
+      ActivityLog.shared.record(task.state == "completed" ? .pcTask : .failure, "PC: \(task.tool) — \(task.stateTitle)")
       return Self.speakable(task)
     } catch {
       return "The PC could not take the approval (\(Self.describe(error))). Nothing ran. Tell the user briefly."
     }
   }
+
+  /// Follows a PC task that outlasted the wait and reports it once it
+  /// finishes (plan 4.8): into the running conversation, otherwise as a
+  /// notification. Stops after `PCTaskRelay.maxWait` or on unpairing.
+  func relayUntilFinished(_ taskID: String) {
+    guard relays[taskID] == nil else { return }
+    relays[taskID] = Task { @MainActor [weak self] in
+      var delay = PCTaskRelay.firstPoll
+      let deadline = Date().addingTimeInterval(PCTaskRelay.maxWait)
+      while !Task.isCancelled, Date() < deadline {
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        guard let self, !Task.isCancelled else { return }
+        guard let client = try? self.connection(), let task = try? await client.task(id: taskID) else {
+          delay = PCTaskRelay.nextDelay(after: delay, reached: false)
+          continue
+        }
+        guard task.isFinished else {
+          delay = PCTaskRelay.nextDelay(after: delay, reached: true)
+          continue
+        }
+        self.relays[taskID] = nil
+        await self.refresh()
+        self.deliverFinished(task)
+        return
+      }
+      self?.relays[taskID] = nil
+    }
+  }
+
+  /// PC tasks being followed for a later report.
+  var relayedTaskIDs: Set<String> { Set(relays.keys) }
 
   /// English text for the voice model, from the PC's own report.
   static func speakable(_ task: PCTask) -> String {
@@ -658,7 +706,13 @@ final class PCCompanionStore: ObservableObject {
     tasks = []
     lastContact = nil
     lastError = nil
+    stopRelays()
     persist()
+  }
+
+  private func stopRelays() {
+    for relay in relays.values { relay.cancel() }
+    relays.removeAll()
   }
 
   /// Privacy wipe: forget the PC on this phone (the PC keeps its own record
@@ -672,6 +726,7 @@ final class PCCompanionStore: ObservableObject {
     status = nil
     tasks = []
     lastContact = nil
+    stopRelays()
     persist()
   }
 
@@ -687,5 +742,54 @@ final class PCCompanionStore: ObservableObject {
     }
     guard let data = try? JSONEncoder().encode(link) else { return }
     try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+  }
+}
+
+/// Long PC tasks (plan 4.8, research F01): after a short wait the
+/// conversation hears that the task goes on, and its result is delivered
+/// when it finishes, even after the conversation ended.
+enum PCTaskRelay {
+  /// How long a reply waits for a PC task before saying it is still running.
+  static let announceAfter: TimeInterval = 10
+  /// The longest a task is followed.
+  static let maxWait: TimeInterval = 30 * 60
+  static let firstPoll: TimeInterval = 2
+
+  /// A little less often the longer a task runs; backs off while the PC
+  /// cannot be reached.
+  static func nextDelay(after delay: TimeInterval, reached: Bool) -> TimeInterval {
+    reached ? min(delay + 1, 10) : min(delay * 2, 60)
+  }
+
+  /// The task id of an MCP answer whose task is still queued or running.
+  static func runningTaskID(structured: [String: Any]?) -> String? {
+    guard let structured, let state = structured["state"] as? String,
+          state == "running" || state == "pending" else { return nil }
+    return structured["taskId"] as? String
+  }
+
+  static func stillRunning(_ task: PCTask) -> String {
+    "The PC is still working on it (\(task.stateTitle)): \(task.summary). Tell the user it continues on the PC and that "
+      + "the app will tell them when it finishes. Do not guess the result and do not ask the PC again."
+  }
+
+  /// Into the running conversation when there is one; otherwise an on-screen
+  /// notice and a notification with the PC's own summary only (no result
+  /// text on the lock screen).
+  @MainActor
+  static func deliver(_ task: PCTask) {
+    ActivityLog.shared.record(task.state == "completed" ? .pcTask : .failure, "PC: \(task.tool) — \(task.stateTitle)")
+    let orchestrator = AssistantOrchestrator.shared
+    // The PC's report is outside content for the rest of the conversation.
+    orchestrator.noteUntrustedContent(origin: "PC companion result")
+    let report = "A task the user started earlier on their PC has finished. " + PCCompanionStore.speakable(task)
+    if let speak = orchestrator.speakInConversation, speak(report) { return }
+    let title = task.state == "completed"
+      ? L.t("Done on your PC", "Bilgisayarda bitti")
+      : L.t("Not finished on your PC", "Bilgisayarda tamamlanmadı")
+    orchestrator.postNotice(title + ": " + task.summary)
+    Task { @MainActor in
+      _ = try? await LocalNotifications.schedule(title: title, body: task.summary, at: Date().addingTimeInterval(1))
+    }
   }
 }

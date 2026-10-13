@@ -178,6 +178,8 @@ struct ScreenshotRootView: View {
       case "timeline": NavigationStack { ActivityTimelineView() }
       case "privacydashboard": NavigationStack { PrivacySettingsView() }
       case "palette": NavigationStack { CommandPaletteView() }
+      case "approvals": NavigationStack { ApprovalInboxView() }
+      case "licenses": NavigationStack { ThirdPartyLicensesView() }
       default: StreamSessionView(wearables: nil)
       }
     }

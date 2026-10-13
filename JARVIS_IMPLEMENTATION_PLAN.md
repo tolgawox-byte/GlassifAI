@@ -63,16 +63,16 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 | 2.1 | Real connection and system state on Home | PARTLY IN CI / NEXT | One status strip: glasses link, voice session (real phases), camera source, PC reachability (answered < 30 s), pending approvals count; nothing green without a fresh fact — Done so far: Home already showed the glasses link, the waiting phone action and Live Vision; a PC chip now shows approvals waiting or tasks running on the paired PC (refreshed every 20 s while Home is shown, "not answering" after 30 s of silence) and opens the PC screen. Still NEXT: real voice phases in one strip |
 | 2.2 | Reminders verified by fetch-back; list choice; complete/delete by voice | PARTLY IN CI (fetch-back) / NEXT | After saving, `calendarItem(withIdentifier:)` returns the item or the reply says it failed |
 | 2.3 | Tasks: priority, snooze, recurrence; notification delegate with Complete/Snooze actions | NEXT | Foreground banners; actions work from the lock screen; undo for completion |
-| 2.4 | Approval inbox (F10) | NEXT | Every waiting phone action and PC task in one list; more than one slot; survives app restart |
-| 2.5 | Persisted activity log on the phone | NEXT | Actions, approvals, PC tasks, failures kept 30 days (no content), viewable and exportable |
+| 2.4 | Approval inbox (F10) | PARTLY IN CI / NEXT | Every waiting phone action and PC task in one list; more than one slot; survives app restart — Done: one screen with the phone's waiting action and the PC's approvals (those survive a restart, they wait on the PC), opened from the Home chip. Still NEXT: more than one waiting phone action, and keeping it across a restart |
+| 2.5 | Persisted activity log on the phone | IN CI | Actions, approvals, PC tasks, failures kept 30 days (no content), viewable and exportable |
 | 2.6 | Notes: attachments and visible links; bulk export | LATER | Photo/document attachments; links to tasks and conversations shown both ways; JSON/Markdown export |
-| 2.7 | UI polish of inert rows and misleading copy | NEXT | Search, timeline and task rows open their item; privacy copy matches behaviour |
+| 2.7 | UI polish of inert rows and misleading copy | IN CI (search, Memory-search task and timeline rows open their item; contacts copy) | Search, timeline and task rows open their item; privacy copy matches behaviour |
 
 ## Phase 3 — Visual intelligence and memory (P1/P2)
 
 | # | Item | Status | Acceptance criteria |
 |---|---|---|---|
-| 3.1 | Diagnostics: "what the AI saw" | NEXT | Live Vision images recorded; destination provider/model; capture age; opt-in local thumbnail of the exact bytes; metadata status; glasses-only "Actual" |
+| 3.1 | Diagnostics: "what the AI saw" | PARTLY IN CI (capture age, metadata status) / NEXT | Live Vision images recorded; destination provider/model; capture age; opt-in local thumbnail of the exact bytes; metadata status; glasses-only "Actual" |
 | 3.2 | Memory supersession (F06) and memory inbox (F07) | NEXT | Outdated facts superseded with history; model proposals need approval |
 | 3.3 | Semantic visual memory (F21) | LATER | On-device embeddings with a commercially licensed model; Turkish queries work; never indexes the photo library without consent |
 | 3.4 | DAT 1.x port behind a camera-backend seam | NEXT (big) | Two builds share all code above the seam; full-resolution stills as an opt-in HIGH_DETAIL path; recording not cut by photos; D1–D11 pass on V128 |
@@ -88,7 +88,7 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 | 4.5 | PC: Secure Enclave request signing and signed approvals (F27) | LATER | Stolen bearer token alone useless; approvals signed and verified |
 | 4.6 | PC: PDF via pdf.js in a worker; Windows OCR (F19); FTS5 index (F16) | LATER | Scanned PDFs readable; offline search across shared folders |
 | 4.7 | PC: tray app, autostart, DPAPI for the key | LATER | Runs at sign-in without a terminal; key unusable outside the profile |
-| 4.8 | Long-task relay in voice (F01) | NEXT | PC tasks over 10 s announced, results delivered later even after the conversation ended |
+| 4.8 | Long-task relay in voice (F01) | IN CI / DEVICE TEST | PC tasks over 10 s announced, results delivered later even after the conversation ended — into the conversation, or as a notice and a summary-only notification; followed up to 30 min; `testLongPCTasksAreReportedWhenTheyFinish`; physical PC9 |
 | 4.9 | iOS: Files import, share extension, widgets | BLOCKED | Extension signing in the sideloaded IPA (needs a paid developer team) |
 
 ## Phase 5 — New features from research
@@ -116,8 +116,19 @@ All of these wait on the owner supplying keys and approving costs.
 
 ## Next session, in order
 
-1. Read the CI results of this session's push and fix anything red (`TEST_REPORT.md`).
-2. Owner's physical tests: AU1, SEC1, VC1–VC3, CAM1, DAT1, then PC1–PC8.
-3. Phase 1 NEXT items: 1.4 → 1.5 → 1.6 → 1.7 → 1.12 → 1.13 → 1.14 → 1.15.
-4. Phase 2: 2.1 (honest status strip) and 2.4 (approval inbox).
-5. DAT 1.x port (3.4) once the glasses are on V128.
+1. Read the CI results of the last push and fix anything red (`TEST_REPORT.md`).
+2. Owner's physical tests, most valuable first:
+   - AU1, VC1–VC4, AU2, AU3 (voice start, audio route, watchdog);
+   - CAM1, CAM2, DAT1 (camera honesty and freshness, DAT version);
+   - SEC1–SEC3 (approvals and injection);
+   - PC1–PC10 (companion), RA1 (Remote Assist).
+3. Owner decisions:
+   - HFP before the camera stream (1.7), after AU2/AU3;
+   - Remote Assist TLS (1.15);
+   - App Store privacy answers from `PrivacyInfo.xcprivacy` (1.16).
+4. Remaining NEXT items:
+   - 2.2 list choice and voice complete/delete; 2.3 task snooze/recurrence with notification actions;
+   - more than one waiting phone action (2.4);
+   - 3.1 Live Vision images and an opt-in thumbnail; 3.2 memory supersession and inbox;
+   - per-crate Rust license texts in CI (1.16).
+5. DAT 1.x port (3.4) once DAT1 shows the glasses need it.

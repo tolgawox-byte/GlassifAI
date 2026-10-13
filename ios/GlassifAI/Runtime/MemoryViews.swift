@@ -118,7 +118,8 @@ struct MemoryTabView: View {
           switch hit.item {
           case .memory(let record): memoryLink(record)
           case .note(let note): noteLink(note)
-          case .task(let task): TaskSearchRow(task: task)
+          case .task(let task):
+            NavigationLink { TaskEditorView(task: task) } label: { TaskSearchRow(task: task) }
           }
         }
       }
@@ -291,7 +292,7 @@ struct MemoryTabView: View {
   }
 }
 
-/// A task found by the Memory search (open it in the Tasks tab).
+/// A task found by the Memory search; tapping opens it.
 private struct TaskSearchRow: View {
   let task: TaskItem
 
