@@ -54,7 +54,7 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 | 1.13 | EXIF stripped from stills sent to providers | DONE-CI | Pass-through stills keep their bytes only after a clean metadata strip; otherwise re-encoded | `testStillsSentToAModelCarryNoLocationOrCameraMetadata` (JPEG with GPS and camera tags) |
 | 1.14 | Session-wide untrusted-content taint; memory saves gated on the user's words | DONE-CI / DEVICE TEST | The mark lasts until the conversation ends; QR, translation, document, Live Vision, MCP and PC text set it; a model-delegated `save:` is refused while it is set (the user's own "hatırla …" through the bridge, or typed input, still saves); personal-data reads planned by the model wait for a yes; memories and the previous summary are quoted data blocks; outside text cannot pose as "[App message". **Not gated, on purpose**: a model-started Live Vision ("bakmaya devam et" reaches the app only through the model today; gating it would break "Bu ne? → Bakmaya devam et") — gate it once the bridge parses the start phrases | `testOutsideContentCannotPlantAMemoryTurnsLater`, `testOutsideTextCannotBreakOutOfItsWrapperOrPoseAsTheApp`, updated `testChangesPlannedAfterUntrustedContentWaitForAYes`; physical SEC2, SEC3 |
 | 1.15 | Remote Assist Wi-Fi only + TLS; OpenClaw HTTPS + hostname fix; authentication on personal-data intents | DONE-CI / NEXT (TLS) | Remote Assist: Wi-Fi only, local network only, four viewers, 10 s request timeout (done, CI); gateway: no token over plain HTTP except loopback/Tailscale, `fc`/`fd` host names not private (done, CI); briefing, vehicle and remember intents need an unlocked phone (done, CI). Still NEXT: Remote Assist TLS (a per-session certificate makes browsers warn; needs a device test of the viewer experience) | `testGatewayHostNamesAreNotMistakenForPrivateAddresses`, `testPersonalDataIntentsNeedAnUnlockedPhone`; physical RA1 |
-| 1.16 | Third-party notices and privacy copy | DONE-CI (app texts, manifest, crate list) / NEXT (Rust texts in the app) | Full texts of WebRTC (BSD-3 + patents), BoringSSL, Abseil, Opus, libvpx, libyuv, libsrtp, CRC32C and Codex ship in the app; `PrivacyInfo.xcprivacy` from the code (owner review before App Store); contacts wording corrected; `docs/RUST_CRATE_LICENSES.md` lists every crate's declared license. Still NEXT: per-crate Rust license texts (`cargo about` in CI) and WebRTC components not yet listed (dav1d, libaom, libjpeg-turbo) | `testTheAppShipsItsLicenseTextsAndPrivacyManifest`; review |
+| 1.16 | Third-party notices and privacy copy | DONE-CI (app texts, manifest, crate list) / IN CI (Rust texts in the app) / NEXT (6 MIT/BSD crates without a license file; dav1d, libaom, libjpeg-turbo) | Full texts of WebRTC (BSD-3 + patents), BoringSSL, Abseil, Opus, libvpx, libyuv, libsrtp, CRC32C and Codex ship in the app; `PrivacyInfo.xcprivacy` from the code (owner review before App Store); contacts wording corrected; `docs/RUST_CRATE_LICENSES.md` lists every crate's declared license. Still NEXT: per-crate Rust license texts (`cargo about` in CI) and WebRTC components not yet listed (dav1d, libaom, libjpeg-turbo) | `testTheAppShipsItsLicenseTextsAndPrivacyManifest`; review |
 
 ## Phase 2 — Core experience (P1)
 
@@ -93,7 +93,7 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 
 ## Phase 5 — New features from research
 
-Ordered by value ÷ cost: F03 (audio watchdog, in 1.6), F10 (approval inbox, 2.4), F01 (relay, 4.8), F06/F07 (memory), F05 (egress PII screen), F04 (MCP definition pinning), F02 (frame pin), F13 (dry run), F14 (crash briefing), F09 (assistive mode), F24 (exposure profiles), F22 (latency timeline), then the P3 items. Details and sources: `JARVIS_FEATURE_RESEARCH.md` §5.
+Ordered by value ÷ cost: F03 (audio watchdog, in 1.6 — DONE-CI), F10 (approval inbox, 2.4 — DONE-CI, phone part single-slot), F01 (relay, 4.8 — DONE-CI), F06/F07 (memory), F05 (egress PII screen), F04 (MCP definition pinning — IN CI), F02 (frame pin), F13 (dry run), F14 (crash briefing), F09 (assistive mode), F24 (exposure profiles), F22 (latency timeline), then the P3 items. Details and sources: `JARVIS_FEATURE_RESEARCH.md` §5.
 
 Multi-provider architecture: the existing router (ChatGPT, Claude, Gemini, Perplexity, OpenRouter, Apple on-device) stays. Next:
 - an OpenAI API-key provider for the official Realtime API (`gpt-realtime-2.1`, image input);
@@ -131,5 +131,6 @@ All of these wait on the owner supplying keys and approving costs.
    - 2.2 list choice and voice complete/delete; 2.3 task snooze/recurrence with notification actions;
    - more than one waiting phone action (2.4);
    - 3.1 Live Vision images and an opt-in thumbnail; 3.2 memory supersession and inbox;
-   - bundle `rust-crate-licenses.txt` from the CI screenshots branch into the app (1.16; CI collects it from phase 1e on).
+   - fetch the notices of the six MIT/BSD crates that publish no license file from their repositories (1.16);
+   - find out why some screenshot launches do not stay up (the phase 1f run logs the simulator's reason).
 5. DAT 1.x port (3.4) once DAT1 shows the glasses need it.

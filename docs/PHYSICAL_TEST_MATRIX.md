@@ -66,6 +66,7 @@ A checklist for a human tester with the real Ray-Ban Meta (Gen 1) glasses and th
 | PC9 | Long PC task reported later | Allow a command that takes about a minute (for example `npm-test` on a real project, PC4); "Bilgisayarda testleri çalıştır", tap to approve; then (a) keep talking, (b) another time end the conversation and lock the phone | After about 10 s: "the PC is still working; I will tell you". (a) The result is spoken into the conversation when it finishes; (b) a notification "Bilgisayarda bitti: <summary>" with no result text; the result is in Settings → Bilgisayar (PC) | NOT RUN |
 | PC10 | Approval inbox | Ask the PC for two changes that need approval; tap the Home chip "Bilgisayar: 2 onay bekliyor" | The inbox lists both with their own Approve/Deny; approving one runs only that one; with the PC stopped the note "has not answered in the last 30 seconds" appears | NOT RUN |
 | TK1 | Task alert actions | "2 dakika sonra lastikleri kontrol et diye görev oluştur"; lock the phone; when the alert comes, long-press it and tap "1 saat ertele"; the next time tap "Tamamla"; also leave the app open for one alert | Snooze moves the task an hour and a new alert comes; Complete ticks the task without opening the app; with the app open the alert shows as a banner; Privacy center → Activity log lists both actions | NOT RUN |
+| SK2 | A changed MCP tool is blocked | With an MCP server you control: add it, set a read-only tool to "Allow (read-only)", change that tool's description on the server, then tap "Connect and read tools" | The message names the tool; it shows "Changed since you last reviewed it" and is Blocked; choosing "Ask every time" clears the mark | NOT RUN |
 | SEC1 | The model cannot confirm | Ask your agent or a skill for something that asks "Onaylıyor musun?"; stay silent and let the assistant talk; then say "Evet" | Nothing runs while only the assistant speaks; your own "Evet" (or a tap) runs it | NOT RUN |
 | AU1 | Offline cold launch keeps the session | Wait until the ChatGPT access token is old (or a day later); force-quit the app; Airplane Mode on; open the app | The app opens (notes, tasks, memory visible); no sign-in screen; after the network returns, a conversation starts normally | NOT RUN |
 | VC1 | Stop during start | Tap the voice button and tap stop within one second; tap start again | The second call connects and stays connected; the first never tears it down | NOT RUN |
@@ -86,7 +87,7 @@ A checklist for a human tester with the real Ray-Ban Meta (Gen 1) glasses and th
 | Item | Status |
 |---|---|
 | All rows above | PHYSICAL_TEST_REQUIRED (NOT RUN) |
-| Rows needing an MCP server (SK1) | REQUIRES_PROVIDER |
+| Rows needing an MCP server (SK1, SK2) | REQUIRES_PROVIDER |
 | Rows needing the Windows PC with the companion running (PC1–PC8) | PHYSICAL_TEST_REQUIRED (PC and iPhone on the same Wi-Fi) |
 | Rows needing a second device on the same Wi-Fi (RA1) | PHYSICAL_TEST_REQUIRED |
 | Rows needing Apple Intelligence (AI1, part of OF1) | PHYSICAL_TEST_REQUIRED on an eligible iPhone |

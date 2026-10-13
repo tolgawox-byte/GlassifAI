@@ -15,6 +15,20 @@ final class TaskNotifications: NSObject, UNUserNotificationCenterDelegate {
   nonisolated static let taskIDKey = "taskID"
   nonisolated static let snoozeInterval: TimeInterval = 3_600
 
+  /// Whether alerts are allowed. Tests replace it: the unit-test host has no
+  /// notification service, and a call to it never returns there (phase 1e,
+  /// run 38336561701).
+  var alertsAllowed: @MainActor () async -> Bool = {
+    let status = await LocalNotifications.authorizationStatus(timeout: 3)
+    return [UNAuthorizationStatus.authorized, .provisional, .ephemeral].contains(status)
+  }
+
+  /// Sets the snoozed task's new alert and returns its id. Tests replace it.
+  var scheduleAlert: @MainActor (_ title: String, _ date: Date, _ taskID: UUID) async -> String? = { title, date, taskID in
+    try? await LocalNotifications.schedule(
+      title: title, body: L.t("AutoLoom task", "AutoLoom görevi"), at: date, taskID: taskID)
+  }
+
   /// Called once at launch, before any notification can be answered.
   func register() {
     let center = UNUserNotificationCenter.current()
@@ -57,10 +71,7 @@ final class TaskNotifications: NSObject, UNUserNotificationCenterDelegate {
       store.updateTask(task, title: task.title, notes: task.notes, dueAt: next, dueHasTime: true)
       // A new alert only where alerts are already allowed (an alert's own
       // action implies it); never a permission prompt from here.
-      let status = await LocalNotifications.authorizationStatus()
-      if [UNAuthorizationStatus.authorized, .provisional, .ephemeral].contains(status),
-         let id = try? await LocalNotifications.schedule(
-           title: task.title, body: L.t("AutoLoom task", "AutoLoom görevi"), at: next, taskID: task.id) {
+      if await alertsAllowed(), let id = await scheduleAlert(task.title, next, task.id) {
         store.setNotificationID(task, id)
       }
       ActivityLog.shared.record(.action, L.t("Task — snoozed for an hour from its alert", "Görev — bildiriminden 1 saat ertelendi"))
@@ -68,5 +79,20 @@ final class TaskNotifications: NSObject, UNUserNotificationCenterDelegate {
     default:
       return false
     }
+  }
+}
+
+/// True for the first caller only, from any thread: resumes a continuation
+/// exactly once when two callbacks race (an answer and a timeout).
+final class ResumeOnce: @unchecked Sendable {
+  private let lock = NSLock()
+  private var claimed = false
+
+  func claim() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !claimed else { return false }
+    claimed = true
+    return true
   }
 }

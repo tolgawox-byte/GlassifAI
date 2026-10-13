@@ -547,6 +547,23 @@ enum LocalNotifications {
     await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
   }
 
+  /// The same, but answers `.notDetermined` after `timeout` instead of
+  /// waiting forever: a notification action has little background time, and
+  /// where no notification service answers (the unit-test host) the plain
+  /// call never returns.
+  static func authorizationStatus(timeout: TimeInterval) async -> UNAuthorizationStatus {
+    await withCheckedContinuation { continuation in
+      let once = ResumeOnce()
+      UNUserNotificationCenter.current().getNotificationSettings { settings in
+        let status = settings.authorizationStatus
+        if once.claim() { continuation.resume(returning: status) }
+      }
+      DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+        if once.claim() { continuation.resume(returning: .notDetermined) }
+      }
+    }
+  }
+
   /// Schedules one notification and confirms it was accepted by iOS. A task's
   /// alert carries its id, so its lock-screen actions find it.
   @MainActor

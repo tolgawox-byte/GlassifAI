@@ -2,6 +2,43 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [CI — simulator boot failures reported and contained] — branch `autoloom-glasses-jarvis-v1`
+
+Phase 1c's run (38330128872) was red although every test passed. In that run:
+- parallel testing had cloned the simulator once per worker;
+- on a runner that was slow throughout (a pure parsing test took 139 s), clone 2 missed its 60-second boot ("Failed to prepare device 'Clone 2 of iPhone 18 Pro' … Timed out trying to boot simulator after waiting 60.00s");
+- xcodebuild recorded that as a "System Failures" case and exited 65;
+- the later, independent Rust step never ran.
+
+### Changed
+- **Fewer simulators boot at once:** at most two parallel test workers (`-maximum-parallel-testing-workers 2`).
+- **A simulator-only failure is reported as one, and the step stays red.** `scripts/xcresult-classify.py` checks that every failure is the simulator's and none is a test's. If so, it adds an error annotation "Simulator infrastructure: Not a test failure …" with the device message and how many test cases ran out of how many exist in the source. The step stays red; it is never turned green. Test classes that did not run because of it run again on one simulator without clones, reported under "Rerun:".
+- **The Rust tests always run**, unless the run was cancelled.
+- The result summary moved from the shell script into `scripts/xcresult-summary.py`, so the rerun is summarised the same way.
+- **Screenshot launches that end without a crash report now say why.** Every run has lost 3–8 screens this way, and phase 1e reached the script's limit of 8. The script now records what the simulator's process manager (runningboardd, SpringBoard, launchd) logged about the app: in the annotation and in `logs/<screen>.termination.txt`.
+
+## [JARVIS Ultimate — phase 1f: MCP tool pinning, Rust licenses in the app, phase 1e test fix] — branch `autoloom-glasses-jarvis-v1`
+
+Research item F04 and plan items 1.16 and 2.3. CI results: `TEST_REPORT.md`.
+
+### Fixed
+- **Phase 1e's red run:** the task-alert test hung for 180 s. It reached `UNUserNotificationCenter.notificationSettings()`, which never returns in the unit-test host. Now:
+  - the alert check and the alert scheduling are replaceable, and the test replaces both;
+  - the test checks both paths: alerts not allowed (no new alert, no prompt) and allowed (a new alert an hour later, carrying the task's id);
+  - in the app, the check gives up after 3 s, because a lock-screen action has little background time.
+
+### Licenses
+- **The Rust crates' license texts ship in the app** (Settings → Licenses → Full license texts).
+  - CI collected them from the 451 crates resolved for iOS: 269 distinct texts, including aws-lc-sys, ring, rustls and ICU4X.
+  - Every crate's declared license matched the crates.io declaration of the same version. The two OpenAI git forks of tungstenite and tokio-tungstenite declare the same as upstream.
+  - 42 crates publish no license file:
+    - the Apache-2.0 ones, and those offering Apache-2.0 as one choice, are covered by the Apache text included;
+    - six MIT- or BSD-only crates (Inflector, debugserver-types, schemafy_core, schemafy_lib, ts-rs, ts-rs-macros) are named as still missing their notices; no text was made up for them.
+  - `option-ext` (MPL-2.0) is noted as unmodified, with its source location.
+
+### Security
+- **A skill's tool that changes after you reviewed it is blocked** (protection against a "rug pull"). The app pins what you reviewed for each tool: its name, title, description, input schema and read-only/destructive claims. If a later sync finds any of these changed, that tool is blocked and marked "Changed since you last reviewed it". It stays blocked until you choose a policy for it again, and the sync message names the tools. Tools that are new on the server start at "Ask every time", as before. A tool the server drops loses its policy, so it cannot come back later with another definition and keep an old "Allow" (found while reviewing this change). The PC companion is exempt: it is your own, key-pinned, and approves on the PC.
+
 ## [JARVIS Ultimate — phase 1e: task alert actions, Rust crate license texts] — branch `autoloom-glasses-jarvis-v1`
 
 Plan items 2.3 (part) and 1.16 (part). CI results: `TEST_REPORT.md`. New physical test TK1.

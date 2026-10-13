@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Security
 import SwiftUI
@@ -221,11 +222,36 @@ struct SkillServer: Codable, Equatable, Identifiable {
   /// PCCompanion.swift). Optional so older skills.json files still decode.
   var pinnedKey: String?
   var companion: Bool?
+  /// Tools whose definition changed since the last sync; blocked until the
+  /// user chooses a policy again (research F04). Optional for older files.
+  var changedTools: Set<String>?
 
   var host: String { url.host ?? url.absoluteString }
   var isCompanion: Bool { companion == true && pinnedKey != nil }
 
   func policy(for tool: String) -> SkillPolicy { policies[tool] ?? .ask }
+  func hasChanged(_ tool: String) -> Bool { changedTools?.contains(tool) == true }
+}
+
+/// What the user reviewed when they set a tool's policy: its name, title,
+/// description, input schema and read-only/destructive claims. A server that
+/// later changes any of these ("rug pull") gets that tool blocked until the
+/// user looks again (research F04).
+enum MCPToolPinning {
+  static func digest(_ tool: MCPTool) -> String {
+    let parts = [tool.name, tool.title ?? "", tool.summary, tool.inputSchema, "\(tool.readOnly)", "\(tool.destructive)"]
+    let data = Data(parts.joined(separator: "\u{1F}").utf8)
+    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// Tools present before and now whose definition changed.
+  static func changedTools(old: [MCPTool], new: [MCPTool]) -> Set<String> {
+    let before = Dictionary(old.map { ($0.name, digest($0)) }, uniquingKeysWith: { first, _ in first })
+    return Set(new.compactMap { tool in
+      guard let previous = before[tool.name], previous != digest(tool) else { return nil }
+      return tool.name
+    })
+  }
 }
 
 /// What a remote tool call needs before it runs: nil = blocked.
@@ -341,9 +367,27 @@ final class SkillStore: ObservableObject {
     do {
       _ = try await client.initialize()
       let tools = try await client.listTools()
+      // The PC companion is the user's own, key-pinned and approves on the
+      // PC; any other server that changed a tool's definition gets it blocked.
+      let changed = server.isCompanion ? [] : MCPToolPinning.changedTools(old: server.tools, new: tools)
       update(id) {
         $0.tools = tools
         $0.lastSync = Date()
+        // A tool the server dropped loses its policy: if it comes back, even
+        // with another definition, it starts again at "Ask every time".
+        let present = Set(tools.map(\.name))
+        $0.policies = $0.policies.filter { present.contains($0.key) }
+        $0.changedTools = $0.changedTools?.filter { present.contains($0) }
+        for name in changed {
+          $0.policies[name] = .block
+          $0.changedTools = ($0.changedTools ?? []).union([name])
+        }
+      }
+      if !changed.isEmpty {
+        return L.t(
+          "\(changed.count) tool(s) changed since you last reviewed them and are blocked until you choose again: ",
+          "\(changed.count) araç son incelemenizden bu yana değişti; yeniden seçene kadar engellendi: ")
+          + changed.sorted().joined(separator: ", ")
       }
       return nil
     } catch {
@@ -352,7 +396,11 @@ final class SkillStore: ObservableObject {
   }
 
   func setPolicy(_ policy: SkillPolicy, tool: String, server id: UUID) {
-    update(id) { $0.policies[tool] = policy }
+    update(id) {
+      $0.policies[tool] = policy
+      // Choosing again is the review of the changed definition.
+      $0.changedTools?.remove(tool)
+    }
   }
 
   func setEnabled(_ enabled: Bool, server id: UUID) {
@@ -615,6 +663,14 @@ struct SkillsView: View {
                   .foregroundStyle(tool.readOnly ? Color.green : tool.destructive ? Color.red : Color.orange)
               }
               if !tool.summary.isEmpty { Text(tool.summary).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
+              if server.hasChanged(tool.name) {
+                Label(
+                  L.t("Changed since you last reviewed it; blocked until you choose a policy again.",
+                      "Son incelemenizden beri değişti; yeniden bir izin seçene kadar engelli."),
+                  systemImage: "exclamationmark.triangle")
+                  .font(.caption)
+                  .foregroundStyle(.orange)
+              }
               Picker(L.t("Policy", "İzin"), selection: Binding(
                 get: { server.policy(for: tool.name) }, set: { store.setPolicy($0, tool: tool.name, server: server.id) })) {
                 ForEach(SkillPolicy.allCases.filter { $0 != .allowReadOnly || tool.readOnly }) { Text($0.title).tag($0) }

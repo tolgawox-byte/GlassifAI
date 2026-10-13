@@ -196,20 +196,44 @@ final class AutoLoomSecurityHardeningTests: XCTestCase {
     let title = "Lastik basıncı \(UUID().uuidString.prefix(6))"
     let task = try XCTUnwrap(store.addTask(title: title, dueAt: Date().addingTimeInterval(600), source: "test"))
     defer { store.deleteTask(task) }
+    // No notification service in the test host (a call to it never
+    // returns there): both system calls are replaced.
+    let alerts = TaskNotifications()
+    var scheduled: [(title: String, date: Date, taskID: UUID)] = []
+    alerts.alertsAllowed = { false }
+    alerts.scheduleAlert = { title, date, taskID in
+      scheduled.append((title, date, taskID))
+      return "alert-\(scheduled.count)"
+    }
+
     let now = Date()
-    let snoozed = await TaskNotifications.shared.handle(action: TaskNotifications.snoozeAction, taskID: task.id, now: now)
+    let snoozed = await alerts.handle(action: TaskNotifications.snoozeAction, taskID: task.id, now: now)
     XCTAssertTrue(snoozed)
     XCTAssertEqual(task.dueAt?.timeIntervalSince1970 ?? 0, now.addingTimeInterval(3_600).timeIntervalSince1970, accuracy: 1)
     XCTAssertTrue(task.dueHasTime)
-    let opened = await TaskNotifications.shared.handle(action: "com.apple.UNNotificationDefaultActionIdentifier", taskID: task.id)
+    XCTAssertTrue(scheduled.isEmpty, "alerts not allowed: no new alert and no permission prompt")
+
+    alerts.alertsAllowed = { true }
+    let later = now.addingTimeInterval(60)
+    let snoozedAgain = await alerts.handle(action: TaskNotifications.snoozeAction, taskID: task.id, now: later)
+    XCTAssertTrue(snoozedAgain)
+    XCTAssertEqual(scheduled.count, 1)
+    XCTAssertEqual(scheduled.first?.taskID, task.id, "the new alert carries the task, so its actions find it")
+    XCTAssertEqual(scheduled.first?.date.timeIntervalSince1970 ?? 0, later.addingTimeInterval(3_600).timeIntervalSince1970, accuracy: 1)
+    XCTAssertEqual(task.notificationID, "alert-1")
+
+    let opened = await alerts.handle(action: "com.apple.UNNotificationDefaultActionIdentifier", taskID: task.id)
     XCTAssertFalse(opened, "opening the alert itself changes nothing")
     XCTAssertFalse(task.completed)
-    let completed = await TaskNotifications.shared.handle(action: TaskNotifications.completeAction, taskID: task.id)
+    // Completing cancels the task's pending alert; keep the test host away
+    // from the notification service there too.
+    store.setNotificationID(task, nil)
+    let completed = await alerts.handle(action: TaskNotifications.completeAction, taskID: task.id)
     XCTAssertTrue(completed)
     XCTAssertTrue(task.completed)
-    let again = await TaskNotifications.shared.handle(action: TaskNotifications.completeAction, taskID: task.id)
+    let again = await alerts.handle(action: TaskNotifications.completeAction, taskID: task.id)
     XCTAssertFalse(again, "a finished task is left alone")
-    let unknown = await TaskNotifications.shared.handle(action: TaskNotifications.completeAction, taskID: UUID())
+    let unknown = await alerts.handle(action: TaskNotifications.completeAction, taskID: UUID())
     XCTAssertFalse(unknown)
   }
 
@@ -242,6 +266,9 @@ final class AutoLoomSecurityHardeningTests: XCTestCase {
     for needle in [
       "The WebRTC project authors", "Additional IP Rights Grant (Patents)", "BoringSSL", "Cisco Systems",
       "Xiph.Org", "The WebM Project authors", "The LibYuv Project Authors", "The CRC32C Authors", "OpenAI Codex",
+      // The Rust crates of the native bridge (collected by CI, phase 1f).
+      "Rust crates of the native bridge (iOS target)", "aws-lc-sys", "rustls", "option-ext 0.2.0 — MPL-2.0",
+      "Mozilla Public License",
     ] {
       XCTAssertTrue(text.contains(needle), needle)
     }

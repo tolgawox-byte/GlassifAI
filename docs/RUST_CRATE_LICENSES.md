@@ -2,7 +2,7 @@
 
 Every package in `native/GlassifAICodexBridge/Cargo.lock`, with the license its crates.io release declares (crates.io API, read 2026-10-13). This is a **superset** of what the iOS static library contains: the lockfile also lists build-time crates and crates for other platforms (Windows, Linux).
 
-Full license texts per crate are not reproduced here yet; that needs `cargo about` (or equivalent) in CI (`JARVIS_IMPLEMENTATION_PLAN.md` 1.16).
+The license texts themselves ship in the app (`ios/GlassifAI/Runtime/AutoLoomThirdPartyLicenses.txt`). CI collects them for the crates resolved for **iOS** (`cargo metadata --filter-platform aarch64-apple-ios`; `scripts/rust-license-texts.py`). Run 38336561701 found 451 such crates and 269 distinct texts. Their declared licenses match this list. 42 of them publish no license file: Apache-2.0 or Apache-2.0-choice crates are covered by the Apache text; six MIT/BSD-only crates still lack their notices (Inflector, debugserver-types, schemafy_core, schemafy_lib, ts-rs, ts-rs-macros).
 
 ## Summary
 

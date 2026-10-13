@@ -13,6 +13,7 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 | Run | Commit | Result | Notes |
 |---|---|---|---|
+| [38336561701](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38336561701) | `ef0778e` | **FAILED · iOS 350 passed, 2 skipped, 1 failed** · Rust step not reached | Phase 1e. `testATaskAlertCanCompleteOrSnoozeItsTask` hung for its full 180 s allowance. Root cause: it reached `UNUserNotificationCenter.notificationSettings()`, which never returns in the unit-test host (the existing `TimerCenter` already keeps tests away from the notification service for that reason). Fixed in phase 1f: the alert check and scheduling are injectable and the test replaces both; in the app the check gives up after 3 s. The screenshot step stopped after 8 launches that did not stay up (8 different screens, no crash report; see below). The new license step worked: 451 crates, 269 distinct texts |
 | [38333865610](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38333865610) | `2b5a83e` | **BUILD PASS · iOS 350/352 (2 skipped) · Rust 13/13** | Phase 1d: long PC task relay, approval inbox, activity log, search and timeline rows open their item, MCP transport (no redirects, 4 MB cap), capture age and metadata in diagnostics, failed requests no longer mark the conversation. Also re-verifies phase 1c and the Rust step 1c's run never reached. 21 screenshots (`run-38333865610-2b5a83e`), including the new approval inbox and license texts, checked by eye |
 | [38330128872](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38330128872) | `2e020fa` | BUILD PASS · iOS 346 passed, 2 skipped, **1 system failure** · Rust step not reached | Phase 1c. Every test passed, including the four new ones (capture-time freshness, late photos, contact lookups, license texts and privacy manifest). The job is red because one parallel simulator clone timed out while booting ("Failed to prepare device 'Clone 2 of iPhone 18 Pro' … waiting 60.00s"); the runner was slow throughout (a pure parsing test took 139 s). The stop skipped the Rust step; 1c changed no Rust code, and the next run covers both. 25 screenshots (`run-38330128872-2e020fa`) |
 | [38327327122](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38327327122) | `6385e03` | **BUILD PASS · iOS 342/344 (2 skipped) · Rust 13/13** | Phase 1b: structured voice-start errors, bridge timeouts and sideband budget, start ladder, audio-flow watchdog, WebRTC audio configuration, conversation-wide untrusted-content mark, memory-save gate, metadata strip, locked-phone intents, gateway and Remote Assist hardening. New: `AutoLoomSecurityHardeningTests`, `AutoLoomRealtimeReliabilityTests`, 5 Rust tests. 19 screenshots (`run-38327327122-6385e03`) |
@@ -23,7 +24,23 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 The screenshot step reports "not running after launch" for a few screens on every run (6 on the baseline, 3 on `2e32c2a`, 7 on `6385e03`). Different screens each time and never a crash report, so it is the simulator's launch, not the app; those screens are simply missing from that run's set.
 
-Phase 1e (next commit) adds the task alert actions test and the CI step that collects the Rust crate license texts. **Its run is pending**; its result is added here when it finishes.
+Phase 1f (next push) fixes phase 1e's hung test, bundles the Rust crate license texts, adds MCP tool pinning, and changes how CI handles simulator failures. **Its run is pending**; its result is added here when it finishes.
+
+### Simulator infrastructure (investigated, not ignored)
+
+- **Phase 1c's red run (simulator boot).** The run was 38330128872.
+  - Parallel testing clones the simulator once per worker.
+  - On a runner that was slow throughout, clone 2 missed its 60-second boot: "Failed to prepare device 'Clone 2 of iPhone 18 Pro' … Timed out trying to boot simulator after waiting 60.00s".
+  - xcodebuild counted that as a failed "System Failures" case and exited 65. Every real test had run and passed, but the later Rust step was skipped.
+  - Changed in phase 1f:
+    - at most two workers;
+    - `scripts/xcresult-classify.py` names a simulator-only failure "Simulator infrastructure" and the step stays red;
+    - classes that did not run are run again on one simulator;
+    - the Rust tests run even when the iOS step failed.
+- **Screenshot launches that do not stay up.**
+  - Every run since the baseline lost 3–8 screens this way: always different screens and never a crash report. The app logs its normal start and is gone 7–15 s later.
+  - Phase 1e reached the script's limit of 8.
+  - The cause is not known yet. From phase 1f the script records what the simulator's process manager logged about the app (`logs/<screen>.termination.txt` and the annotation), so the next run says why.
 
 ### What CI cannot show
 
