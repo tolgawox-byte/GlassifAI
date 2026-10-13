@@ -3,7 +3,7 @@
 GlassifAI’s original application code and branding are released under the MIT License in [`LICENSE`](LICENSE). Third-party components retain their own licenses and terms.
 
 - **Meta Wearables Device Access Toolkit and camera-access sample code** — governed by the [Meta Wearables Developer Terms](https://wearables.developer.meta.com/terms) and [Acceptable Use Policy](https://wearables.developer.meta.com/acceptable-use-policy). The upstream notices are preserved in [`NOTICE`](NOTICE).
-- **OpenAI Codex** — Apache License 2.0. The pinned source, its license and its NOTICE are preserved under [`vendor/codex`](vendor/codex); the NOTICE and license texts also ship in the app's license file.
+- **OpenAI Codex** — Apache License 2.0. The pinned source, its license and its NOTICE are preserved under [`vendor/codex`](vendor/codex); the NOTICE and license texts also ship in the app's license file. Two files differ from `rust-v0.149.0` (iOS trust roots in `http-client`); they carry a change notice and are listed in [`vendor/codex/MODIFICATIONS.md`](vendor/codex/MODIFICATIONS.md).
 - **LiveKit WebRTC XCFramework** (`livekit/webrtc-xcframework` 144.7559.11, `46f2af8`).
   - The packaging repository is under the MIT License ("Copyright (c) 2021 WebRTC SDKs").
   - The binary (download checksum `07c5caf7…` matches the package) carries **WebRTC's BSD 3-Clause license** and its patent grant.

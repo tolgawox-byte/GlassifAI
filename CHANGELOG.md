@@ -2,6 +2,19 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — phase 1e: task alert actions, Rust crate license texts] — branch `autoloom-glasses-jarvis-v1`
+
+Plan items 2.3 (part) and 1.16 (part). CI results: `TEST_REPORT.md`. New physical test TK1.
+
+### Added
+- **Task alerts can complete or snooze their task from the lock screen** (plan 2.3). The actions are "Tamamla / Complete" and "1 saat ertele / Snooze 1 hour"; both are handled in the background, without opening the app. Snoozing moves the due time an hour ahead and, where alerts are already allowed, sets a new alert; it never shows a permission prompt. While the app is on screen a task alert now shows as a banner; other notifications keep their earlier behaviour. Each action is written to the activity log.
+- **CI collects the license texts of the Rust crates compiled for iOS** (plan 1.16): `cargo metadata --filter-platform aarch64-apple-ios`, then each crate's own LICENSE/COPYING/NOTICE files, with each distinct text written once. The file is published with the screenshots (`logs/rust-crate-licenses.txt`) so it can be bundled in the app; a CI failure in this step never fails the build.
+
+### Licenses and policy
+- **The vendored Codex files changed from `rust-v0.149.0` now say so** (Apache License 2.0, section 4(b)). The two files are `http-client/src/custom_ca.rs` (iOS trust roots) and its `Cargo.toml`. They carry a notice at the top and are listed in `vendor/codex/MODIFICATIONS.md`. A `diff -r` against the pristine release confirmed that every other file, including the realtime call and sideband code, is byte-identical. Audit M7.
+- The in-app license text reads better on a phone: the app's own introduction is no longer hard-wrapped, and the separators fit the screen (seen in the phase 1d screenshot).
+- `SECURITY.md` no longer points reporters at private vulnerability reporting while it is disabled. It asks for a details-free "Security contact request" issue until the owner enables the feature. Audit M9: enabling it is the owner's action.
+
 ## [JARVIS Ultimate — phase 1d: long PC tasks reported later, approval inbox] — branch `autoloom-glasses-jarvis-v1`
 
 Plan items 4.8, 2.4 (part), 2.5, 2.7 and 3.1 (part). CI results: `TEST_REPORT.md`. New physical tests PC9, PC10.

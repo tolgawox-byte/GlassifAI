@@ -1,19 +1,13 @@
 AutoLoom Media Glasses - third-party licenses
 
-This file reproduces the license texts of open-source code compiled into this app.
-WebRTC's framework does not ship the notices of the components it bundles; the texts
-below were taken from those components at the revisions pinned in WebRTC's DEPS for
-branch 7559 (the branch of LiveKitWebRTC 144.7559.11). Other components WebRTC may
-link (for example dav1d, libaom, libjpeg-turbo) and the Rust crates of the native
-bridge are not listed yet (tracked in JARVIS_IMPLEMENTATION_PLAN.md, item 1.16).
+This file reproduces the license texts of open-source code compiled into this app. WebRTC's framework does not ship the notices of the components it bundles; the texts below were taken from those components at the revisions pinned in WebRTC's DEPS for branch 7559 (the branch of LiveKitWebRTC 144.7559.11). Other components WebRTC may link (for example dav1d, libaom, libjpeg-turbo) and the Rust crates of the native bridge are not listed yet (JARVIS_IMPLEMENTATION_PLAN.md, item 1.16).
 
-Meta's Wearables Device Access Toolkit is used under the Meta Wearables Developer
-Terms (https://wearables.developer.meta.com/terms), not an open-source license.
+Meta's Wearables Device Access Toolkit is used under the Meta Wearables Developer Terms (https://wearables.developer.meta.com/terms), not an open-source license.
 
-========================================================================
+====================================
 WebRTC (inside LiveKitWebRTC.xcframework 144.7559.11)
 The binary framework's own LICENSE file (checksum-verified download of the pinned release).
-========================================================================
+====================================
 
 Copyright (c) 2011, The WebRTC project authors. All rights reserved.
 
@@ -70,10 +64,10 @@ infringement, then any patent rights granted to you under this License
 for this implementation of the WebRTC code package shall terminate as
 of the date such litigation is filed.
 
-========================================================================
+====================================
 LiveKit WebRTC XCFramework packaging (livekit/webrtc-xcframework 46f2af8)
 The build and packaging repository.
-========================================================================
+====================================
 
 MIT License
 
@@ -97,10 +91,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-========================================================================
+====================================
 BoringSSL (WebRTC branch 7559, boringssl b94d71f8)
 TLS/DTLS for the voice connection.
-========================================================================
+====================================
 
                                  Apache License
                            Version 2.0, January 2004
@@ -340,10 +334,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-========================================================================
+====================================
 libsrtp (WebRTC branch 7559, libsrtp a52756ac)
 Encrypted audio packets.
-========================================================================
+====================================
 
 /*
  *	
@@ -381,10 +375,10 @@ Encrypted audio packets.
  *
  */
 
-========================================================================
+====================================
 Opus (WebRTC branch 7559, chromium third_party a3b630c2)
 Voice codec.
-========================================================================
+====================================
 
 Copyright 2001-2023 Xiph.Org, Skype Limited, Octasic,
                     Jean-Marc Valin, Timothy B. Terriberry,
@@ -431,10 +425,10 @@ https://datatracker.ietf.org/ipr/1914/
 Broadcom Corporation:
 https://datatracker.ietf.org/ipr/1526/
 
-========================================================================
+====================================
 libvpx (WebRTC branch 7559, libvpx 9a7674e1)
 Video codecs built into WebRTC.
-========================================================================
+====================================
 
 Copyright (c) 2010, The WebM Project authors. All rights reserved.
 
@@ -491,10 +485,10 @@ patent infringement, then any patent rights granted to you under this License
 for these implementations of WebM shall terminate as of the date such
 litigation is filed.
 
-========================================================================
+====================================
 libyuv (WebRTC branch 7559, libyuv 4825d9b2)
 Image format conversion.
-========================================================================
+====================================
 
 Copyright 2011 The LibYuv Project Authors. All rights reserved.
 
@@ -526,10 +520,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-========================================================================
+====================================
 CRC32C (WebRTC branch 7559, crc32c d3d60ac6)
 Checksums for the data channel.
-========================================================================
+====================================
 
 Copyright 2017, The CRC32C Authors.
 
@@ -560,10 +554,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-========================================================================
+====================================
 Abseil (WebRTC branch 7559, chromium third_party a3b630c2)
 C++ support library.
-========================================================================
+====================================
 
                                  Apache License
                            Version 2.0, January 2004
@@ -767,10 +761,10 @@ C++ support library.
    See the License for the specific language governing permissions and
    limitations under the License.
 
-========================================================================
+====================================
 OpenAI Codex (vendored rust-v0.149.0 under vendor/codex)
 The native bridge is built from this code.
-========================================================================
+====================================
 
 OpenAI Codex
 Copyright 2025 OpenAI

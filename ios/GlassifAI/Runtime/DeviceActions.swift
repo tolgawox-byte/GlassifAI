@@ -547,9 +547,10 @@ enum LocalNotifications {
     await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
   }
 
-  /// Schedules one notification and confirms it was accepted by iOS.
+  /// Schedules one notification and confirms it was accepted by iOS. A task's
+  /// alert carries its id, so its lock-screen actions find it.
   @MainActor
-  static func schedule(title: String, body: String?, at date: Date) async throws -> String {
+  static func schedule(title: String, body: String?, at date: Date, taskID: UUID? = nil) async throws -> String {
     let center = UNUserNotificationCenter.current()
     switch await authorizationStatus() {
     case .authorized, .provisional, .ephemeral: break
@@ -567,6 +568,10 @@ enum LocalNotifications {
     content.title = title
     if let body { content.body = body }
     content.sound = .default
+    if let taskID {
+      content.categoryIdentifier = TaskNotifications.category
+      content.userInfo = [TaskNotifications.taskIDKey: taskID.uuidString]
+    }
     let seconds = max(1, date.timeIntervalSinceNow)
     let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
     let identifier = "autoloom-\(UUID().uuidString)"

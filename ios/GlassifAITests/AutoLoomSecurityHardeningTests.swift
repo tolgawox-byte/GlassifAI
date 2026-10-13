@@ -189,6 +189,30 @@ final class AutoLoomSecurityHardeningTests: XCTestCase {
     }
   }
 
+  /// Plan 2.3: a task alert's Complete and Snooze work without opening the
+  /// app, and leave a finished or unknown task alone.
+  func testATaskAlertCanCompleteOrSnoozeItsTask() async throws {
+    let store = MemoryStore.shared
+    let title = "Lastik basıncı \(UUID().uuidString.prefix(6))"
+    let task = try XCTUnwrap(store.addTask(title: title, dueAt: Date().addingTimeInterval(600), source: "test"))
+    defer { store.deleteTask(task) }
+    let now = Date()
+    let snoozed = await TaskNotifications.shared.handle(action: TaskNotifications.snoozeAction, taskID: task.id, now: now)
+    XCTAssertTrue(snoozed)
+    XCTAssertEqual(task.dueAt?.timeIntervalSince1970 ?? 0, now.addingTimeInterval(3_600).timeIntervalSince1970, accuracy: 1)
+    XCTAssertTrue(task.dueHasTime)
+    let opened = await TaskNotifications.shared.handle(action: "com.apple.UNNotificationDefaultActionIdentifier", taskID: task.id)
+    XCTAssertFalse(opened, "opening the alert itself changes nothing")
+    XCTAssertFalse(task.completed)
+    let completed = await TaskNotifications.shared.handle(action: TaskNotifications.completeAction, taskID: task.id)
+    XCTAssertTrue(completed)
+    XCTAssertTrue(task.completed)
+    let again = await TaskNotifications.shared.handle(action: TaskNotifications.completeAction, taskID: task.id)
+    XCTAssertFalse(again, "a finished task is left alone")
+    let unknown = await TaskNotifications.shared.handle(action: TaskNotifications.completeAction, taskID: UUID())
+    XCTAssertFalse(unknown)
+  }
+
   /// Plan 2.5: the activity log keeps 30 days on this iPhone, survives a
   /// restart, and its titles are sanitized like every log line.
   func testTheActivityLogKeepsThirtyDaysWithoutSecrets() throws {

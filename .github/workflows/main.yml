@@ -139,6 +139,18 @@ jobs:
           chmod +x ./scripts/ci-screenshots.sh
           ./scripts/ci-screenshots.sh
 
+      # The license texts of the Rust crates compiled into the app, published
+      # with the screenshots (logs/) so they can be bundled (JARVIS plan 1.16).
+      - name: Rust crate license texts
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p screenshots/logs
+          cargo metadata --manifest-path native/GlassifAICodexBridge/Cargo.toml --format-version 1 \
+            --filter-platform aarch64-apple-ios > cargo-metadata.json
+          python3 scripts/rust-license-texts.py cargo-metadata.json > screenshots/logs/rust-crate-licenses.txt
+          echo "::notice title=Rust crate licenses::$(sed -n '2p' screenshots/logs/rust-crate-licenses.txt)"
+
       - name: Hand screenshots to the publish job
         if: always()
         continue-on-error: true

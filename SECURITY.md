@@ -2,7 +2,12 @@
 
 ## Reporting a vulnerability
 
-Please use GitHub’s private vulnerability reporting for this repository rather than opening a public issue. Include the affected commit, reproduction steps, impact, and any suggested mitigation.
+Please do not put the details of a vulnerability in a public issue.
+
+- When GitHub's private vulnerability reporting is enabled for this repository (the owner turns it on in Settings → Code security), use it.
+- Until then, open an issue titled "Security contact request" with no details; the owner will reply with a private channel.
+
+Include the affected commit, reproduction steps, impact, and any suggested mitigation.
 
 Do not include access tokens, refresh tokens, device codes, account identifiers, camera frames, or other private user data in a report.
 

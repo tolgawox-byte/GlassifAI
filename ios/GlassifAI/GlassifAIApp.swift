@@ -46,6 +46,9 @@ struct GlassifAIApp: App {
       let configured = available
       MainActor.assumeIsolated {
         WearableConnectionCoordinator.shared.attach(wearables: configured, configureError: failure)
+        // Before any notification can be answered: a task alert's Complete
+        // or Snooze may be what launched the app.
+        TaskNotifications.shared.register()
       }
     }
   }

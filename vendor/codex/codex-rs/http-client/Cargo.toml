@@ -21,6 +21,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "time", "sync"] }
 tracing = { workspace = true }
+# Added by GlassifAI / AutoLoom (see vendor/codex/MODIFICATIONS.md): fallback roots on iOS.
 webpki-roots = "1.0.5"
 tracing-opentelemetry = { workspace = true }
 zstd = { workspace = true }

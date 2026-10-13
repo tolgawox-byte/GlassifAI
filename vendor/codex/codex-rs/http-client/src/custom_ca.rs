@@ -1,3 +1,7 @@
+// MODIFIED by GlassifAI / AutoLoom Media Glasses from OpenAI Codex rust-v0.149.0
+// (Apache License 2.0, section 4(b)): on iOS a rustls configuration is always
+// built, and the Mozilla roots from `webpki-roots` are used when the platform
+// store yields no certificates. See vendor/codex/MODIFICATIONS.md.
 //! Custom CA handling shared by Codex outbound HTTP and websocket clients.
 //!
 //! Codex constructs outbound reqwest clients and secure websocket connections in a few crates, but

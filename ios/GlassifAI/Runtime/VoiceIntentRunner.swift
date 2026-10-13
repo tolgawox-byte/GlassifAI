@@ -1253,7 +1253,7 @@ extension AssistantOrchestrator {
     }
     do {
       let id = try await LocalNotifications.schedule(
-        title: task.title, body: L.t("AutoLoom task", "AutoLoom görevi"), at: date)
+        title: task.title, body: L.t("AutoLoom task", "AutoLoom görevi"), at: date, taskID: task.id)
       MemoryStore.shared.setNotificationID(task, id)
       ActionTraceLog.shared.update(traceID) { $0.permission = "notifications: granted (alert scheduled)" }
     } catch {

@@ -417,7 +417,8 @@ struct TasksTabView: View {
     guard hasTime, next > Date() else { return }
     let title = task.title
     Task {
-      if let id = try? await LocalNotifications.schedule(title: title, body: L.t("AutoLoom task", "AutoLoom görevi"), at: next) {
+      if let id = try? await LocalNotifications.schedule(
+        title: title, body: L.t("AutoLoom task", "AutoLoom görevi"), at: next, taskID: task.id) {
         store.setNotificationID(task, id)
       }
     }
@@ -574,7 +575,7 @@ struct TaskEditorView: View {
     Task { @MainActor in
       guard await PermissionCenter.state(.notifications) == .granted,
             let id = try? await LocalNotifications.schedule(
-              title: taskTitle, body: L.t("AutoLoom task", "AutoLoom görevi"), at: date),
+              title: taskTitle, body: L.t("AutoLoom task", "AutoLoom görevi"), at: date, taskID: saved.id),
             store.tasks.contains(where: { $0 === saved }) else { return }
       store.setNotificationID(saved, id)
     }
