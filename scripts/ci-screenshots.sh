@@ -64,6 +64,19 @@ sleep 15
 xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
 taken=0
 crashed=0
+# Whether the app launched for the current screen still runs. `simctl launch`
+# prints the app's pid, a process of this Mac, so `kill -0` sees it. The
+# simulator's `launchctl list` alone reported running apps as gone: in run
+# 38341978615 every "not running" app was running-active-Visible in the
+# simulator's own log, and a relaunch returned the same pid.
+app_alive() {
+  local pid
+  pid="$(grep -oE "${BUNDLE}: [0-9]+" "$LOGS/$screen.launch.txt" 2>/dev/null | tail -n 1 | grep -oE '[0-9]+$')"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"
+}
 for screen in $SCREENS; do
   xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
   sleep 1
@@ -77,7 +90,7 @@ for screen in $SCREENS; do
   sleep 7
   # Not running: one more try before reporting (a launch can be refused
   # while the previous process is still going away).
-  if ! xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
+  if ! app_alive; then
     sleep 2
     xcrun simctl launch "$UDID" "$BUNDLE" -AutoLoomScreenshot "$screen" >>"$LOGS/$screen.launch.txt" 2>&1 || true
     sleep 8
@@ -85,7 +98,7 @@ for screen in $SCREENS; do
   # A launch that did not stay up: say why (crash report, app output, and
   # what the simulator's process manager logged, since these launches end
   # without a crash report).
-  if ! xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
+  if ! app_alive; then
     report="$(python3 "$ROOT/scripts/crash-summary.py" GlassifAI "$started" 2>&1 | head -c 1500)"
     newest="$(ls -t ~/Library/Logs/DiagnosticReports/GlassifAI*.ips 2>/dev/null | head -1)"
     [ -n "$newest" ] && cp "$newest" "$LOGS/$screen.crash.ips"
@@ -93,8 +106,8 @@ for screen in $SCREENS; do
     xcrun simctl spawn "$UDID" log show --last 40s --style compact \
       --predicate '(process == "runningboardd" OR process == "SpringBoard" OR process == "launchd") AND eventMessage CONTAINS[c] "glassifai"' \
       > "$LOGS/$screen.termination.txt" 2>/dev/null || true
-    reason="$(grep -iE 'terminat|exit|kill|jetsam|watchdog|memory|crash' "$LOGS/$screen.termination.txt" 2>/dev/null \
-      | tail -n 3 | cut -c1-240 | tr '\n' ' ')"
+    reason="$(grep -iE 'process exited|termination reported|exited with|watchdog|jetsam event|crash' "$LOGS/$screen.termination.txt" 2>/dev/null \
+      | grep -v 'SuspendableJetsamPriority' | tail -n 3 | cut -c1-240 | tr '\n' ' ')"
     echo "::warning title=Screenshot $screen::not running after launch — $report — system log: ${reason:-nothing about the app} — stderr: ${output:-none}"
     crashed=$((crashed + 1))
     if [ "$crashed" -ge 8 ]; then

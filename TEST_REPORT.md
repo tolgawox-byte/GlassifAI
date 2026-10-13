@@ -13,6 +13,7 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 | Run | Commit | Result | Notes |
 |---|---|---|---|
+| [38341978615](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38341978615) | `13807e3` | **BUILD PASS · iOS 352/354 (2 skipped, 0 failed) · Rust 13/13** | Phase 1f on top of the CI change `fe447f0`. The phase 1e test that hung now passes (under 3 s). It also covers MCP tool pinning, a dropped tool losing its policy, and the Rust license texts in the app. 354 test cases ran, the same number of test methods `xcresult-classify.py` counts in the source. License step: 451 crates, 269 texts. 23 of 28 screenshots (see below for the 5 others) |
 | [38336561701](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38336561701) | `ef0778e` | **FAILED · iOS 350 passed, 2 skipped, 1 failed** · Rust step not reached | Phase 1e. `testATaskAlertCanCompleteOrSnoozeItsTask` hung for its full 180 s allowance. Root cause: it reached `UNUserNotificationCenter.notificationSettings()`, which never returns in the unit-test host (the existing `TimerCenter` already keeps tests away from the notification service for that reason). Fixed in phase 1f: the alert check and scheduling are injectable and the test replaces both; in the app the check gives up after 3 s. The screenshot step stopped after 8 launches that did not stay up (8 different screens, no crash report; see below). The new license step worked: 451 crates, 269 distinct texts |
 | [38333865610](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38333865610) | `2b5a83e` | **BUILD PASS · iOS 350/352 (2 skipped) · Rust 13/13** | Phase 1d: long PC task relay, approval inbox, activity log, search and timeline rows open their item, MCP transport (no redirects, 4 MB cap), capture age and metadata in diagnostics, failed requests no longer mark the conversation. Also re-verifies phase 1c and the Rust step 1c's run never reached. 21 screenshots (`run-38333865610-2b5a83e`), including the new approval inbox and license texts, checked by eye |
 | [38330128872](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38330128872) | `2e020fa` | BUILD PASS · iOS 346 passed, 2 skipped, **1 system failure** · Rust step not reached | Phase 1c. Every test passed, including the four new ones (capture-time freshness, late photos, contact lookups, license texts and privacy manifest). The job is red because one parallel simulator clone timed out while booting ("Failed to prepare device 'Clone 2 of iPhone 18 Pro' … waiting 60.00s"); the runner was slow throughout (a pure parsing test took 139 s). The stop skipped the Rust step; 1c changed no Rust code, and the next run covers both. 25 screenshots (`run-38330128872-2e020fa`) |
@@ -24,7 +25,7 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 The screenshot step reports "not running after launch" for a few screens on every run (6 on the baseline, 3 on `2e32c2a`, 7 on `6385e03`). Different screens each time and never a crash report, so it is the simulator's launch, not the app; those screens are simply missing from that run's set.
 
-Phase 1f (next push) fixes phase 1e's hung test, bundles the Rust crate license texts, adds MCP tool pinning, and changes how CI handles simulator failures. **Its run is pending**; its result is added here when it finishes.
+The next push fixes the screenshot liveness check. **Its run is pending**; its result is added here when it finishes.
 
 ### Simulator infrastructure (investigated, not ignored)
 
@@ -40,7 +41,12 @@ Phase 1f (next push) fixes phase 1e's hung test, bundles the Rust crate license 
 - **Screenshot launches that do not stay up.**
   - Every run since the baseline lost 3–8 screens this way: always different screens and never a crash report. The app logs its normal start and is gone 7–15 s later.
   - Phase 1e reached the script's limit of 8.
-  - The cause is not known yet. From phase 1f the script records what the simulator's process manager logged about the app (`logs/<screen>.termination.txt` and the annotation), so the next run says why.
+  - **Root cause found in run 38341978615.** Phase 1f logged what the simulator's process manager recorded about the app for each of the 5 screens reported "not running" (`logs/<screen>.termination.txt`):
+    - every one of those apps was `running-active-Visible` with no exit;
+    - the only exits were the previous screens' instances, closed by the script itself (force-quit);
+    - the relaunch returned the same pid (for example `1768` twice).
+  - So the apps were running. The script's liveness check (`launchctl list` inside the simulator) reported running apps as gone; nothing had crashed.
+  - Fixed (next commit): the check uses the pid that `simctl launch` prints, which is a process of the Mac, with `kill -0`; `launchctl` is only the fallback.
 
 ### What CI cannot show
 
