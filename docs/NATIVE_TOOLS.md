@@ -27,7 +27,7 @@ This is enforced in code as well as in the prompts: when camera, web or agent co
 
 | Tool | Actions | Risk | Permission |
 |---|---|---|---|
-| Reminders | create_reminder, list_reminders | **SAFE** (explicit request; an unclear time is asked first) | Reminders (full access), asked on first use |
+| Reminders | create_reminder, list_reminders; complete_reminder and delete_reminder from the user's own words only | **SAFE** (explicit request; an unclear time is asked first); completing is SAFE and undone by "geri al"; deleting is **CONFIRM** | Reminders (full access), asked on first use |
 | Calendar | today_events, upcoming_events, create_event, "yarın ne var?" | **SAFE** (explicit request; an unclear time is asked first) | Calendars (full for reading, write-only is enough to add) |
 | AutoLoom Notes | save_note | SAFE | none |
 | AutoLoom Tasks | local tasks ("görev oluştur") | SAFE | none (Notifications only for an optional alert) |
@@ -83,13 +83,13 @@ Rules:
 AutoLoom tasks and Apple Reminders together:
 - **Today** (due today or overdue), **Upcoming** (later, and undated), **Completed** (AutoLoom: last 20; Reminders: last 7 days).
 - AutoLoom tasks: add, edit (natural-language "when" field), complete, delete; swipe right for **Tomorrow** (same time tomorrow, with a new alert) or **Reschedule**; an optional notification at the due time when notifications are allowed.
-- Apple Reminders through EventKit: complete, delete (confirmation), reschedule; "Connect" card when access was not asked yet.
+- Apple Reminders through EventKit: complete, delete (confirmation), reschedule; "Connect" card when access was not asked yet. A new reminder's sheet has a list picker. A row whose reminder was deleted in the Reminders app says so and the list reloads.
 - Notifications scheduled by the assistant are listed and can be cancelled.
 - Everything the assistant creates by voice appears immediately (the store is observed; Reminders are reloaded after each spoken action).
 
 ## Not supported
 
-Email, purchases, payments, deleting the user's data (except the app's own memories, tasks and the user's reminders in the Tasks tab, all with confirmation), posting publicly, code or deployment changes, and deleting calendar events by voice.
+Email, purchases, payments, deleting the user's data (except the app's own memories, tasks and notes, and one Apple reminder at a time by voice or in the Tasks tab, all with confirmation), deleting several reminders at once, posting publicly, code or deployment changes, and deleting calendar events by voice.
 
 ## The Local Agent (multi-agent, v1.4)
 

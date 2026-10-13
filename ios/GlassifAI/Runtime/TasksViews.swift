@@ -30,6 +30,10 @@ final class RemindersBoard: ObservableObject {
   @Published private(set) var upcoming: [Item] = []
   @Published private(set) var completed: [Item] = []
   @Published private(set) var notifications: [ScheduledNotification] = []
+  /// Lists that take new reminders, and the one a new reminder goes to by
+  /// default (the list chosen in Settings, else iOS's default list).
+  @Published private(set) var lists: [ReminderLists.Option] = []
+  @Published private(set) var defaultListID: String?
   @Published private(set) var access: PermissionState = .notAsked
   @Published private(set) var lastError: String?
   @Published private(set) var isLoading = false
@@ -60,6 +64,8 @@ final class RemindersBoard: ObservableObject {
     guard access == .granted else { return }
     isLoading = true
     defer { isLoading = false }
+    lists = ReminderLists.options(in: store)
+    defaultListID = ReminderLists.destination(for: DeviceActionPlan(kind: .createReminder), store: store).list?.calendarIdentifier
     let calendar = Calendar.current
     let open: [EKReminder] = await fetch(store.predicateForIncompleteReminders(
       withDueDateStarting: nil, ending: nil, calendars: nil))
@@ -95,32 +101,45 @@ final class RemindersBoard: ObservableObject {
       list: reminder.calendar?.title ?? "")
   }
 
+  /// The reminder behind a row; a row whose reminder is gone (deleted in
+  /// the Reminders app meanwhile) says so instead of doing nothing.
   private func reminder(_ item: Item) -> EKReminder? {
-    store.calendarItem(withIdentifier: item.id) as? EKReminder
+    guard let reminder = store.calendarItem(withIdentifier: item.id) as? EKReminder else {
+      lastError = L.t("This reminder is no longer in Apple Reminders.", "Bu anımsatıcı artık Apple Anımsatıcılar'da yok.")
+      return nil
+    }
+    return reminder
   }
 
   func setCompleted(_ item: Item, _ done: Bool) async {
-    guard let reminder = reminder(item) else { return }
+    guard let reminder = reminder(item) else { return await load() }
     reminder.isCompleted = done
     commit { try store.save(reminder, commit: true) }
     await load()
   }
 
   func delete(_ item: Item) async {
-    guard let reminder = reminder(item) else { return }
+    guard let reminder = reminder(item) else { return await load() }
     commit { try store.remove(reminder, commit: true) }
     await load()
   }
 
   func reschedule(_ item: Item, to date: Date, hasTime: Bool) async {
-    guard let reminder = reminder(item) else { return }
+    guard let reminder = reminder(item) else { return await load() }
     apply(date: date, hasTime: hasTime, to: reminder)
     commit { try store.save(reminder, commit: true) }
     await load()
   }
 
-  func create(title: String, due: Date?, hasTime: Bool) async {
-    guard access == .granted, let list = store.defaultCalendarForNewReminders() else { return }
+  /// A new reminder in `listID`, else in the default list for new reminders.
+  func create(title: String, due: Date?, hasTime: Bool, listID: String? = nil) async {
+    guard access == .granted else { return }
+    var plan = DeviceActionPlan(kind: .createReminder)
+    plan.reminderListID = listID
+    guard let list = ReminderLists.destination(for: plan, store: store).list else {
+      lastError = L.t("No Reminders list can take a new reminder.", "Yeni anımsatıcı alabilecek bir Anımsatıcılar listesi yok.")
+      return
+    }
     let reminder = EKReminder(eventStore: store)
     reminder.title = title
     reminder.calendar = list
@@ -586,7 +605,9 @@ struct TaskEditorView: View {
 /// naturally ("yarın 9'da") and is shown resolved before saving.
 struct ReminderEditorView: View {
   let item: RemindersBoard.Item?
+  @ObservedObject private var board = RemindersBoard.shared
   @State private var title = ""
+  @State private var listID = ""
   @State private var hasDue = true
   @State private var includeTime = true
   @State private var due = Date().addingTimeInterval(3_600)
@@ -598,6 +619,13 @@ struct ReminderEditorView: View {
     Form {
       if item == nil {
         TextField(L.t("Reminder", "Anımsatıcı"), text: $title)
+        if !board.lists.isEmpty {
+          Picker(L.t("List", "Liste"), selection: $listID) {
+            ForEach(board.lists) { list in
+              Text(list.title).tag(list.id)
+            }
+          }
+        }
       } else {
         Text(item?.title ?? "").font(.headline)
       }
@@ -633,11 +661,13 @@ struct ReminderEditorView: View {
           let due = due
           let hasDue = hasDue
           let includeTime = includeTime
+          let listID = listID
           Task {
             if let item {
               if hasDue { await board.reschedule(item, to: due, hasTime: includeTime) }
             } else {
-              await board.create(title: title, due: hasDue ? due : nil, hasTime: includeTime)
+              await board.create(
+                title: title, due: hasDue ? due : nil, hasTime: includeTime, listID: listID.isEmpty ? nil : listID)
             }
           }
           dismiss()
@@ -654,6 +684,9 @@ struct ReminderEditorView: View {
           due = date
           includeTime = item.hasTime
         }
+      } else {
+        let preferred = board.defaultListID.flatMap { id in board.lists.contains(where: { $0.id == id }) ? id : nil }
+        listID = preferred ?? board.lists.first?.id ?? ""
       }
     }
   }

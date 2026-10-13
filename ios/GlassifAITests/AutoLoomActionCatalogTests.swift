@@ -164,6 +164,7 @@ final class AutoLoomActionCatalogTests: XCTestCase {
       .createReminder(title: "x", time: time), .locationReminder(title: "x", place: .home, arriving: true),
       .notify(title: nil, time: time), .createTask(title: "x", time: nil), .createEvent(title: "x", time: time),
       .readCalendar(.today), .listTasks, .completeTask("x"), .moveTask(title: nil, time: time), .dayPlan(.today),
+      .completeReminder(.words("x")), .deleteReminder(.id("x")), .ask(.chooseReminder(delete: true, options: [])),
       .translateView(language: "Türkçe"), .call(contact: "x"), .message(contact: "x", body: "y"), .findContact("x"),
       .directions("x"), .nearby("x"), .directionsInView, .copyText(nil), .shareText(nil), .routine(.startWork),
       .routine(.briefing), .routine(.eveningReview), .routine(.weeklyReview), .takePhoto(label: nil, note: nil, caption: nil),

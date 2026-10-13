@@ -60,8 +60,10 @@ extension VoiceIntent {
   /// A command that may be one step of several in a sentence.
   var isGraphStep: Bool {
     switch self {
+    // A reminder deletion waits for its own yes; it is never one step of several.
     case .ask, .classify, .graph, .dropAwaiting, .confirmPending, .choosePendingTime, .cancelTasks, .correctPending,
-         .capabilities, .search, .findVisual, .whatChanged, .userRoutine, .remoteAssist, .skill, .runShortcut:
+         .capabilities, .search, .findVisual, .whatChanged, .userRoutine, .remoteAssist, .skill, .runShortcut,
+         .deleteReminder:
       false
     default:
       true

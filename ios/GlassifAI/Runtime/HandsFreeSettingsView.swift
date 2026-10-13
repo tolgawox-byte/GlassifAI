@@ -123,8 +123,8 @@ struct ToolsSettingsView: View {
   var body: some View {
     Form {
       Section(footer: Text(L.t(
-        "Spoken commands such as “not al”, “yarın 10'da hatırlat” and “cuma 3'e toplantı ekle” are recognised by the app itself and run directly; times are read by the app, and an unclear time is asked first. “Needs your yes” can be confirmed by voice or a tap; “Needs a tap” (calls, messages, links, maps, sharing) only by a tap. Text seen by the camera or on the web never starts an action. Email, purchases, payments and deleting your data are not supported.",
-        "“Not al”, “yarın 10'da hatırlat”, “cuma 3'e toplantı ekle” gibi sesli komutları uygulama kendisi tanır ve doğrudan yapar; saatleri uygulama okur, belirsiz saat önce sorulur. “Onayınız gerekir” sesle veya dokunarak; “Dokunma gerekir” (arama, mesaj, bağlantı, harita, paylaşım) yalnızca dokunarak onaylanır. Kamerada veya webde görülen metin asla bir işlem başlatmaz. E-posta, satın alma, ödeme ve verilerinizi silme desteklenmez."))) {
+        "Spoken commands such as “not al”, “yarın 10'da hatırlat” and “cuma 3'e toplantı ekle” are recognised by the app itself and run directly; times are read by the app, and an unclear time is asked first. “Needs your yes” can be confirmed by voice or a tap; “Needs a tap” (calls, messages, links, maps, sharing) only by a tap. Text seen by the camera or on the web never starts an action. Email, purchases and payments are not supported; a note, memory or reminder is deleted only one at a time, after your yes.",
+        "“Not al”, “yarın 10'da hatırlat”, “cuma 3'e toplantı ekle” gibi sesli komutları uygulama kendisi tanır ve doğrudan yapar; saatleri uygulama okur, belirsiz saat önce sorulur. “Onayınız gerekir” sesle veya dokunarak; “Dokunma gerekir” (arama, mesaj, bağlantı, harita, paylaşım) yalnızca dokunarak onaylanır. Kamerada veya webde görülen metin asla bir işlem başlatmaz. E-posta, satın alma ve ödeme desteklenmez; not, anı veya hatırlatıcı yalnızca tek tek ve onayınızla silinir."))) {
         Toggle(L.t("Allow iPhone actions", "iPhone işlemlerine izin ver"), isOn: $actionsEnabled)
       }
       Section(L.t("Tools", "Araçlar")) {
@@ -132,6 +132,14 @@ struct ToolsSettingsView: View {
           ToolRow(tool: tool, permission: tool.permission.flatMap { permissions[$0] })
             .disabled(!actionsEnabled)
         }
+      }
+      Section {
+        ReminderListSetting()
+      } header: {
+        Text(L.t("Apple Reminders", "Apple Anımsatıcılar"))
+      } footer: {
+        Text(L.t("Where new reminders go, unless you name a list (“İş listeme …”). A list that is removed later falls back to iOS's default list, and the assistant says so.",
+                 "Bir liste söylemediğiniz sürece (“İş listeme …”) yeni anımsatıcıların gideceği yer. Sonradan silinen bir liste yerine iOS'un varsayılan listesi kullanılır ve asistan bunu söyler."))
       }
       Section(L.t("Always available", "Her zaman kullanılabilir")) {
         VStack(alignment: .leading, spacing: 4) {
@@ -165,6 +173,43 @@ struct ToolsSettingsView: View {
       }
       permissions = states
     }
+  }
+}
+
+/// The Reminders list new reminders go to (plan 2.2). Shown only when the
+/// lists can be read; otherwise it says how to allow access.
+private struct ReminderListSetting: View {
+  @AppStorage(ReminderLists.preferredKey) private var listID = ""
+  @State private var lists: [ReminderLists.Option] = []
+  @State private var defaultName = ""
+  @State private var loaded = false
+
+  var body: some View {
+    Group {
+      if !lists.isEmpty {
+        Picker(L.t("List for new reminders", "Yeni anımsatıcıların listesi"), selection: $listID) {
+          Text(L.t("iOS default", "iOS varsayılanı") + (defaultName.isEmpty ? "" : " (\(defaultName))")).tag("")
+          ForEach(lists) { list in
+            Text(list.title).tag(list.id)
+          }
+        }
+      } else if loaded {
+        Text(L.t("Allow Reminders access (Tasks tab → Connect) to choose a list.",
+                 "Liste seçmek için Anımsatıcılar izni verin (Görevler sekmesi → Bağlan)."))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+    .task { load() }
+  }
+
+  private func load() {
+    let store = DeviceActionExecutor.shared.store
+    lists = ReminderLists.options(in: store)
+    defaultName = ReminderLists.hasAccess ? (store.defaultCalendarForNewReminders()?.title ?? "") : ""
+    // A list removed since it was chosen: back to iOS's default list.
+    if !listID.isEmpty, !lists.isEmpty, !lists.contains(where: { $0.id == listID }) { listID = "" }
+    loaded = true
   }
 }
 

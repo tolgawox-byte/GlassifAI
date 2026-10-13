@@ -935,6 +935,8 @@ final class AssistantOrchestrator: ObservableObject {
           if plan.kind == .call { return Outcome(speakable: text, kind: .authorizedAction) }
         }
       }
+      // "İş listeme …": a Reminders list named in the request (plan 2.2).
+      ReminderLists.applyNamedList(to: &plan, request: query, store: DeviceActionExecutor.shared.store)
       if taint.isTainted {
         // Text from the camera, the web or an agent never triggers a change
         // by itself (brief: prompt injection), whatever the model decided,

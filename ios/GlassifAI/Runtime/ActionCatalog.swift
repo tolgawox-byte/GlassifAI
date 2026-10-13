@@ -414,7 +414,7 @@ enum ActionCatalog {
       ui: "Tasks", keys: ["listTasks"]),
     ActionDefinition(
       "task.complete", .tasks, name: "Complete a task", tr: "Görevi tamamla",
-      summary: "Marks an AutoLoom task as done.",
+      summary: "Marks an AutoLoom task as done; when no task matches, an open Apple reminder with those words.",
       examplesTR: ["Lastik görevini tamamla", "[saved] Bunu tamamla"], examplesEN: ["Mark the tire order as done"],
       undo: .notSupported, ui: "Tasks → tap the circle", keys: ["completeTask"]),
     ActionDefinition(
@@ -437,6 +437,25 @@ enum ActionCatalog {
       examplesEN: ["Remind me to call mom when I get home"], permissions: [.reminders], capabilities: [.network],
       offline: false, undo: .notSupported, voiceOnly: "Apple Reminders shows and edits it",
       status: .physicalTestRequired, keys: ["locationReminder"]),
+    ActionDefinition(
+      "reminder.complete", .tasks, name: "Complete a reminder", tr: "Hatırlatıcıyı tamamla",
+      summary: "Marks one open Apple reminder as done, checked by reading Reminders back; \"geri al\" reopens it.",
+      examplesTR: [
+        "Süt alma hatırlatıcısını tamamla", "Ahmet'i arama anımsatıcısını tamamlandı olarak işaretle",
+        "Bu hatırlatıcıyı tamamla",
+      ],
+      examplesEN: ["Mark the milk reminder as done", "Complete the reminder to call mom"],
+      negatives: ["Süt almayı hatırlat", "Bir hatırlatıcı oluştur", "Lastik görevini tamamla"],
+      permissions: [.reminders], undo: .supported, localPriority: true, ui: "Tasks → tap the circle",
+      status: .physicalTestRequired, keys: ["completeReminder", "ask.chooseReminder"]),
+    ActionDefinition(
+      "reminder.delete", .tasks, name: "Delete a reminder", tr: "Hatırlatıcıyı sil",
+      summary: "Deletes one open Apple reminder after a yes, checked by reading Reminders back. It cannot be undone.",
+      examplesTR: ["Süt alma hatırlatıcısını sil", "Diş hekimi anımsatıcısını kaldır", "Bu hatırlatıcıyı sil"],
+      examplesEN: ["Delete the dentist reminder", "Remove the reminder to call mom"],
+      negatives: ["Tüm hatırlatıcılarımı sil", "Bu notu sil", "Delete all my reminders"],
+      risk: .confirm, confirmation: .always, permissions: [.reminders], undo: .impossible,
+      ui: "Tasks → swipe → Delete", status: .physicalTestRequired, keys: ["deleteReminder"]),
     ActionDefinition(
       "notification.schedule", .tasks, name: "Notify me", tr: "Haber ver",
       summary: "A local notification at a time.", examplesTR: ["20 dakika sonra bana haber ver"], examplesEN: ["Notify me in 20 minutes"],
@@ -1143,6 +1162,8 @@ extension VoiceIntent {
     case .readCalendar: "readCalendar"
     case .listTasks: "listTasks"
     case .completeTask: "completeTask"
+    case .completeReminder: "completeReminder"
+    case .deleteReminder: "deleteReminder"
     case .moveTask: "moveTask"
     case .dayPlan: "dayPlan"
     case .translateView: "translateView"

@@ -20,6 +20,9 @@ enum VoiceIntent: Equatable {
     case messageRecipient(body: String?)
     /// "İki Ahmet buldum: Ahmet Yılmaz mı, Ahmet Kaya mı?"
     case chooseContact(action: ContactAction, names: [String])
+    /// "Hangisi: Süt al (Market) mı, Süt al (İş) mi?" before completing or
+    /// deleting an Apple reminder.
+    case chooseReminder(delete: Bool, options: [ReminderOption])
 
     /// For the action trace: the kind of question, never its content.
     var label: String {
@@ -33,6 +36,7 @@ enum VoiceIntent: Equatable {
       case .messageBody: "messageBody"
       case .messageRecipient: "messageRecipient"
       case .chooseContact: "chooseContact"
+      case .chooseReminder: "chooseReminder"
       }
     }
   }
@@ -92,6 +96,11 @@ enum VoiceIntent: Equatable {
   case readCalendar(CalendarRange)
   case listTasks
   case completeTask(String)
+  /// "Süt alma hatırlatıcısını tamamla": an open Apple reminder, done at
+  /// once ("geri al" reopens it).
+  case completeReminder(ReminderTarget)
+  /// "Süt alma hatırlatıcısını sil": deleted only after a yes.
+  case deleteReminder(ReminderTarget)
   /// "Bugün ne yapmam gerekiyor?": AutoLoom tasks, Apple Reminders and the
   /// calendar together.
   case dayPlan(CalendarRange)
@@ -204,6 +213,8 @@ enum VoiceIntent: Equatable {
     case .readCalendar(let range): "readCalendar(\(range.rawValue))"
     case .listTasks: "listTasks"
     case .completeTask: "completeTask"
+    case .completeReminder: "completeReminder"
+    case .deleteReminder: "deleteReminder"
     case .dayPlan(let range): "dayPlan(\(range.rawValue))"
     case .translateView: "translateView"
     case .call: "call"
@@ -401,6 +412,7 @@ enum VoiceActionIntentBridge {
       { skill($0, context) },
       { shortcut($0) },
       { translation($0, context) },
+      { reminderEdits($0) },
       { messages($0, context) },
       { notes($0, context) },
       { noteQueries($0) },
@@ -797,6 +809,75 @@ enum VoiceActionIntentBridge {
   }
 
   // MARK: 3. Reminders and notifications
+
+  /// "Reminder" as the object of the verb: "süt hatırlatıcısını", "bu
+  /// anımsatıcıyı", "hatırlatmayı".
+  private static let reminderNouns: Set<String> = [
+    "hatirlatici", "hatirlaticiyi", "hatirlaticisi", "hatirlaticisini", "hatirlaticimi", "animsatici",
+    "animsaticiyi", "animsaticisi", "animsaticisini", "animsaticimi", "hatirlatmayi", "hatirlatmasi",
+    "hatirlatmasini", "hatirlatmami",
+  ]
+  /// Several reminders at once are never completed or deleted by voice.
+  private static let reminderPlurals: Set<String> = [
+    "hatirlaticilar", "hatirlaticilari", "hatirlaticilarim", "hatirlaticilarimi", "animsaticilar", "animsaticilari",
+    "animsaticilarim", "animsaticilarimi", "hatirlatmalar", "hatirlatmalari", "hatirlatmalarimi", "reminders",
+    "tum", "tumunu", "butun", "hepsini", "all", "every",
+  ]
+  private static let reminderCompleteEndings: [[String]] = [
+    ["tamamlandi", "olarak", "isaretle"], ["tamamlandi", "isaretle"], ["yapildi", "olarak", "isaretle"],
+    ["yapildi", "isaretle"], ["bitti", "olarak", "isaretle"], ["tamamlar", "misin"], ["tamamla"], ["tamamladim"],
+  ]
+  private static let reminderDeleteEndings: [[String]] = [
+    ["silebilir", "misin"], ["siler", "misin"], ["kaldirir", "misin"], ["iptal", "et"], ["sil"], ["kaldir"],
+  ]
+
+  /// "Süt alma hatırlatıcısını tamamla", "Ahmet'i arama anımsatıcısını
+  /// sil", "bu hatırlatıcıyı tamamla" (the one just saved), "mark the milk
+  /// reminder as done", "delete the dentist reminder". Which reminder it is
+  /// is decided by the runner from Apple Reminders itself.
+  static func reminderEdits(_ u: Utterance) -> VoiceBridgeDecision? {
+    guard u.count <= 14, !u.containsAny(reminderPlurals) else { return nil }
+    if let english = englishReminderEdit(u) { return english }
+    let complete = reminderCompleteEndings.first(where: { u.ends(with: $0) })
+    let delete = complete == nil ? reminderDeleteEndings.first(where: { u.ends(with: $0) }) : nil
+    guard let ending = complete ?? delete,
+          let noun = u.keys.lastIndex(where: reminderNouns.contains), noun < u.count - ending.count else { return nil }
+    // Only a "lütfen" or "artık" between the reminder and the verb.
+    let between: Set<String> = ["lutfen", "artik", "hemen", "simdi"]
+    guard u.keys[(noun + 1)..<(u.count - ending.count)].allSatisfy({ between.contains($0) }) else { return nil }
+    var target = u.dropping(noun..<u.count)
+    target.trimLeading(["bu", "su", "o", "son", "simdi", "lutfen", "benim", "bir"])
+    target.trimTrailing(["bu", "su", "o", "son"])
+    let words = target.isOnly(deictic) ? "" : target.text
+    if delete != nil {
+      return VoiceBridgeDecision(.deleteReminder(.words(words)), "delete a reminder (needs a yes)")
+    }
+    return VoiceBridgeDecision(.completeReminder(.words(words)), "complete a reminder")
+  }
+
+  private static func englishReminderEdit(_ u: Utterance) -> VoiceBridgeDecision? {
+    guard u.contains("reminder") else { return nil }
+    let verbs: [[String]] = [["delete"], ["remove"], ["cancel"], ["complete"], ["finish"], ["check", "off"], ["tick", "off"]]
+    var target: Utterance
+    let delete: Bool
+    if let verb = verbs.first(where: { u.starts(with: $0) }) {
+      delete = verb == ["delete"] || verb == ["remove"] || verb == ["cancel"]
+      target = u.dropping(0..<verb.count)
+    } else if u.starts(with: ["mark"]),
+              let ending = [["as", "done"], ["as", "complete"], ["as", "completed"], ["done"], ["complete"], ["completed"]]
+                .first(where: { u.ends(with: $0) }) {
+      delete = false
+      target = u.dropping((u.count - ending.count)..<u.count).dropping(0..<1)
+    } else {
+      return nil
+    }
+    target.removeKeys(["reminder"])
+    target.trimLeading(["the", "my", "this", "that", "to", "about", "for", "called", "named", "off", "a"])
+    target.trimTrailing(["the", "my", "off", "please", "for", "to", "about"])
+    let words = target.isOnly(deictic) ? "" : target.text
+    if delete { return VoiceBridgeDecision(.deleteReminder(.words(words)), "delete a reminder (needs a yes)") }
+    return VoiceBridgeDecision(.completeReminder(.words(words)), "complete a reminder")
+  }
 
   private static let reminderTriggers: [[String]] = [
     ["hatirlatma", "olustur"], ["hatirlatma", "kur"], ["hatirlatma", "ekle"], ["hatirlatma", "ayarla"],
@@ -1689,6 +1770,10 @@ enum VoiceActionIntentBridge {
       who.trimTrailing(["yaz", "gonder", "at", "yolla", "mesaj", "mesaji"])
       guard let name = contactName(who, .dative) ?? contactName(who, .nominative) else { return nil }
       return VoiceBridgeDecision(.message(contact: name, body: body), "answer: message recipient")
+    case .chooseReminder(let delete, let options):
+      guard let index = chooseReminder(u, among: options) else { return nil }
+      let target = ReminderTarget.id(options[index].id)
+      return VoiceBridgeDecision(delete ? .deleteReminder(target) : .completeReminder(target), "answer: which reminder")
     case .chooseContact(let action, let names):
       guard let chosen = chooseName(u, among: names) else { return nil }
       switch action {
@@ -1699,16 +1784,33 @@ enum VoiceActionIntentBridge {
     }
   }
 
+  private static let ordinals: [(words: Set<String>, index: Int)] = [
+    (["birinci", "birincisi", "ilk", "ilki", "first"], 0), (["ikinci", "ikincisi", "second"], 1),
+    (["ucuncu", "ucuncusu", "third"], 2), (["dorduncu", "dorduncusu", "fourth"], 3),
+  ]
+
+  /// "İlki", "ikincisi", "the second one", among `count` choices.
+  static func ordinalIndex(_ u: Utterance, count: Int) -> Int? {
+    ordinals.first { u.containsAny($0.words) && $0.index < count }?.index
+  }
+
+  /// "İkincisi", "Market'teki" (a list only one of them is in), or words of
+  /// one title ("süt alma olanı").
+  static func chooseReminder(_ u: Utterance, among options: [ReminderOption]) -> Int? {
+    if let index = ordinalIndex(u, count: options.count) { return index }
+    let byList = options.indices.filter { index in
+      guard let keys = Utterance(options[index].list)?.keys, !keys.isEmpty else { return false }
+      return keys.allSatisfy { key in u.keys.contains { $0 == key || MemorySearch.sameStem(key, $0) } }
+    }
+    if byList.count == 1 { return byList[0] }
+    guard case .one(let option) = ReminderMatcher.match(u.text, in: options) else { return nil }
+    return options.firstIndex(of: option)
+  }
+
   /// "Ahmet Kaya", "Kaya", "ikincisi", "the first one". "Ahmet" alone does
   /// not choose between two Ahmets.
   static func chooseName(_ u: Utterance, among names: [String]) -> String? {
-    let ordinals: [(words: Set<String>, index: Int)] = [
-      (["birinci", "birincisi", "ilk", "ilki", "first"], 0), (["ikinci", "ikincisi", "second"], 1),
-      (["ucuncu", "ucuncusu", "third"], 2), (["dorduncu", "dorduncusu", "fourth"], 3),
-    ]
-    for ordinal in ordinals where u.containsAny(ordinal.words) && ordinal.index < names.count {
-      return names[ordinal.index]
-    }
+    if let index = ordinalIndex(u, count: names.count) { return names[index] }
     let spoken = Set(u.keys)
     let scored = names.map { name -> (name: String, score: Int) in
       let parts = name.split(separator: " ").map { Utterance.key(String($0)) }

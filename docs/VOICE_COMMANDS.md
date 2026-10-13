@@ -9,7 +9,7 @@ What to say to AutoLoom, grouped by area. Explicit commands are recognised on th
 3. **Answers** to a waiting action: yes, no, morning/evening, "hayır, cumartesi".
 4. **Cancel** a running task ("iptal et", "vazgeç").
 5. **Ray-Ban photo and video**, then **Dealer Mode**, then **parking, QR codes, timers, shopping list**, then **undo**.
-6. The rest in this order: name, "neler yapabilirsin?", "ne değişti?", documents, music, Remote Assist, skills, shortcuts, translation, messages, notes, note questions, reminders, moving a task, tasks, day plan, calendar, task questions, routines, own routines, calls, contact questions, directions, clipboard, "nerede gördüm?", memory, search.
+6. The rest in this order: name, "neler yapabilirsin?", "ne değişti?", documents, music, Remote Assist, skills, shortcuts, translation, completing or deleting a reminder, messages, notes, note questions, reminders, moving a task, tasks, day plan, calendar, task questions, routines, own routines, calls, contact questions, directions, clipboard, "nerede gördüm?", memory, search.
 7. The answer to the app's own question ("Neyi not alayım?").
 
 Tips:
@@ -43,11 +43,14 @@ The stop and end words can be turned off in Settings → Name & conversation →
 | "Görevlerim neler?", "Lastik görevini tamamla", "Lastik görevini cumaya ertele" | Lists, completes, moves a task |
 | "Yarın 10'da Ahmet'i aramayı hatırlat", "20 dakika sonra fırını kapatmayı hatırlat" | Apple Reminder with an alarm |
 | "Eve varınca süt almayı hatırlat", "İşten çıkınca Ahmet'i aramayı hatırlat" | Location reminder at the saved home/work address |
+| "İş listeme yarın 10'da raporu göndermeyi hatırlat" | The reminder "Raporu gönder" in the list İş (only a real list's name counts; otherwise the list chosen in Settings → iPhone tools, else iOS's default) |
+| "Süt alma hatırlatıcısını tamamla", "Bu hatırlatıcıyı tamamla" | Completes one open Apple reminder ("geri al" reopens it); asks "Hangisi?" when several fit |
+| "Süt alma hatırlatıcısını sil", "Diş hekimi anımsatıcısını kaldır" | Deletes one open Apple reminder after "evet"; it cannot be undone |
 | "20 dakika sonra bana haber ver" | Local notification |
 | "Cuma 3'te toplantı ekle", "Bugün takvimimde ne var?", "Bugün ne yapmam gerekiyor?" | Calendar event (asks when the time is unclear), calendar, day plan |
 | "Evet", "Hayır", "Akşam", "Hayır, cumartesi", "Son yaptığını geri al" | Answer, correct or undo the last local action |
 
-English: "Take a note: buy tires", "Add a task: call the bank", "Remind me to call mom tomorrow at 9".
+English: "Take a note: buy tires", "Add a task: call the bank", "Remind me to call mom tomorrow at 9", "Mark the milk reminder as done", "Delete the dentist reminder".
 
 ## Memory and visual memory
 

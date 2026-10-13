@@ -83,7 +83,7 @@ Status words: **WORKING-IN-CODE** (complete path + automated tests; no device te
 | DAT version | Risk | 0.5.0 linked; latest 1.0.1 (2026-10-09); 0.5.0 still listed by Meta, no deprecation | `sdkUpdateRequired` was never surfaced (**FIXED-NOW**); dat1 branch 33 commits behind |
 | Notes | WORKING-IN-CODE | SwiftData, 60 s duplicate guard, rollback on failed save, search with Turkish folding | No attachments; links written but never shown; no bulk export |
 | Tasks (app's own) | PARTIAL | Create/complete/move/undo-move | `priority` never set; no snooze/recurrence; no notification delegate |
-| Apple Reminders / Calendar | PARTIAL | Create/list; ambiguous time asked first; location alarms | Not fetched back after saving; default list only; no voice complete/delete |
+| Apple Reminders / Calendar | PARTIAL | Create/list; ambiguous time asked first; location alarms | Not fetched back after saving (**FIXED (CI)**, plan 2.2); default list only and no voice complete/delete (**IN CI**: a list by name or from Settings, complete with undo, delete after a yes, each read back) |
 | Memory | PARTIAL | Explicit save via parser; summaries; 12-line prompt cap | Model-delegated saves trusted without the user's words; no export |
 | Visual memory | WORKING-IN-CODE (lexical) | Opt-in; OCR + labels; honest "not found"; photos never read from the library | No image embeddings; a half match can win |
 | Action engine | PARTIAL | SAFE / CONFIRM / STRONG CONFIRM; untrusted-content raise | Model could confirm its own actions (**FIXED-NOW**); one pending slot; undo misses EventKit; staged graph steps reported as done |

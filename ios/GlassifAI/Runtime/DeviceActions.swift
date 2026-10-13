@@ -31,6 +31,12 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
   case forgetMemory = "forget_memory"
   /// Deleting an AutoLoom note ("bu notu sil"; never chosen by the planner).
   case deleteNote = "delete_note"
+  /// Completing an Apple reminder ("süt hatırlatıcısını tamamla"; never
+  /// chosen by the planner).
+  case completeReminder = "complete_reminder"
+  /// Deleting an Apple reminder ("… hatırlatıcısını sil"); waits for a yes
+  /// and is never chosen by the planner.
+  case deleteReminder = "delete_reminder"
   /// A request for the user's own OpenClaw agent (never chosen by the planner).
   case agentTask = "agent_task"
   /// A tool call on an MCP server the user added (never chosen by the planner).
@@ -47,10 +53,11 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     switch self {
     // An explicit reminder or event is saved at once; an ambiguous time is
     // always asked first (see `DeviceActionPlan.ambiguityNote`).
+    // Completing a reminder is undone by "geri al"; deleting one is not.
     case .listReminders, .todayEvents, .upcomingEvents, .copyText, .saveNote, .scheduleNotification,
-         .findContact, .createReminder, .createEvent, .none:
+         .findContact, .createReminder, .createEvent, .completeReminder, .none:
       .safe
-    case .forgetMemory, .deleteNote, .agentTask, .skillCall:
+    case .forgetMemory, .deleteNote, .deleteReminder, .agentTask, .skillCall:
       .confirm
     case .openMaps, .openURL, .shareText, .call, .message:
       .strongConfirm
@@ -60,7 +67,7 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
   /// Changes something on the phone; the other SAFE kinds only read.
   var writes: Bool {
     switch self {
-    case .createReminder, .createEvent, .saveNote, .scheduleNotification, .copyText: true
+    case .createReminder, .createEvent, .saveNote, .scheduleNotification, .copyText, .completeReminder, .deleteReminder: true
     default: false
     }
   }
@@ -76,7 +83,8 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
 
   /// Kinds the action planner may choose.
   static var plannable: [DeviceActionKind] {
-    allCases.filter { $0 != .agentTask && $0 != .forgetMemory && $0 != .deleteNote && $0 != .skillCall }
+    let appOnly: Set<DeviceActionKind> = [.agentTask, .forgetMemory, .deleteNote, .skillCall, .completeReminder, .deleteReminder]
+    return allCases.filter { !appOnly.contains($0) }
   }
 
   var label: String {
@@ -97,6 +105,8 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .message: L.t("Message", "Mesaj")
     case .forgetMemory: L.t("Forget memory", "Hafızadan sil")
     case .deleteNote: L.t("Delete note", "Notu sil")
+    case .completeReminder: L.t("Complete reminder", "Hatırlatıcıyı tamamla")
+    case .deleteReminder: L.t("Delete reminder", "Hatırlatıcıyı sil")
     case .agentTask: L.t("Your agent (OpenClaw)", "Ajanınız (OpenClaw)")
     case .skillCall: L.t("Skill (MCP)", "Beceri (MCP)")
     case .none: L.t("No action", "İşlem yok")
@@ -117,7 +127,8 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     case .call: "phone"
     case .message: "message"
     case .forgetMemory: "brain"
-    case .deleteNote: "trash"
+    case .deleteNote, .deleteReminder: "trash"
+    case .completeReminder: "checkmark.circle"
     case .agentTask: "server.rack"
     case .skillCall: "puzzlepiece.extension"
     case .none: "questionmark.circle"
@@ -178,6 +189,14 @@ struct DeviceActionPlan: Equatable {
   var memoryID: UUID?
   /// The note to delete (delete_note).
   var noteID: UUID?
+  /// The Apple reminder to complete or delete (its calendar item identifier).
+  var reminderID: String?
+  /// The Reminders list a new reminder goes to: one the user named
+  /// ("İş listeme …"); nil means the list chosen in Settings, else iOS's
+  /// default list.
+  var reminderListID: String?
+  /// That list's name, or the list of the reminder to complete or delete.
+  var reminderListName: String?
   /// A reminder that rings at a place instead of a time.
   var trigger: LocationTrigger?
   /// The planner's short explanation (used for `none`).
@@ -245,6 +264,11 @@ struct DeviceActionPlan: Equatable {
       return L.t("Forget", "Unut") + ": \"\((text ?? "").prefix(80))\""
     case .deleteNote:
       return L.t("Delete note", "Notu sil") + ": \"\((text ?? "").prefix(80))\""
+    case .completeReminder:
+      return L.t("Complete reminder", "Hatırlatıcıyı tamamla") + ": \"\(title ?? "")\"" + (reminderListName.map { " (\($0))" } ?? "")
+    case .deleteReminder:
+      return L.t("Delete reminder", "Hatırlatıcıyı sil") + ": \"\(title ?? "")\"" + (reminderListName.map { " (\($0))" } ?? "")
+        + L.t(" — cannot be undone", " — geri alınamaz")
     case .agentTask:
       return L.t("Ask your agent", "Ajanınıza sor") + ": \"\((text ?? "").prefix(120))\""
     case .skillCall:
@@ -445,6 +469,8 @@ enum DeviceActionParser {
       guard plan.memoryID != nil else { return .failure(.missing("which memory to forget")) }
     case .deleteNote:
       guard plan.noteID != nil else { return .failure(.missing("which note to delete")) }
+    case .completeReminder, .deleteReminder:
+      guard plan.reminderID != nil else { return .failure(.missing("which reminder")) }
     case .agentTask:
       guard plan.text != nil else { return .failure(.missing("what to ask your agent")) }
     case .skillCall:
@@ -667,6 +693,10 @@ final class DeviceActionExecutor {
       let deleted = String(note.title.prefix(60))
       MemoryStore.shared.deleteNote(note)
       return "Deleted the AutoLoom note: \(deleted)"
+    case .completeReminder:
+      return try await completeReminder(plan)
+    case .deleteReminder:
+      return try await deleteReminder(plan)
     case .none:
       return plan.reply.isEmpty ? "No supported action was found for that request." : plan.reply
     case .openMaps, .openURL, .shareText, .call, .message:
@@ -756,8 +786,12 @@ final class DeviceActionExecutor {
 
   private func createReminder(_ plan: DeviceActionPlan) async throws -> String {
     try await ensureReminderAccess()
-    guard let calendar = store.defaultCalendarForNewReminders() else {
-      throw ExecutionError.failed("There is no default Reminders list on this iPhone.")
+    var plan = plan
+    // A list named in the words ("İş listeme …"), now that lists can be read.
+    ReminderLists.applyNamedList(to: &plan, store: store)
+    let destination = ReminderLists.destination(for: plan, store: store)
+    guard let calendar = destination.list else {
+      throw ExecutionError.failed("There is no Reminders list on this iPhone that can take a new reminder.")
     }
     let reminder = EKReminder(eventStore: store)
     reminder.title = plan.title
@@ -786,9 +820,89 @@ final class DeviceActionExecutor {
     // (Reminders always need full access, so reading back is allowed.)
     guard store.calendarItem(withIdentifier: identifier) is EKReminder else {
       return "The reminder was handed to \(calendar.title)\(when), but Reminders did not return it when the app checked. "
-        + "Ask the user to look in the Reminders app before trying again: \(plan.title ?? "")."
+        + "Ask the user to look in the Reminders app before trying again: \(plan.title ?? "")." + destination.note
     }
-    return "Reminder saved in \(calendar.title)\(when): \(plan.title ?? "")."
+    return "Reminder saved in \(calendar.title)\(when): \(plan.title ?? "")." + destination.note
+  }
+
+  /// Open reminders in every list, soonest first (for "… hatırlatıcısını
+  /// tamamla / sil").
+  func openReminderOptions() async throws -> [ReminderOption] {
+    try await ensureReminderAccess()
+    let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
+    let reminders: [EKReminder] = await withCheckedContinuation { continuation in
+      _ = store.fetchReminders(matching: predicate) { continuation.resume(returning: $0 ?? []) }
+    }
+    let calendar = Calendar.current
+    return reminders.map { reminder -> ReminderOption in
+      let components = reminder.dueDateComponents
+      return ReminderOption(
+        id: reminder.calendarItemIdentifier, title: reminder.title ?? "", list: reminder.calendar?.title ?? "",
+        due: components.flatMap { calendar.date(from: $0) }, hasTime: components?.hour != nil)
+    }
+    .sorted { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
+  }
+
+  /// Whether Reminders' own store still lists the reminder as open (a
+  /// fresh fetch, not the object in memory).
+  private func isOpenReminder(_ id: String, in list: EKCalendar?) async -> Bool {
+    let predicate = store.predicateForIncompleteReminders(
+      withDueDateStarting: nil, ending: nil, calendars: list.map { [$0] })
+    let reminders: [EKReminder] = await withCheckedContinuation { continuation in
+      _ = store.fetchReminders(matching: predicate) { continuation.resume(returning: $0 ?? []) }
+    }
+    return reminders.contains { $0.calendarItemIdentifier == id }
+  }
+
+  /// Done only when Reminders, read back, no longer lists it as open.
+  private func completeReminder(_ plan: DeviceActionPlan) async throws -> String {
+    try await ensureReminderAccess()
+    guard let id = plan.reminderID, let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else {
+      throw ExecutionError.failed("That reminder is no longer in Apple Reminders, so nothing was changed.")
+    }
+    let title = reminder.title ?? plan.title ?? ""
+    let list = reminder.calendar
+    if reminder.isCompleted { return "The reminder \"\(title)\" was already completed." }
+    reminder.isCompleted = true
+    try store.save(reminder, commit: true)
+    let stillOpen = await isOpenReminder(id, in: list)
+    guard !stillOpen else {
+      throw ExecutionError.failed(
+        "Reminders still lists \"\(title)\" as open after the app completed it. Ask the user to check the Reminders app.")
+    }
+    return "Completed the reminder \"\(title)\" in \(list?.title ?? "Reminders")."
+  }
+
+  /// Deleted only after the user's yes; reported only when Reminders, read
+  /// back, no longer lists it.
+  private func deleteReminder(_ plan: DeviceActionPlan) async throws -> String {
+    try await ensureReminderAccess()
+    guard let id = plan.reminderID, let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else {
+      throw ExecutionError.failed("That reminder is no longer in Apple Reminders, so nothing was deleted.")
+    }
+    let title = reminder.title ?? plan.title ?? ""
+    let list = reminder.calendar
+    try store.remove(reminder, commit: true)
+    if lastCreated?.identifier == id { lastCreated = nil }
+    let stillOpen = await isOpenReminder(id, in: list)
+    guard !stillOpen else {
+      throw ExecutionError.failed(
+        "Reminders still lists \"\(title)\" after the app deleted it. Ask the user to check the Reminders app.")
+    }
+    return "Deleted the reminder \"\(title)\" from \(list?.title ?? "Reminders")."
+  }
+
+  /// "Geri al" after a spoken completion: the reminder is open again.
+  func reopenReminder(_ id: String) -> Bool {
+    guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess,
+          let reminder = store.calendarItem(withIdentifier: id) as? EKReminder, reminder.isCompleted else { return false }
+    reminder.isCompleted = false
+    do {
+      try store.save(reminder, commit: true)
+      return true
+    } catch {
+      return false
+    }
   }
 
   /// A Reminders alarm at the saved address (150 m), found on the map now.
@@ -821,12 +935,14 @@ final class DeviceActionExecutor {
     func dueDate(_ reminder: EKReminder) -> Date? {
       reminder.dueDateComponents.flatMap { calendar.date(from: $0) }
     }
+    let severalLists = Set(reminders.compactMap { $0.calendar?.calendarIdentifier }).count > 1
     let lines = reminders
       .sorted { (dueDate($0) ?? .distantFuture) < (dueDate($1) ?? .distantFuture) }
       .prefix(8)
       .map { reminder -> String in
         let due = dueDate(reminder).map { " (\($0.formatted(date: .abbreviated, time: .shortened)))" } ?? ""
-        return "- \(reminder.title ?? "Untitled")\(due)"
+        let list = severalLists ? (reminder.calendar?.title).map { " [\($0)]" } ?? "" : ""
+        return "- \(reminder.title ?? "Untitled")\(due)\(list)"
       }
     return "Open reminders:\n" + lines.joined(separator: "\n")
   }

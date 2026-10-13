@@ -2,6 +2,35 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — plan 2.2: Apple Reminders by voice, list choice] — branch `autoloom-glasses-jarvis-v1`
+
+Plan item 2.2. CI results: `TEST_REPORT.md`. Nothing here has been tried on an iPhone yet (device tests RM1–RM4).
+
+### Added
+- **Complete an Apple reminder by voice:** "Süt alma hatırlatıcısını tamamla", "Ahmet'i arama anımsatıcısını tamamlandı olarak işaretle", "mark the milk reminder as done".
+  - It runs at once. "Son yaptığını geri al" reopens it.
+  - "Lastik görevini tamamla" still completes an AutoLoom task first. When no task matches, an open reminder with those words is completed.
+- **Delete an Apple reminder by voice:** "Süt alma hatırlatıcısını sil", "delete the dentist reminder".
+  - It waits for "evet" or a tap. The card says it cannot be undone.
+- **Both changes are read back.** Each is reported only after a fresh fetch from Reminders no longer lists the reminder as open; otherwise the user hears that Reminders did not confirm it.
+- **Which reminder is meant:**
+  - found by its words. Turkish verb nouns match their reminder, so "süt alma" finds "Süt al" and "Ahmet'i arama" finds "Ahmet'i ara";
+  - "bu hatırlatıcıyı …" means the one saved in the last ten minutes;
+  - when several fit, or nothing was saved just now, the assistant asks "Hangisi: …?". The answer can be the order ("ikincisi"), the list ("Market'teki") or words of the title.
+  - Nothing is guessed. Several reminders at once ("tüm hatırlatıcılarımı sil") are never completed or deleted.
+- **List choice for new reminders:**
+  - a list named in the words: "İş listeme yarın 10'da raporu göndermeyi hatırlat" saves "Raporu gönder" in İş. Only the names of the user's real lists count;
+  - otherwise the list chosen in Settings → iPhone tools → Apple Reminders;
+  - otherwise iOS's default list. A list that no longer exists falls back to the default, and the assistant says so;
+  - the Tasks tab's new-reminder sheet has a list picker.
+- The reminder read-out names each reminder's list when they come from more than one.
+- The planner model can choose neither action. Only the user's own words reach them, through the app's own parser.
+
+### Fixed
+- **A step waiting for a yes is no longer reported as done.** In a sentence with several commands, a step such as "bu notu sil" that waits for confirmation was reported "done". It now reads "NOT done yet — waiting for the user's yes or tap".
+- **Tasks tab rows whose reminder was deleted elsewhere** (in the Reminders app) now say "This reminder is no longer in Apple Reminders" when tapped, and the list reloads. Before, nothing happened.
+- **"Tool turned off" messages** name the switch (for example "Reminders"), not the action.
+
 ## [JARVIS Ultimate — phase 1g: the last Rust crate notices] — branch `autoloom-glasses-jarvis-v1`
 
 Plan item 1.16. CI results: `TEST_REPORT.md`.

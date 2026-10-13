@@ -249,28 +249,36 @@ extension AssistantOrchestrator {
     var lines: [String] = []
     var said: [String] = []
     var failures = 0
+    var waiting = 0
     for (index, step) in steps.enumerated() {
       // Decided again now: an earlier step may have changed the context
       // (a new vehicle, a saved note).
       let intent = VoiceActionIntentBridge.decideSingle(step.text, context: bridgeContext())?.intent ?? step.intent
+      let pendingBefore = pendingAction?.id
       let outcome = await runVoiceIntent(VoiceBridgeDecision(intent, "graph step \(index + 1)"), transcript: step.text)
       let name = ActionCatalog.definition(for: intent)?.name ?? intent.canonicalName
       if let failed = outcome.failed {
         failures += 1
         lines.append("Step \(index + 1) (\(name)): NOT done — \(failed).")
+      } else if let pending = pendingAction, pending.id != pendingBefore {
+        // Staged for a yes or a tap ("bu notu sil"): not done yet.
+        waiting += 1
+        lines.append("Step \(index + 1) (\(name)): NOT done yet — waiting for the user's yes or tap: \(pending.plan.summary).")
       } else {
         let result = outcome.said ?? String(outcome.reply.prefix(160))
         lines.append("Step \(index + 1) (\(name)): done — \(result)")
         if let spoken = outcome.said { said.append(spoken) }
       }
     }
-    let done = steps.count - failures
-    ActionTraceLog.shared.update(traceID) { $0.persistence = "\(done)/\(steps.count) steps done" }
+    let done = steps.count - failures - waiting
+    ActionTraceLog.shared.update(traceID) {
+      $0.persistence = "\(done)/\(steps.count) steps done" + (waiting > 0 ? ", \(waiting) waiting for a yes" : "")
+    }
     return IntentOutcome(
       spoken: "The app ran several commands from one sentence, in order:\n" + lines.joined(separator: "\n")
         + "\nTell the user in one or two short sentences what was done and, honestly, what was not. Never say a step that was NOT done was done.",
       reply: lines.joined(separator: "\n"),
-      failed: done == 0 ? "no step succeeded" : nil,
+      failed: done == 0 && waiting == 0 ? "no step succeeded" : nil,
       said: said.joined(separator: " "))
   }
 }

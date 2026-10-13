@@ -1,6 +1,6 @@
 # Action Catalog
 
-`ios/GlassifAI/Runtime/ActionCatalog.swift` lists every action the assistant can do as plain data (`ActionDefinition`). The voice parser's tests, the App Intents, the Command Library, the command palette, the Command Lab, user routines and the offline assistant all read the same list, and `AutoLoomActionCatalogTests` fails the CI test run when an entry is incomplete or its example sentences do not reach it through the parser that speech uses. The catalog does not parse speech itself: `VoiceActionIntentBridge` decides, and the catalog maps each decision back to an entry. This page describes commit `8ee1a24` (108 actions; the catalog has not changed since `b5802bd`).
+`ios/GlassifAI/Runtime/ActionCatalog.swift` lists every action the assistant can do as plain data (`ActionDefinition`). The voice parser's tests, the App Intents, the Command Library, the command palette, the Command Lab, user routines and the offline assistant all read the same list, and `AutoLoomActionCatalogTests` fails the CI test run when an entry is incomplete or its example sentences do not reach it through the parser that speech uses. The catalog does not parse speech itself: `VoiceActionIntentBridge` decides, and the catalog maps each decision back to an entry. This page describes the catalog after plan 2.2 on `autoloom-glasses-jarvis-v1` (111 actions: the 108 of commit `8ee1a24`, `parking.photo` from `2af0bb8`, and `reminder.complete` and `reminder.delete`).
 
 ## What an `ActionDefinition` contains
 
@@ -129,6 +129,8 @@ Context tags used in examples: `pending` and `ambiguous` (an action waits for ye
 | `task.move` | tasks | [saved] Bunu yarına taşı | SAFE | none | local | EXPERIMENTAL |
 | `reminder.create` | tasks | Yarın 10'da Ahmet'i aramayı hatırlat | SAFE | none | local | EXPERIMENTAL |
 | `reminder.place` | tasks | Eve varınca süt almayı hatırlat | SAFE | none | local | PHYSICAL_TEST_REQUIRED |
+| `reminder.complete` | tasks | Süt alma hatırlatıcısını tamamla | SAFE | none | local | PHYSICAL_TEST_REQUIRED |
+| `reminder.delete` | tasks | Süt alma hatırlatıcısını sil | CONFIRM | always | local | PHYSICAL_TEST_REQUIRED |
 | `notification.schedule` | tasks | 20 dakika sonra bana haber ver | SAFE | none | local | EXPERIMENTAL |
 | `calendar.read` | tasks | Bugün takvimimde ne var? | SAFE | none | local | EXPERIMENTAL |
 | `calendar.create` | tasks | Cuma 3'te toplantı ekle | SAFE | whenAmbiguous | local | EXPERIMENTAL |
@@ -193,6 +195,7 @@ Context tags used in examples: `pending` and `ambiguous` (an action waits for ye
 | `shopping.read` | automation | Alışveriş listemde ne var | SAFE | none | local | EXPERIMENTAL |
 | `shopping.remove` | automation | Sütü alışveriş listesinden çıkar | SAFE | none | local | EXPERIMENTAL |
 | `parking.save` | navigation | Park yerimi kaydet | SAFE | none | local | PHYSICAL_TEST_REQUIRED |
+| `parking.photo` | navigation | Park yerimi fotoğrafla kaydet | SAFE | none | local | PHYSICAL_TEST_REQUIRED |
 | `parking.recall` | navigation | Arabam nerede? | SAFE | none | local | EXPERIMENTAL |
 | `parking.directions` | navigation | Beni arabama götür | SAFE | none | local | EXPERIMENTAL |
 | `parking.clear` | navigation | Park yerini sil | SAFE | none | local | EXPERIMENTAL |

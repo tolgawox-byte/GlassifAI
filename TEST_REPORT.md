@@ -27,7 +27,7 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 Until `544a6d6` the screenshot step reported "not running after launch" for a few screens on every run (6 on the baseline, 3 on `2e32c2a`, 7 on `6385e03`), different ones each time and never with a crash report. This was first put down to the simulator's launch. Run 38341978615 showed the real cause: the script's own liveness check missed apps that were running (see below). Run 38346329047 captured all 28 screens.
 
-No run is pending. Run 38349904362 verified the last code commit, `6c84c6d`. The commit that records it changes only documents, so it was pushed with `[skip ci]` and started no run of its own.
+Plan 2.2 (next push) adds Apple Reminders by voice (complete with undo, delete after a yes, "hangisi?", list choice) and the new test class `AutoLoomReminderVoiceTests`. **Its run is pending**; its result is added here when it finishes. EventKit cannot be used in the unsigned simulator test host, so reading Reminders back is covered only by device tests RM1–RM4.
 
 ### Simulator infrastructure (investigated, not ignored)
 

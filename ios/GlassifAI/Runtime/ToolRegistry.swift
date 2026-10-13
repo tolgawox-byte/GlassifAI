@@ -28,9 +28,9 @@ enum ToolRegistry {
   static let tools: [NativeTool] = [
     NativeTool(
       id: "reminders", english: "Reminders", turkish: "Anımsatıcılar", systemImage: "checklist",
-      kinds: [.createReminder, .listReminders], permission: .reminders,
-      englishDetail: "Apple Reminders, saved at once. Times are read from your words by the app, never guessed by the model; an unclear time (\"7'de\") is asked first.",
-      turkishDetail: "Apple Anımsatıcılar, hemen kaydedilir. Saatler uygulama tarafından sözlerinizden okunur, model tahmin etmez; belirsiz saat (\"7'de\") önce sorulur."),
+      kinds: [.createReminder, .listReminders, .completeReminder, .deleteReminder], permission: .reminders,
+      englishDetail: "Apple Reminders, saved at once in the list chosen below, or in the list you name (\"İş listeme …\"). Times are read from your words by the app, never guessed by the model; an unclear time (\"7'de\") is asked first. \"… hatırlatıcısını tamamla\" completes one (\"geri al\" reopens it); deleting one waits for your yes.",
+      turkishDetail: "Apple Anımsatıcılar, aşağıda seçilen listeye ya da söylediğiniz listeye (\"İş listeme …\") hemen kaydedilir. Saatler uygulama tarafından sözlerinizden okunur, model tahmin etmez; belirsiz saat (\"7'de\") önce sorulur. \"… hatırlatıcısını tamamla\" birini tamamlar (\"geri al\" yeniden açar); silmek onayınızı bekler."),
     NativeTool(
       id: "calendar", english: "Calendar", turkish: "Takvim", systemImage: "calendar",
       kinds: [.todayEvents, .upcomingEvents, .createEvent], permission: .calendars,

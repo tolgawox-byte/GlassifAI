@@ -139,6 +139,8 @@ extension VoiceIntent {
     case .saveMemory: "SAVE_MEMORY"
     case .createTask: "CREATE_TASK"
     case .createReminder: "CREATE_REMINDER"
+    case .completeReminder: "COMPLETE_REMINDER"
+    case .deleteReminder: "DELETE_REMINDER"
     case .locationReminder: "CREATE_LOCATION_REMINDER"
     case .notify: "SCHEDULE_NOTIFICATION"
     case .createEvent: "CREATE_EVENT"
@@ -723,8 +725,14 @@ extension AssistantOrchestrator {
         scored = open.map { ($0, MemorySearch.lexicalScore(query: words, document: MemorySearch.tokens($0.title))) }
       }
       guard let best = scored.max(by: { $0.1 < $1.1 }), best.1 >= 0.5 else {
+        // No AutoLoom task: an open Apple reminder by that name (plan 2.2).
+        if !words.isEmpty, AssistantPreferences.actionsEnabled, ToolRegistry.allows(.completeReminder),
+           await PermissionCenter.state(.reminders) == .granted {
+          return await runReminderEdit(
+            .words(query), delete: false, afterTaskSearch: true, decision: decision, transcript: transcript, traceID: traceID)
+        }
         return IntentOutcome(
-          spoken: "No open AutoLoom task matches \"\(query)\". Tell the user; Apple Reminders can be completed in the Tasks tab.",
+          spoken: "No open AutoLoom task matches \"\(query)\". Tell the user.",
           reply: L.t("No matching task.", "Eşleşen görev yok."))
       }
       let title = best.0.title
@@ -734,6 +742,12 @@ extension AssistantOrchestrator {
           "Marked the AutoLoom task \"\(title)\" as done.", tr: "Tamam, tamamlandı olarak işaretledim.", en: "Done, marked as complete."),
         reply: L.t("Completed: ", "Tamamlandı: ") + title,
         feedback: ActionFeedback(kind: .taskDone, title: L.t("Task completed", "Görev tamamlandı")))
+
+    case .completeReminder(let target):
+      return await runReminderEdit(target, delete: false, decision: decision, transcript: transcript, traceID: traceID)
+
+    case .deleteReminder(let target):
+      return await runReminderEdit(target, delete: true, decision: decision, transcript: transcript, traceID: traceID)
 
     case .dayPlan(let range):
       return await runDayPlan(range, traceID: traceID)
@@ -1021,7 +1035,7 @@ extension AssistantOrchestrator {
   // MARK: Questions
 
   /// Asks for what the command was missing; the next utterance answers it.
-  private func askQuestion(_ awaiting: VoiceIntent.Awaiting) -> IntentOutcome {
+  func askQuestion(_ awaiting: VoiceIntent.Awaiting) -> IntentOutcome {
     bridgeAwaiting = awaiting
     bridgeAwaitingSince = Date()
     switch awaiting {
@@ -1061,6 +1075,13 @@ extension AssistantOrchestrator {
       return IntentOutcome(
         spoken: BridgeSpeech.ask("Hangisi: \(names.joined(separator: ", "))?", en: "Which one: \(names.joined(separator: ", "))?"),
         reply: L.t("Which one? ", "Hangisi? ") + names.joined(separator: ", "))
+    case .chooseReminder(let delete, let options):
+      let names = ReminderOption.labels(options).joined(separator: ", ")
+      return IntentOutcome(
+        spoken: BridgeSpeech.ask(
+          "Hangisi: \(names)?", en: "Which one: \(names)?",
+          note: "These open Apple reminders match; the user picks one to \(delete ? "delete" : "complete")."),
+        reply: L.t("Which one? ", "Hangisi? ") + names)
     }
   }
 
@@ -1096,6 +1117,7 @@ extension AssistantOrchestrator {
     var plan = DeviceActionPlan(kind: kind)
     plan.title = title
     plan.trigger = trigger
+    ReminderLists.applyNamedList(to: &plan, store: DeviceActionExecutor.shared.store)
     if let time {
       plan.date = time.date
       plan.hasTime = time.hasTime
@@ -1144,7 +1166,7 @@ extension AssistantOrchestrator {
 
   /// Checks an iOS permission before a spoken action. When it is missing,
   /// the command is kept and resumed as soon as the permission is given.
-  private func permissionBlock(
+  func permissionBlock(
     _ permission: AppPermission,
     fullCalendarAccess: Bool,
     decision: VoiceBridgeDecision,
@@ -1783,7 +1805,7 @@ extension AssistantOrchestrator {
       reply: lines.joined(separator: "\n"))
   }
 
-  private func refreshBoards() async {
+  func refreshBoards() async {
     await RemindersBoard.shared.load()
   }
 
@@ -1804,8 +1826,10 @@ extension AssistantOrchestrator {
   }
 
   func toolOff(_ kind: DeviceActionKind) -> IntentOutcome {
-    IntentOutcome(
-      spoken: "The \(kind.label) tool is turned off in Settings, Tools, so nothing was done. Tell the user briefly.",
-      reply: L.t("\(kind.label) is off in Settings → Tools.", "\(kind.label) Ayarlar → Araçlar'da kapalı."), failed: "tool off")
+    // The switch's own name ("Reminders"), not the action's.
+    let name = ToolRegistry.tool(for: kind)?.name ?? kind.label
+    return IntentOutcome(
+      spoken: "The \(name) tool is turned off in Settings, Tools, so nothing was done. Tell the user briefly.",
+      reply: L.t("\(name) is off in Settings → Tools.", "\(name) Ayarlar → Araçlar'da kapalı."), failed: "tool off")
   }
 }

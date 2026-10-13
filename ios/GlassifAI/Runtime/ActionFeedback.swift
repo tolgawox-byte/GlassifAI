@@ -124,6 +124,10 @@ struct ActionFeedback: Identifiable, Equatable {
       return ActionFeedback(kind: .forgotten, title: L.t("Forgotten", "Hafızadan silindi"))
     case .deleteNote:
       return ActionFeedback(kind: .forgotten, title: L.t("Note deleted", "Not silindi"))
+    case .completeReminder:
+      return ActionFeedback(kind: .taskDone, title: L.t("Reminder completed", "Hatırlatıcı tamamlandı"))
+    case .deleteReminder:
+      return ActionFeedback(kind: .forgotten, title: L.t("Reminder deleted", "Hatırlatıcı silindi"))
     default:
       return nil
     }
@@ -137,6 +141,8 @@ struct ActionFeedback: Identifiable, Equatable {
     case .scheduleNotification: failed(L.t("Notification not set", "Bildirim kurulamadı"))
     case .saveNote: failed(L.t("Note not saved", "Not kaydedilemedi"))
     case .copyText: failed(L.t("Not copied", "Kopyalanamadı"))
+    case .completeReminder: failed(L.t("Reminder not completed", "Hatırlatıcı tamamlanamadı"))
+    case .deleteReminder: failed(L.t("Reminder not deleted", "Hatırlatıcı silinemedi"))
     default: nil
     }
   }
