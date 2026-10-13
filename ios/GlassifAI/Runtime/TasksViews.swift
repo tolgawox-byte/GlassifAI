@@ -18,6 +18,7 @@ final class RemindersBoard: ObservableObject {
     let completed: Bool
     let completedAt: Date?
     let list: String
+    var repeats = false
   }
 
   struct ScheduledNotification: Identifiable, Equatable {
@@ -98,7 +99,8 @@ final class RemindersBoard: ObservableObject {
       hasTime: components?.hour != nil,
       completed: reminder.isCompleted,
       completedAt: reminder.completionDate,
-      list: reminder.calendar?.title ?? "")
+      list: reminder.calendar?.title ?? "",
+      repeats: reminder.hasRecurrenceRules)
   }
 
   /// The reminder behind a row; a row whose reminder is gone (deleted in
@@ -132,7 +134,8 @@ final class RemindersBoard: ObservableObject {
   }
 
   /// A new reminder in `listID`, else in the default list for new reminders.
-  func create(title: String, due: Date?, hasTime: Bool, listID: String? = nil) async {
+  /// A repeat needs a due date.
+  func create(title: String, due: Date?, hasTime: Bool, listID: String? = nil, recurrence: Recurrence? = nil) async {
     guard access == .granted else { return }
     var plan = DeviceActionPlan(kind: .createReminder)
     plan.reminderListID = listID
@@ -144,6 +147,7 @@ final class RemindersBoard: ObservableObject {
     reminder.title = title
     reminder.calendar = list
     if let due { apply(date: due, hasTime: hasTime, to: reminder) }
+    if let recurrence, due != nil { reminder.addRecurrenceRule(recurrence.eventKitRule) }
     commit { try store.save(reminder, commit: true) }
     await load()
   }
@@ -393,6 +397,11 @@ struct TasksTabView: View {
           if task.notificationID != nil {
             Image(systemName: "bell.fill").foregroundStyle(.secondary)
           }
+          if let recurrence = store.recurrence(of: task), !task.completed {
+            Image(systemName: "repeat")
+              .foregroundStyle(.secondary)
+              .accessibilityLabel(recurrence.label)
+          }
           Text("AutoLoom").foregroundStyle(.tertiary)
         }
         .font(.caption)
@@ -464,6 +473,11 @@ struct TasksTabView: View {
             Text(due.formatted(date: .abbreviated, time: item.hasTime ? .shortened : .omitted))
               .foregroundStyle(!item.completed && due < Date() ? Color.red : Color.secondary)
           }
+          if item.repeats {
+            Image(systemName: "repeat")
+              .foregroundStyle(.secondary)
+              .accessibilityLabel(L.t("Repeats", "Tekrarlıyor"))
+          }
           Text(item.list.isEmpty ? L.t("Reminders", "Anımsatıcılar") : item.list).foregroundStyle(.tertiary)
         }
         .font(.caption)
@@ -495,6 +509,8 @@ struct TaskEditorView: View {
   @State private var phrase = ""
   @State private var loaded = false
   @State private var confirmDelete = false
+  /// Plan 2.3: the next task is added when this one is completed.
+  @State private var repeatRule: Recurrence?
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
@@ -520,6 +536,7 @@ struct TaskEditorView: View {
               hasDue = true
               includeTime = parsed.hasTime
               due = parsed.date
+              if let recurrence = parsed.recurrence { repeatRule = recurrence }
             }
           }
         Toggle(L.t("Due date", "Tarih"), isOn: $hasDue)
@@ -528,10 +545,11 @@ struct TaskEditorView: View {
           DatePicker(
             L.t("Due", "Zaman"), selection: $due,
             displayedComponents: includeTime ? DatePickerComponents([.date, .hourAndMinute]) : DatePickerComponents.date)
+          RepeatPicker(selection: $repeatRule)
         }
       } footer: {
-        Text(L.t("With a time, a notification is scheduled when notifications are allowed.",
-                 "Saat verilirse, bildirim izni varsa bir bildirim planlanır."))
+        Text(L.t("With a time, a notification is scheduled when notifications are allowed. A repeating task adds the next one when it is completed.",
+                 "Saat verilirse, bildirim izni varsa bir bildirim planlanır. Tekrarlayan görev tamamlanınca bir sonrakini ekler."))
       }
       if task != nil {
         Section {
@@ -574,6 +592,7 @@ struct TaskEditorView: View {
           due = date
           includeTime = task.dueHasTime
         }
+        repeatRule = store.recurrence(of: task)
       }
     }
   }
@@ -581,12 +600,17 @@ struct TaskEditorView: View {
   private func save() {
     let dueAt = hasDue ? due : nil
     let saved: TaskItem?
+    let previousRule = task.flatMap { store.recurrence(of: $0) }
+    let previousDue = task?.dueAt
     if let task {
       store.updateTask(task, title: title, notes: notes, dueAt: dueAt, dueHasTime: includeTime)
       saved = task
     } else {
       saved = store.addTask(title: title, notes: notes, dueAt: dueAt, dueHasTime: includeTime, source: "manual")
     }
+    // A repeat is counted from the due date: set again when either changed.
+    let rule = hasDue ? repeatRule : nil
+    if let saved, rule != previousRule || dueAt != previousDue { store.setRecurrence(rule, for: saved) }
     dismiss()
     guard let saved, saved.notificationID == nil, let date = saved.dueAt, saved.dueHasTime, date > Date() else { return }
     let store = store
@@ -601,6 +625,20 @@ struct TaskEditorView: View {
   }
 }
 
+/// "Repeat": none, or one of the repeats a task or reminder can have.
+struct RepeatPicker: View {
+  @Binding var selection: Recurrence?
+
+  var body: some View {
+    Picker(L.t("Repeat", "Tekrar"), selection: $selection) {
+      Text(L.t("Never", "Yok")).tag(Recurrence?.none)
+      ForEach(Recurrence.allCases) { recurrence in
+        Text(recurrence.label).tag(Recurrence?.some(recurrence))
+      }
+    }
+  }
+}
+
 /// New reminder, or a new time for an existing one. The time can be typed
 /// naturally ("yarın 9'da") and is shown resolved before saving.
 struct ReminderEditorView: View {
@@ -608,6 +646,7 @@ struct ReminderEditorView: View {
   @ObservedObject private var board = RemindersBoard.shared
   @State private var title = ""
   @State private var listID = ""
+  @State private var repeatRule: Recurrence?
   @State private var hasDue = true
   @State private var includeTime = true
   @State private var due = Date().addingTimeInterval(3_600)
@@ -644,6 +683,7 @@ struct ReminderEditorView: View {
           DatePicker(
             L.t("Due", "Zaman"), selection: $due,
             displayedComponents: includeTime ? DatePickerComponents([.date, .hourAndMinute]) : DatePickerComponents.date)
+          if item == nil { RepeatPicker(selection: $repeatRule) }
         }
       }
     }
@@ -662,12 +702,14 @@ struct ReminderEditorView: View {
           let hasDue = hasDue
           let includeTime = includeTime
           let listID = listID
+          let repeatRule = repeatRule
           Task {
             if let item {
               if hasDue { await board.reschedule(item, to: due, hasTime: includeTime) }
             } else {
               await board.create(
-                title: title, due: hasDue ? due : nil, hasTime: includeTime, listID: listID.isEmpty ? nil : listID)
+                title: title, due: hasDue ? due : nil, hasTime: includeTime, listID: listID.isEmpty ? nil : listID,
+                recurrence: repeatRule)
             }
           }
           dismiss()

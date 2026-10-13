@@ -2,6 +2,26 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — plan 2.3: repeating reminders, events and tasks; undo a spoken completion] — branch `autoloom-glasses-jarvis-v1`
+
+Plan item 2.3. CI results: `TEST_REPORT.md`. Not tried on an iPhone yet (device tests TK2, RM5).
+
+### Added
+- **Repeats said by voice:** "her gün", "hafta içi her gün", "her pazartesi", "cumaları", "her ayın 15'inde", "her yıl", "her sabah", "every day", "every Monday".
+  - "Her gün 9'da ilacımı içmeyi hatırlat" saves "İlacımı iç" as a reminder that repeats every day at 9. The repeat is the Reminders app's own, and the title loses the repeat words.
+  - Calendar events repeat the same way ("her pazartesi 10'da toplantı ekle"). "Hayır, cumartesi" right after moves the whole series.
+  - **AutoLoom tasks repeat too.** Completing one adds the next, by voice, in the Tasks tab or from its alert:
+    - the next one is never in the past, and is counted from the first date, so "the 31st" stays the 31st;
+    - it gets its own alert when the completed one had one.
+  - The task and new-reminder sheets have a **Repeat** picker. Repeating rows show a repeat mark.
+- **Repeats are read only when the user said one.** "Haftalık toplantı" or "bu hafta içi" do not make a repeat.
+  - A repeat the app cannot set ("her saat", "iki günde bir", "every other day") is said, and the item is saved once.
+  - A notification cannot repeat and the assistant says so; "her gün … hatırlat" makes a repeating reminder.
+- **"Geri al" after "… görevini tamamla"** reopens the task. For a repeating task it also takes back the task its completion added. Tapping the circle again in the Tasks tab does the same.
+
+### Changed
+- Task repeats are kept in the app's settings, beside the SwiftData store. The store already on the iPhone therefore needs no schema migration, which could not be tried on the device first. Deleting a task, or all data, removes its repeat.
+
 ## [JARVIS Ultimate — plan 2.2: Apple Reminders by voice, list choice] — branch `autoloom-glasses-jarvis-v1`
 
 Plan item 2.2. CI results: `TEST_REPORT.md`. Nothing here has been tried on an iPhone yet (device tests RM1–RM4).

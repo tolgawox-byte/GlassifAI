@@ -17,6 +17,8 @@ struct ParsedTime: Equatable {
   let matched: String
   /// A day was said ("yarın", "cuma", "15 Ekim", "in 2 days").
   var hasDay = false
+  /// "Her gün", "her pazartesi", "every day": how it repeats (plan 2.3).
+  var recurrence: Recurrence?
 }
 
 /// Turns Turkish and English time phrases into dates: "yarın saat 7'de",
@@ -54,6 +56,7 @@ enum TimePhraseParser {
     var part: PartOfDay?
     /// Written as a 24-hour clock ("07:30", "11:00"), so not ambiguous.
     var twentyFourHour = false
+    var recurrence: Recurrence?
     var matched: [String] = []
 
     var hasDay: Bool { dayOffset != nil || weekday != nil || (month != nil && day != nil) }
@@ -100,18 +103,36 @@ enum TimePhraseParser {
   static func parse(_ text: String, now: Date = Date(), calendar: Calendar = .current) -> ParsedTime? {
     var s = " " + normalize(text) + " "
     var c = Components()
+    extractRecurrence(&s, &c, now: now, calendar: calendar)
     extractRelative(&s, &c)
     if let seconds = c.relativeSeconds {
       return ParsedTime(
         date: now.addingTimeInterval(seconds), hasTime: true, isAmbiguous: false, alternative: nil,
-        usedDefaultTime: false, matched: c.matched.joined(separator: " + "))
+        usedDefaultTime: false, matched: c.matched.joined(separator: " + "), recurrence: c.recurrence)
     }
     extractDate(&s, &c)
     extractClock(&s, &c)
     extractDay(&s, &c)
     extractPartOfDay(&s, &c)
+    // "Her gün süt al": a repeat alone starts today, without a time.
+    if c.recurrence != nil, !c.hasDay, c.hour == nil, c.part == nil { c.dayOffset = 0 }
     guard c.hasDay || c.hour != nil || c.part != nil else { return nil }
-    return resolve(c, now: now, calendar: calendar)
+    guard let first = resolve(c, now: now, calendar: calendar) else { return nil }
+    guard c.recurrence == .weekdays else {
+      var parsed = first
+      parsed.recurrence = c.recurrence
+      return parsed
+    }
+    // "Hafta içi her gün" said on a Friday evening starts on Monday.
+    var date = first.date
+    var alternative = first.alternative
+    while [1, 7].contains(calendar.component(.weekday, from: date)) {
+      date = calendar.date(byAdding: .day, value: 1, to: date) ?? date.addingTimeInterval(86_400)
+      alternative = alternative.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
+    }
+    return ParsedTime(
+      date: date, hasTime: first.hasTime, isAmbiguous: first.isAmbiguous, alternative: alternative,
+      usedDefaultTime: first.usedDefaultTime, matched: first.matched, hasDay: first.hasDay, recurrence: .weekdays)
   }
 
   /// A readable time for confirmations: "Pazartesi 28 Eylül, 07:00".
@@ -138,6 +159,75 @@ enum TimePhraseParser {
   }
 
   // MARK: Extraction (each match is blanked so it is not read twice)
+
+  /// "Her gün", "hafta içi her gün", "her pazartesi", "cumaları", "her ayın
+  /// 15'inde", "her yıl", "every day", "every Monday" (plan 2.3). Adjectives
+  /// such as "günlük", "haftalık" or "weekly" are not read: they are usually
+  /// part of a title ("haftalık toplantı"). "Her sabah" leaves "sabah" for
+  /// the clock.
+  private static func extractRecurrence(_ s: inout String, _ c: inout Components, now: Date, calendar: Calendar) {
+    func take(_ match: Match, _ recurrence: Recurrence) {
+      c.recurrence = recurrence
+      c.matched.append(match.text)
+      blank(match.range, in: &s)
+    }
+    // Weekdays first: "hafta içi her gün" also contains "her gün". "Bu hafta
+    // içi" means "this week", not a repeat.
+    if let match = firstMatch(#"\b(hafta ici her gun|her hafta ici|hafta icleri|(?<!bu )hafta ici|every weekday|on weekdays)\b"#, in: s) {
+      return take(match, .weekdays)
+    }
+    let days = "pazartesi|sali|carsamba|persembe|cumartesi|cuma|pazar|monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+    // "Her pazartesi", "her cuma günü", "every Monday".
+    if let match = firstMatch(#"\b(?:her|every) ("# + days + #")(?: gunu)?\b"#, in: s),
+       let day = weekdayNumber(match.groups[1] ?? "") {
+      c.weekday = day
+      return take(match, .weekly)
+    }
+    // "Pazartesileri", "cumaları", "pazar günleri", "on Mondays" ("pazarları"
+    // alone is also "the markets").
+    if let match = firstMatch(#"\b(pazartesi|sali|carsamba|persembe|cumartesi|cuma)(?:leri|lari)\b"#, in: s)
+      ?? firstMatch(#"\b("# + days + #") gunleri\b"#, in: s)
+      ?? firstMatch(#"\bon (monday|tuesday|wednesday|thursday|friday|saturday|sunday)s\b"#, in: s),
+      let day = weekdayNumber(match.groups[1] ?? "") {
+      c.weekday = day
+      return take(match, .weekly)
+    }
+    // "Her ayın 15'inde": the next 15th, then monthly.
+    if let match = firstMatch(#"\bher ayin (\d{1,2})(?: (?:inde|sinde|unda|unde|sunda|sunde|inda|sinda|nda|nde|da|de|ta|te))?\b"#, in: s),
+       let day = int(match.groups[1]), (1...31).contains(day) {
+      var month = calendar.component(.month, from: now)
+      var year = calendar.component(.year, from: now)
+      if day < calendar.component(.day, from: now) {
+        month += 1
+        if month > 12 {
+          month = 1
+          year += 1
+        }
+      }
+      c.month = month
+      c.day = day
+      c.year = year
+      return take(match, .monthly)
+    }
+    let plain: [(String, Recurrence)] = [
+      ("her gun|her gunu|hergun|every day|everyday", .daily),
+      ("her hafta(?! sonu)|every week", .weekly),
+      ("her ay|every month", .monthly),
+      ("her yil|her sene|every year", .yearly),
+    ]
+    for (words, recurrence) in plain {
+      if let match = firstMatch(#"\b("# + words + #")\b"#, in: s) { return take(match, recurrence) }
+    }
+    // "Her sabah", "every evening": daily at that part of the day.
+    if let match = firstMatch(#"\b(her|every)(?= (sabah|oglen|ogle|ogleden|aksam|gece|morning|afternoon|evening|night)\b)"#, in: s) {
+      take(match, .daily)
+    }
+  }
+
+  /// Calendar weekday number of a day's name (1 = Sunday).
+  private static func weekdayNumber(_ name: String) -> Int? {
+    name == "pazar" ? 1 : weekdays[name]
+  }
 
   private static func extractRelative(_ s: inout String, _ c: inout Components) {
     // "20 dakika sonra", "yarım saat sonra", "bir buçuk saat sonra", "3 gün sonra"

@@ -62,7 +62,7 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 |---|---|---|---|
 | 2.1 | Real connection and system state on Home | PARTLY DONE-CI / NEXT | One status strip: glasses link, voice session (real phases), camera source, PC reachability (answered < 30 s), pending approvals count; nothing green without a fresh fact — Done so far: Home already showed the glasses link, the waiting phone action and Live Vision; a PC chip now shows approvals waiting or tasks running on the paired PC (refreshed every 20 s while Home is shown, "not answering" after 30 s of silence) and opens the PC screen. Still NEXT: real voice phases in one strip |
 | 2.2 | Reminders verified by fetch-back; list choice; complete/delete by voice | DONE-CI (fetch-back) / IN CI (list choice, voice complete/delete) / DEVICE TEST RM1–RM4 | After saving, `calendarItem(withIdentifier:)` returns the item or the reply says it failed — Now also: "… hatırlatıcısını tamamla" completes one open reminder and "geri al" reopens it; "… hatırlatıcısını sil" waits for a yes; both are reported only after a fresh fetch from Reminders no longer lists the reminder as open. A reminder is found by its words (Turkish verb nouns match: "süt alma" finds "Süt al"), the one just saved ("bu hatırlatıcıyı …"), or the user's answer to "Hangisi?" (order, list name or words); nothing is guessed, and several at once are never changed. New reminders go to the list named in the words ("İş listeme …"; only real list names count), else the list chosen in Settings → iPhone tools, else iOS's default; a list that is gone falls back to the default and the assistant says so. The Tasks tab's new-reminder sheet has a list picker. The planner model can choose neither action. Tests: `AutoLoomReminderVoiceTests`; physical RM1–RM4 |
-| 2.3 | Tasks: priority, snooze, recurrence; notification delegate with Complete/Snooze actions | PARTLY DONE-CI (alert actions, foreground banners; priority existed) / DEVICE TEST TK1 / NEXT (recurrence, undo) | Foreground banners; actions work from the lock screen; undo for completion |
+| 2.3 | Tasks: priority, snooze, recurrence; notification delegate with Complete/Snooze actions | DONE-CI (alert actions, foreground banners; priority existed) / IN CI (recurrence, undo of a spoken completion) / DEVICE TEST TK1, TK2, RM5 | Foreground banners; actions work from the lock screen; undo for completion — Now also: "her gün", "hafta içi her gün", "her pazartesi" / "cumaları", "her ayın 15'inde", "her yıl", "every day" repeat a reminder or event (EventKit's own rule) or an AutoLoom task (completing it adds the next one, never in the past and counted from the first date, with an alert when the completed one had one; undoing the completion takes it back). Words such as "haftalık" and "bu hafta içi" are not read as repeats; a repeat the app cannot set ("her saat", "iki günde bir") is said, and the item is saved once; notifications cannot repeat and say so. A spoken task completion is undone by "geri al". The task and new-reminder sheets have a Repeat picker. Task repeats are kept beside the SwiftData store, so the store already on the iPhone needs no schema migration. Tests: `AutoLoomRecurrenceTests`; physical TK2, RM5 |
 | 2.4 | Approval inbox (F10) | PARTLY DONE-CI / NEXT | Every waiting phone action and PC task in one list; more than one slot; survives app restart — Done: one screen with the phone's waiting action and the PC's approvals (those survive a restart, they wait on the PC), opened from the Home chip. Still NEXT: more than one waiting phone action, and keeping it across a restart |
 | 2.5 | Persisted activity log on the phone | DONE-CI | Actions, approvals, PC tasks, failures kept 30 days (no content), viewable and exportable |
 | 2.6 | Notes: attachments and visible links; bulk export | LATER | Photo/document attachments; links to tasks and conversations shown both ways; JSON/Markdown export |
@@ -123,14 +123,14 @@ All of these wait on the owner supplying keys and approving costs.
    - SEC1–SEC3 (approvals and injection);
    - PC1–PC10 (companion), RA1 (Remote Assist);
    - TK1 (task alert actions), SK1 and SK2 (MCP skills, a changed tool blocked);
-   - RM1–RM4 (Apple Reminders by voice: complete and undo, delete after a yes, "hangisi?", list choice).
+   - RM1–RM4 (Apple Reminders by voice: complete and undo, delete after a yes, "hangisi?", list choice);
+   - TK2 and RM5 (repeating tasks, reminders and events).
 3. Owner decisions:
    - HFP before the camera stream (1.7), after AU2/AU3;
    - Remote Assist TLS (1.15);
    - App Store privacy answers from `PrivacyInfo.xcprivacy` (1.16).
    - Turn on GitHub private vulnerability reporting (Settings → Code security), which `SECURITY.md` now waits for.
 4. Remaining NEXT items:
-   - 2.3 task recurrence and undo (snooze and alert actions are done);
    - more than one waiting phone action (2.4);
    - 3.1 Live Vision images and an opt-in thumbnail; 3.2 memory supersession and inbox;
 5. DAT 1.x port (3.4) once DAT1 shows the glasses need it.

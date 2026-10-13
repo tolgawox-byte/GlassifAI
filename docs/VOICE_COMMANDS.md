@@ -44,6 +44,7 @@ The stop and end words can be turned off in Settings → Name & conversation →
 | "Yarın 10'da Ahmet'i aramayı hatırlat", "20 dakika sonra fırını kapatmayı hatırlat" | Apple Reminder with an alarm |
 | "Eve varınca süt almayı hatırlat", "İşten çıkınca Ahmet'i aramayı hatırlat" | Location reminder at the saved home/work address |
 | "İş listeme yarın 10'da raporu göndermeyi hatırlat" | The reminder "Raporu gönder" in the list İş (only a real list's name counts; otherwise the list chosen in Settings → iPhone tools, else iOS's default) |
+| "Her gün 9'da ilacımı içmeyi hatırlat", "Her pazartesi 10'da toplantı ekle", "Hafta içi her gün 8'de görev oluştur: posta" | Repeating reminder, event or task ("her gün", "hafta içi her gün", "her pazartesi", "cumaları", "her ayın 15'inde", "her yıl"); "her saat" and "iki günde bir" are not supported and are said so |
 | "Süt alma hatırlatıcısını tamamla", "Bu hatırlatıcıyı tamamla" | Completes one open Apple reminder ("geri al" reopens it); asks "Hangisi?" when several fit |
 | "Süt alma hatırlatıcısını sil", "Diş hekimi anımsatıcısını kaldır" | Deletes one open Apple reminder after "evet"; it cannot be undone |
 | "20 dakika sonra bana haber ver" | Local notification |

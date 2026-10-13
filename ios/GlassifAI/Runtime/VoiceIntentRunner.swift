@@ -736,10 +736,19 @@ extension AssistantOrchestrator {
           reply: L.t("No matching task.", "Eşleşen görev yok."))
       }
       let title = best.0.title
+      let taskID = best.0.id
       store.setCompleted(best.0, true)
+      LocalUndo.shared.record(kind: "task", english: "task reopened", turkish: "görev yeniden açıldı") {
+        guard let task = MemoryStore.shared.task(id: taskID), task.completed else { return false }
+        MemoryStore.shared.setCompleted(task, false)
+        return true
+      }
+      var fact = "Marked the AutoLoom task \"\(title)\" as done."
+      if let next = store.nextOccurrence(of: best.0), let date = next.dueAt {
+        fact += " It repeats; the next one is due " + TimePhraseParser.describe(date, hasTime: next.dueHasTime, turkish: false) + "."
+      }
       return IntentOutcome(
-        spoken: BridgeSpeech.done(
-          "Marked the AutoLoom task \"\(title)\" as done.", tr: "Tamam, tamamlandı olarak işaretledim.", en: "Done, marked as complete."),
+        spoken: BridgeSpeech.done(fact, tr: "Tamam, tamamlandı olarak işaretledim.", en: "Done, marked as complete."),
         reply: L.t("Completed: ", "Tamamlandı: ") + title,
         feedback: ActionFeedback(kind: .taskDone, title: L.t("Task completed", "Görev tamamlandı")))
 
@@ -1122,6 +1131,7 @@ extension AssistantOrchestrator {
       plan.date = time.date
       plan.hasTime = time.hasTime
       plan.alternativeDate = time.isAmbiguous ? time.alternative : nil
+      plan.recurrence = time.recurrence
     }
     let validated: DeviceActionPlan
     switch DeviceActionParser.validate(plan, now: Date()) {
@@ -1147,7 +1157,16 @@ extension AssistantOrchestrator {
       entry.result = staged.failed.map { "failed: " + LogSanitizer.sanitize($0, limit: 120) }
         ?? (waiting ? "waiting for the user's choice" : "success (iOS confirmed)")
     }
-    return IntentOutcome(spoken: staged.speakable, reply: staged.display ?? staged.speakable, failed: staged.failed)
+    let once = staged.failed == nil ? Self.unsupportedRepeatNote(transcript, title) : ""
+    return IntentOutcome(spoken: staged.speakable + once, reply: staged.display ?? staged.speakable, failed: staged.failed)
+  }
+
+  /// "Her saat", "iki günde bir": repeats the app cannot set are said, so a
+  /// one-time item is never taken for a repeating one (plan 2.3).
+  static func unsupportedRepeatNote(_ texts: String...) -> String {
+    guard texts.contains(where: Recurrence.unsupported(in:)) else { return "" }
+    return " The repeat the user asked for (every hour, or every few days) is not supported: it was saved once."
+      + " Supported: every day, every weekday, every week or a weekday, every month, every year. Tell the user."
   }
 
   private static func traceText(_ plan: DeviceActionPlan, time: ParsedTime?) -> String {
@@ -1230,6 +1249,8 @@ extension AssistantOrchestrator {
         reply: L.t("The task could not be saved.", "Görev kaydedilemedi."), failed: "task save failed",
         feedback: .failed(L.t("Task not added", "Görev eklenemedi")))
     }
+    // "Her gün 9'da ilaç iç": the next one is added when this one is done.
+    if let recurrence = time?.recurrence { store.setRecurrence(recurrence, for: task) }
     if let sourceNote {
       store.link(task, toNote: sourceNote)
       trace.update(traceID) { $0.persistence = "task saved; linked to the note just saved" }
@@ -1253,10 +1274,14 @@ extension AssistantOrchestrator {
       }
       if task.dueHasTime, date > Date() { await scheduleNotification(for: task, traceID: traceID) }
     }
+    if let recurrence = store.recurrence(of: task) {
+      due += ", repeating \(recurrence.english) (when one is completed, the next is added)"
+    }
     trace.update(traceID) { $0.parsed = "title \"\(TaskTrace.redactUserText(task.title, limit: 50))\";\(due.isEmpty ? " no date" : due)" }
     return IntentOutcome(
       spoken: BridgeSpeech.done(
-        "The app added an AutoLoom task on this iPhone: \"\(task.title)\"\(due). It is in the Tasks tab.",
+        "The app added an AutoLoom task on this iPhone: \"\(task.title)\"\(due). It is in the Tasks tab."
+          + Self.unsupportedRepeatNote(title),
         tr: "Tamam, görevlere ekledim.", en: "Done, it's on your task list."),
       reply: L.t("Task added: ", "Görev eklendi: ") + task.title,
       feedback: .taskAdded(due: task.dueAt, hasTime: task.dueHasTime),

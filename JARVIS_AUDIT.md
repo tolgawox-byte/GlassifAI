@@ -82,11 +82,11 @@ Status words: **WORKING-IN-CODE** (complete path + automated tests; no device te
 | Glasses photos / videos | WORKING-IN-CODE | Stills saved byte-for-byte; videos = 720p stream, no audio | No original-media API exists (0.5.0 and 1.0.1) |
 | DAT version | Risk | 0.5.0 linked; latest 1.0.1 (2026-10-09); 0.5.0 still listed by Meta, no deprecation | `sdkUpdateRequired` was never surfaced (**FIXED-NOW**); dat1 branch 33 commits behind |
 | Notes | WORKING-IN-CODE | SwiftData, 60 s duplicate guard, rollback on failed save, search with Turkish folding | No attachments; links written but never shown; no bulk export |
-| Tasks (app's own) | PARTIAL | Create/complete/move/undo-move | `priority` never set; no snooze/recurrence; no notification delegate |
+| Tasks (app's own) | PARTIAL | Create/complete/move/undo-move | `priority` never set; no snooze and no notification delegate (**FIXED (CI)**, phase 1f: Complete and Snooze from the alert); no recurrence (**IN CI**, plan 2.3, with undo of a spoken completion) |
 | Apple Reminders / Calendar | PARTIAL | Create/list; ambiguous time asked first; location alarms | Not fetched back after saving (**FIXED (CI)**, plan 2.2); default list only and no voice complete/delete (**IN CI**: a list by name or from Settings, complete with undo, delete after a yes, each read back) |
 | Memory | PARTIAL | Explicit save via parser; summaries; 12-line prompt cap | Model-delegated saves trusted without the user's words; no export |
 | Visual memory | WORKING-IN-CODE (lexical) | Opt-in; OCR + labels; honest "not found"; photos never read from the library | No image embeddings; a half match can win |
-| Action engine | PARTIAL | SAFE / CONFIRM / STRONG CONFIRM; untrusted-content raise | Model could confirm its own actions (**FIXED-NOW**); one pending slot; undo misses EventKit; staged graph steps reported as done |
+| Action engine | PARTIAL | SAFE / CONFIRM / STRONG CONFIRM; untrusted-content raise | Model could confirm its own actions (**FIXED-NOW**); one pending slot; undo misses EventKit (a reminder completed by voice can now be reopened, **IN CI**); staged graph steps reported as done (**IN CI**, plan 2.2) |
 | Providers | WORKING-IN-CODE | ChatGPT; Claude/Gemini/Perplexity/OpenRouter adapters (keys in Keychain) | No OpenAI API-key provider; no spending cap |
 | MCP skills | PARTIAL | https only, Keychain token, per-tool policy | No pinning (**FIXED-NOW** for the PC); tap-confirmed results discarded (**FIXED-NOW**) |
 | Remote Assist | WORKING-IN-CODE | Tap-only start, red bar, 6-digit code | Plain HTTP; listener on all interfaces |

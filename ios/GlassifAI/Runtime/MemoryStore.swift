@@ -549,9 +549,12 @@ final class MemoryStore: ObservableObject {
   }
 
   private let defaults: UserDefaults
+  /// Which tasks repeat (plan 2.3), kept beside the SwiftData store.
+  let recurrences: TaskRecurrenceStore
 
   init(inMemory: Bool = false, defaults: UserDefaults = .standard) {
     self.defaults = defaults
+    recurrences = TaskRecurrenceStore(defaults: defaults)
     isEnabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
     visualMemoriesEnabled = defaults.bool(forKey: Self.visualEnabledKey)
     saveVisualPhotos = defaults.bool(forKey: Self.visualPhotosKey)
@@ -893,10 +896,67 @@ final class MemoryStore: ObservableObject {
   }
 
   func setCompleted(_ task: TaskItem, _ done: Bool) {
+    let changed = task.completed != done
+    let hadAlert = task.notificationID != nil
     task.completed = done
     task.completedAt = done ? Date() : nil
     if done { cancelNotification(of: task) }
     save()
+    guard changed else { return }
+    if done {
+      addNextOccurrence(after: task, withAlert: hadAlert)
+    } else {
+      withdrawNextOccurrence(of: task)
+    }
+  }
+
+  // MARK: Repeating tasks (plan 2.3)
+
+  func recurrence(of task: TaskItem) -> Recurrence? {
+    recurrences.entry(for: task.id)?.recurrence
+  }
+
+  /// A repeat needs a due date; the later ones are counted from it.
+  func setRecurrence(_ recurrence: Recurrence?, for task: TaskItem) {
+    guard recurrence == nil || task.dueAt != nil else { return }
+    objectWillChange.send()
+    recurrences.set(recurrence, for: task.id, anchor: task.dueAt ?? Date())
+  }
+
+  /// The task added when this one was completed, while it exists.
+  func nextOccurrence(of task: TaskItem) -> TaskItem? {
+    recurrences.successor(of: task.id).flatMap { self.task(id: $0) }
+  }
+
+  /// Completing a repeating task adds the next one (never in the past),
+  /// with its own alert when this one had one; the repeat moves to it.
+  private func addNextOccurrence(after task: TaskItem, withAlert: Bool) {
+    guard let entry = recurrences.entry(for: task.id), let due = task.dueAt else { return }
+    let nextDue = entry.recurrence.next(after: max(due, Date()), anchor: entry.anchor)
+    guard let next = addTask(
+      title: task.title, notes: task.notes, dueAt: nextDue, dueHasTime: task.dueHasTime, priority: task.priority,
+      source: task.source) else { return }
+    next.linkedNoteID = task.linkedNoteID
+    next.linkedMemoryID = task.linkedMemoryID
+    save()
+    recurrences.handOver(from: task.id, to: next.id)
+    guard withAlert, next.dueHasTime, nextDue > Date() else { return }
+    let nextID = next.id
+    let title = next.title
+    Task { @MainActor [weak self] in
+      let alerts = TaskNotifications.shared
+      guard await alerts.alertsAllowed(), let alertID = await alerts.scheduleAlert(title, nextDue, nextID),
+            let self, let current = self.task(id: nextID), !current.completed else { return }
+      self.setNotificationID(current, alertID)
+    }
+  }
+
+  /// Undoing that completion takes back the task it added (while that one
+  /// is still open), and the repeat returns to this one.
+  private func withdrawNextOccurrence(of task: TaskItem) {
+    guard let nextID = recurrences.successor(of: task.id), let next = self.task(id: nextID), !next.completed else { return }
+    recurrences.handBack(from: nextID, to: task.id)
+    deleteTask(next)
   }
 
   /// "Bunun için görev oluştur" after a note: the task remembers the note.
@@ -912,6 +972,7 @@ final class MemoryStore: ObservableObject {
 
   func deleteTask(_ task: TaskItem) {
     cancelNotification(of: task)
+    recurrences.remove(task.id)
     context?.delete(task)
     save()
   }
@@ -921,6 +982,7 @@ final class MemoryStore: ObservableObject {
       cancelNotification(of: task)
       context?.delete(task)
     }
+    recurrences.removeAll()
     save()
   }
 
@@ -997,6 +1059,7 @@ final class MemoryStore: ObservableObject {
       cancelNotification(of: task)
       context?.delete(task)
     }
+    recurrences.removeAll()
     save()
     clearProfile()
   }

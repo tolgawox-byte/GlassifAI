@@ -402,7 +402,7 @@ enum ActionCatalog {
       summary: "An AutoLoom task on this iPhone; links to the active vehicle.",
       examplesTR: [
         "Görev oluştur: lastikleri kontrol et", "Yarına görev oluştur: Civic evraklarını hazırla",
-        "Todo'ya ekle: sigorta",
+        "Todo'ya ekle: sigorta", "Her pazartesi 10'da rapor hazırla diye görev oluştur",
       ],
       examplesEN: ["Create a task to order tires", "Add a task: call the bank"],
       parameters: [.init("title", .text, "The task"), .init("due", .date, required: false, "When")],
@@ -414,9 +414,9 @@ enum ActionCatalog {
       ui: "Tasks", keys: ["listTasks"]),
     ActionDefinition(
       "task.complete", .tasks, name: "Complete a task", tr: "Görevi tamamla",
-      summary: "Marks an AutoLoom task as done; when no task matches, an open Apple reminder with those words.",
+      summary: "Marks an AutoLoom task as done (\"geri al\" reopens it; a repeating task gets its next one); when no task matches, an open Apple reminder with those words.",
       examplesTR: ["Lastik görevini tamamla", "[saved] Bunu tamamla"], examplesEN: ["Mark the tire order as done"],
-      undo: .notSupported, ui: "Tasks → tap the circle", keys: ["completeTask"]),
+      undo: .supported, ui: "Tasks → tap the circle", keys: ["completeTask"]),
     ActionDefinition(
       "task.move", .tasks, name: "Move a task", tr: "Görevi ertele",
       summary: "Moves a task to another day or time.",
@@ -424,8 +424,11 @@ enum ActionCatalog {
       parameters: [.init("time", .date, "The new day or time")], ui: "Tasks → swipe → Reschedule", keys: ["moveTask"]),
     ActionDefinition(
       "reminder.create", .tasks, name: "Create a reminder", tr: "Hatırlatıcı oluştur",
-      summary: "An Apple Reminder with an alarm, saved at once.",
-      examplesTR: ["Yarın 10'da Ahmet'i aramayı hatırlat", "20 dakika sonra fırını kapatmayı hatırlat", "Yarın 10'a uyarı koy"],
+      summary: "An Apple Reminder with an alarm, saved at once; \"her gün\", \"her pazartesi\", \"her ayın 15'inde\" make it repeat.",
+      examplesTR: [
+        "Yarın 10'da Ahmet'i aramayı hatırlat", "20 dakika sonra fırını kapatmayı hatırlat", "Yarın 10'a uyarı koy",
+        "Her gün 9'da ilacımı içmeyi hatırlat",
+      ],
       examplesEN: ["Remind me to call mom tomorrow at 9"],
       parameters: [.init("title", .text, "What"), .init("time", .date, "When")],
       permissions: [.reminders], undo: .notSupported, localPriority: true, ui: "Tasks → +",

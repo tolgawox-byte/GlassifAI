@@ -197,6 +197,8 @@ struct DeviceActionPlan: Equatable {
   var reminderListID: String?
   /// That list's name, or the list of the reminder to complete or delete.
   var reminderListName: String?
+  /// "Her gün", "her pazartesi": a repeating reminder or event (plan 2.3).
+  var recurrence: Recurrence?
   /// A reminder that rings at a place instead of a time.
   var trigger: LocationTrigger?
   /// The planner's short explanation (used for `none`).
@@ -235,8 +237,10 @@ struct DeviceActionPlan: Equatable {
         return L.t("Reminder", "Anımsatıcı") + " \"\(title ?? "")\" — " + trigger.label
       }
       return L.t("Reminder", "Anımsatıcı") + " \"\(title ?? "")\"" + (when.map { " — \($0)" } ?? L.t(" (no time)", " (saatsiz)"))
+        + (recurrence.map { " · " + $0.label } ?? "")
     case .createEvent:
       return L.t("Event", "Etkinlik") + " \"\(title ?? "")\" — \(when ?? "")" + (location.map { " @ \($0)" } ?? "")
+        + (recurrence.map { " · " + $0.label } ?? "")
     case .saveNote:
       return L.t("Note", "Not") + " \"\(title ?? String((text ?? "").prefix(40)))\""
     case .scheduleNotification:
@@ -381,6 +385,7 @@ enum DeviceActionParser {
         plan.date = parsed.date
         plan.hasTime = parsed.hasTime
         plan.alternativeDate = parsed.isAmbiguous ? parsed.alternative : nil
+        plan.recurrence = parsed.recurrence
       case .success(.none):
         break
       case .failure(let error):
@@ -671,7 +676,9 @@ final class DeviceActionExecutor {
       _ = try await LocalNotifications.schedule(
         title: plan.title ?? plan.text ?? AutoLoomBrand.appName,
         body: plan.title == nil ? nil : plan.text, at: date)
-      return "Notification scheduled for \(date.formatted(date: .abbreviated, time: .shortened))."
+      let once = plan.recurrence == nil ? ""
+        : " A notification cannot repeat, so this one is set once; \"her gün … hatırlat\" makes a repeating reminder. Tell the user."
+      return "Notification scheduled for \(date.formatted(date: .abbreviated, time: .shortened))." + once
     case .findContact:
       return try await findContact(plan.recipient ?? "")
     case .copyText:
@@ -764,7 +771,7 @@ final class DeviceActionExecutor {
       let length = event.endDate.timeIntervalSince(event.startDate)
       event.startDate = date
       event.endDate = date.addingTimeInterval(length > 0 ? length : 3_600)
-      try store.save(event, span: .thisEvent, commit: true)
+      try store.save(event, span: event.hasRecurrenceRules ? .futureEvents : .thisEvent, commit: true)
     case .createReminder:
       try await ensureReminderAccess()
       guard let reminder = store.calendarItem(withIdentifier: item.identifier) as? EKReminder else {
@@ -806,6 +813,8 @@ final class DeviceActionExecutor {
       let alarm = try await Self.locationAlarm(for: trigger)
       reminder.addAlarm(alarm)
     }
+    // A repeat needs a due date; Reminders makes the next one itself.
+    if let recurrence = plan.recurrence, plan.date != nil { reminder.addRecurrenceRule(recurrence.eventKitRule) }
     try store.save(reminder, commit: true)
     let identifier = reminder.calendarItemIdentifier
     guard !identifier.isEmpty else {
@@ -814,7 +823,10 @@ final class DeviceActionExecutor {
     lastCreated = CreatedItem(
       kind: .createReminder, identifier: identifier, title: plan.title ?? "", date: plan.date,
       hasTime: plan.hasTime, at: Date())
-    let when = plan.whenText.map { " for \($0)" } ?? plan.trigger.map { " (\($0.englishLabel); Apple Reminders rings there)" } ?? ""
+    var when = plan.whenText.map { " for \($0)" } ?? plan.trigger.map { " (\($0.englishLabel); Apple Reminders rings there)" } ?? ""
+    if let recurrence = plan.recurrence, plan.date != nil {
+      when += ", repeating \(recurrence.english)" + (plan.hasTime ? "" : " (no time, so no alert)")
+    }
     // Read it back (plan 2.2): "saved" only when Reminders returns it. If it
     // does not, the user checks before trying again, so nothing is doubled.
     // (Reminders always need full access, so reading back is allowed.)
@@ -1021,14 +1033,16 @@ final class DeviceActionExecutor {
     event.location = plan.location
     event.notes = plan.notes
     event.calendar = calendar
-    try store.save(event, span: .thisEvent, commit: true)
+    if let recurrence = plan.recurrence { event.addRecurrenceRule(recurrence.eventKitRule) }
+    try store.save(event, span: plan.recurrence == nil ? .thisEvent : .futureEvents, commit: true)
     guard event.eventIdentifier != nil else {
       throw ExecutionError.failed("iOS did not confirm the event.")
     }
     lastCreated = CreatedItem(
       kind: .createEvent, identifier: event.calendarItemIdentifier, title: plan.title ?? "", date: start, hasTime: true,
       at: Date())
-    return "Event saved in \(calendar.title): \(plan.title ?? "") on \(start.formatted(date: .abbreviated, time: .shortened))."
+    let repeats = plan.recurrence.map { ", repeating \($0.english)" } ?? ""
+    return "Event saved in \(calendar.title): \(plan.title ?? "") on \(start.formatted(date: .abbreviated, time: .shortened))\(repeats)."
   }
 
   /// A lookup answers the voice model with names and number labels only; the

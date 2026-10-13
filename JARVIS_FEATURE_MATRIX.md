@@ -73,7 +73,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Note fields: title, content, time, tags, source | Working in code | Automated | `NoteRecord` | — | P1 |
 | Linked image/document/task/conversation | Partial | — | Links written, not shown | Plan 2.6 | P2 |
 | Tasks: create, edit, complete, list, search | Working in code | Automated | `TasksViews`, voice | — | P1 |
-| Snooze, priority, recurrence | Missing | — | `priority` dead field | Plan 2.3 | P1 |
+| Snooze, priority, recurrence | Partial | Automated | Snooze from the alert (phase 1f); recurrence in CI (`AutoLoomRecurrenceTests`); `priority` still a dead field | Device tests TK1, TK2 | P1 |
 | Apple Reminders create | Working in code | Pending device | `DeviceActions.createReminder` | Device test RM4 | P1 |
 | Reminder verified after creation | Working in code | Automated (build) | `calendarItem(withIdentifier:)` after saving | Device test | P1 |
 | Reminder list choice (Settings, by name, Tasks sheet) | In CI | Automated (parser) | `ReminderLists`, `ReminderListMention` | Device test RM4 | P1 |
@@ -105,7 +105,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Calendar / Reminders | Partial | Pending device | EventKit | Reminders: plan 2.2 (in CI); calendar edits by voice: not planned | P1 |
 | Share sheet (outgoing) | Working in code | Pending device | `UIActivityViewController` | — | P2 |
 | Share extension / widgets / Live Activities | **Blocked** | — | Extension signing in the sideloaded IPA | Paid developer team | P3 |
-| Notifications with actions | Missing | — | No delegate | Plan 2.3 | P1 |
+| Notifications with actions | Working in code | Automated | `TaskNotifications` (Complete, Snooze 1 hour; banner while the app is open) | Device test TK1 | P1 |
 | Shortcuts and App Intents | Working in code | Pending device AP1 | 17 intents | Authentication policy (M5) | P1 |
 | Permission denial and revocation handled | Working in code | Automated | `PermissionCenter`, kept commands | — | P1 |
 
