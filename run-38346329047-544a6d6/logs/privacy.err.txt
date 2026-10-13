@@ -1,0 +1,1 @@
+2026-10-13 04:58:21.949 GlassifAI[69613:192284] [GlassifAI] Wearables SDK unavailable: WearablesError(rawValue: 0)
