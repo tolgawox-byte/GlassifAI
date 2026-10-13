@@ -481,6 +481,8 @@ extension AssistantOrchestrator {
   func runSkillCall(_ call: SkillCallRequest) async -> String {
     // The user's tap or own yes on a task the PC holds: approve exactly that one.
     if let approval = call.pcApproval {
+      // The PC's report (file text, command output) is outside content.
+      noteUntrustedContent(origin: "PC companion result")
       return await PCCompanionStore.shared.approveAndWait(approval)
     }
     guard let server = SkillStore.shared.server(call.serverID), server.enabled else {
@@ -504,6 +506,7 @@ extension AssistantOrchestrator {
         return staged.speakable
       }
       let origin = "the MCP skill \(server.name) (\(server.host))"
+      noteUntrustedContent(origin: "MCP skill result")
       if result.isError {
         return "The skill reported an error:\n" + UntrustedContent.wrap(String(result.text.prefix(1_500)), origin: origin)
           + "\nTell the user briefly that it did not work."

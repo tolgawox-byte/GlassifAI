@@ -151,6 +151,7 @@ extension AssistantOrchestrator {
         en: "I couldn't find a QR code or barcode in view; move a little closer to it.",
         fact: "No QR code or barcode was found in the camera image.", failed: "no code")
     }
+    noteUntrustedContent(origin: "QR or barcode")
     let contents = codes.prefix(3).map(CodeReader.classify)
     let tr = contents.map { CodeReader.sentence(for: $0, turkish: true) }.joined(separator: " ")
     let en = contents.map { CodeReader.sentence(for: $0, turkish: false) }.joined(separator: " ")

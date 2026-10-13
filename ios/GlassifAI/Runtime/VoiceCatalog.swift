@@ -130,6 +130,24 @@ enum RealtimeStartLadder {
     step == .withoutResume && error.lowercased().contains("voice")
   }
 
+  enum Recovery: Equatable {
+    /// The error may be about something a later step leaves out.
+    case nextStep
+    /// The sign-in was rejected: refresh it once and repeat the same step.
+    case refreshAndRepeat
+    /// No step can fix it: a rate limit, a server error, or a sign-in that is
+    /// still rejected after a refresh.
+    case stop
+  }
+
+  /// What to do after a failed step, from the service's own status (bridge 4
+  /// and later). Without details the ladder behaves as before.
+  static func recovery(after details: RealtimeErrorDetails?, alreadyRefreshed: Bool) -> Recovery {
+    guard let details else { return .nextStep }
+    if details.isAuthenticationFailure { return alreadyRefreshed ? .stop : .refreshAndRepeat }
+    return details.isUnfixableByRetrying ? .stop : .nextStep
+  }
+
   /// A short reason for Settings and diagnostics (sanitized).
   static func reason(from error: String?) -> String {
     let text = LogSanitizer.sanitize(error ?? "no answer", limit: 200)

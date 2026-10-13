@@ -2,6 +2,61 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — phase 1b: realtime reliability, injection containment] — branch `autoloom-glasses-jarvis-v1`
+
+Plan items 1.4–1.7 and 1.12–1.15 (`JARVIS_IMPLEMENTATION_PLAN.md`). CI results: `TEST_REPORT.md`. Not device-verified; new physical tests VC4, AU2, AU3, RA1, SEC2, SEC3 in `docs/PHYSICAL_TEST_MATRIX.md`.
+
+### Added
+- **Readable voice-start errors** (native bridge 4). A failed call now reports the service's HTTP status, error code, `param`, type, message and request id, plus a 600-byte body excerpt; request headers and the token are never included. Each failed start step shows them in Voice diagnostics and in the copied diagnostics. Before, all of it was one string cut to about 150 characters, which is how the field a 400 rejected was lost.
+- **Audio-flow watchdog.** About 1 s and 5 s after a conversation is ready, WebRTC's own counters are read:
+  - the microphone's captured audio;
+  - audio packets sent;
+  - audio packets received while the assistant speaks.
+
+  A stuck direction is said out loud on the phone ("Mikrofondan ses alınamıyor; bağlantıyı yeniliyorum") and gets **one** reconnect per conversation, never a loop. A muted microphone, an audio interruption (a phone call) or missing counters are not judged. Voice diagnostics shows the result.
+- **Effective audio session in diagnostics**: category, mode, options, sample rate and buffer a few seconds after Ready. It shows if WebRTC replaced the app's choices.
+
+### Changed
+- **Voice start ladder**:
+  - a rejected sign-in (401/403) refreshes the token once and repeats the same step;
+  - after that, and on rate limits (429) or server errors (5xx), it stops instead of resending the same offer with other options;
+  - other errors try the next step as before.
+- **Native bridge timeouts**:
+  - creating the call is limited to 20 s (the HTTP client had none);
+  - the task channel's handshake is limited to 10 s, and a stop is honoured while it runs;
+  - its reconnect budget starts over only after 30 s of stable connection (an accept-and-close loop used to reset it each time);
+  - a 404 before the first connection is retried 3 times (openai/codex#35094).
+- **WebRTC's audio configuration mirrors the app's** category, mode and options (`mixWithOthers`, `defaultToSpeaker`, `allowBluetoothHFP`). WebRTC re-applies its own process-wide configuration whenever its audio unit starts; built with the iOS 26 SDK that configuration carried only `allowBluetoothHFP` (fork source, see `JARVIS_AUDIT.md` §6).
+
+### Security
+- **Prompt-injection containment across turns (audit M1).** Text from outside now marks the whole conversation, not only the turn it arrived in. Sources:
+  - camera, web or agent answers;
+  - QR codes, translated signs and documents;
+  - Live Vision notes;
+  - MCP and PC results.
+
+  While the mark is set, what the voice model asks for on its own needs the user's words or a yes:
+  - changes wait for a yes, as before;
+  - reads of contacts, calendar and reminders now also wait for a yes;
+  - **a memory is saved only from the user's own "hatırla …"** or typed input, because a planted memory would reach every future conversation.
+
+  The mark ends with the conversation.
+- Saved memories and the previous conversation's summary reach the voice model as **quoted data blocks**, never as instructions. The voice model is told that outside text is information only. Outside text cannot pose as an "[App message" or a "[Live view" note.
+- The untrusted-content wrapper defuses its tag in **any** spelling ("</UNTRUSTED_CONTENT >", "< /untrusted_content"), and its origin cannot add attributes (audit L2).
+- **Photos sent to a model carry no location or camera metadata**: GPS, make/model, serials and dates are stripped, or the image is re-encoded (plan 1.13).
+- Today's briefing, "find my vehicle" and "remember in AutoLoom" need an unlocked iPhone (audit M5).
+- **OpenClaw gateway**:
+  - host names such as `fdic.gov` or `fc2.com` are no longer treated as private addresses;
+  - the owner token goes over plain HTTP only to loopback or Tailscale;
+  - plain HTTP on a home network now shows a warning (audit M4).
+- **Remote Assist** (audit M3; TLS is still open, see the plan):
+  - it listens on Wi-Fi only and accepts only devices on the local network;
+  - at most four viewers;
+  - a connection that sends nothing is dropped after 10 s.
+
+### Fixed
+- **Live Vision** drops a scene note that was described while the camera was switched or turned off (plan 1.12, part).
+
 ## [JARVIS Ultimate — phase 1: audit, PC companion, P0 fixes] — branch `autoloom-glasses-jarvis-v1`
 
 Rollback tag: `rollback-146a169-before-jarvis-ultimate`. CI results: `TEST_REPORT.md`. Not device-verified; new physical tests PC1–PC8, SEC1, AU1, VC1–VC3, DAT1, CAM1 in `docs/PHYSICAL_TEST_MATRIX.md`.

@@ -13,6 +13,7 @@ use codex_api::RealtimeWebsocketClient;
 use codex_api::RealtimeWebsocketWriter;
 use codex_api::ReqwestTransport;
 use codex_api::RetryConfig;
+use codex_api::TransportError;
 use codex_http_client::HttpClientBuilder;
 use codex_protocol::protocol::ConversationTextParams;
 use codex_protocol::protocol::ConversationTextRole;
@@ -35,8 +36,11 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
-const BRIDGE_VERSION: &str = "autoloom-bridge-3";
+const BRIDGE_VERSION: &str = "autoloom-bridge-4";
+/// How much of a failed call's response body the app may see (diagnostics).
+const MAX_ERROR_BODY_BYTES: usize = 600;
 
 /// The exact instructions of the device-verified baseline build. Used by the
 /// original entry point and as the fallback when no options are supplied.
@@ -48,6 +52,16 @@ const MAX_INITIAL_ITEM_BYTES: usize = 4_000;
 const MAX_QUEUED_EVENTS: usize = 256;
 const MAX_PENDING_COMMANDS: usize = 8;
 const MAX_RECONNECT_ATTEMPTS: u32 = 6;
+/// The HTTP client has no timeout of its own: a stalled network must not
+/// leave the app waiting forever for a call.
+const CALL_CREATE_TIMEOUT: Duration = Duration::from_secs(20);
+const SIDEBAND_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// A sideband that stayed connected this long starts a fresh reconnect budget.
+/// A socket that is accepted and closed at once keeps counting instead.
+const STABLE_CONNECTION: Duration = Duration::from_secs(30);
+/// A 404 before the first connect can mean the new call is not registered
+/// yet (openai/codex#35094), so it is retried this many times.
+const FIRST_CONNECT_NOT_FOUND_RETRIES: u32 = 3;
 
 #[derive(Clone)]
 struct OAuthAuth {
@@ -202,6 +216,92 @@ fn parse_start_options(raw: &str) -> StartOptions {
     options
 }
 
+/// A short, stable name for the kind of failure.
+fn error_kind(error: &ApiError) -> &'static str {
+    match error {
+        ApiError::Transport(TransportError::Http { .. }) => "http",
+        ApiError::Transport(TransportError::Timeout) => "timeout",
+        ApiError::Transport(_) => "network",
+        ApiError::Api { .. } => "api",
+        ApiError::RateLimit(_) => "rate_limit",
+        ApiError::InvalidRequest { .. } => "invalid_request",
+        ApiError::QuotaExceeded | ApiError::UsageNotIncluded => "quota",
+        ApiError::ServerOverloaded => "overloaded",
+        _ => "other",
+    }
+}
+
+/// What the service said when a call could not be created, kept structured
+/// for the app's diagnostics: the HTTP status, the error's code, param, type
+/// and message when the body is JSON, the request id, and a short excerpt of
+/// the body. Request headers (and so the token) are never included.
+fn error_details(error: &ApiError) -> serde_json::Map<String, Value> {
+    let mut details = serde_json::Map::new();
+    details.insert("kind".to_string(), json!(error_kind(error)));
+    match error {
+        ApiError::Transport(TransportError::Http {
+            status,
+            headers,
+            body,
+            ..
+        }) => {
+            details.insert("status".to_string(), json!(status.as_u16()));
+            if let Some(headers) = headers {
+                for name in ["x-request-id", "request-id", "x-oai-request-id", "cf-ray"] {
+                    if let Some(value) = headers.get(name).and_then(|value| value.to_str().ok()) {
+                        details.insert("request_id".to_string(), json!(truncate_utf8(value, 120)));
+                        break;
+                    }
+                }
+            }
+            if let Some(body) = body {
+                details.insert(
+                    "body_excerpt".to_string(),
+                    json!(truncate_utf8(body, MAX_ERROR_BODY_BYTES)),
+                );
+                if let Ok(parsed) = serde_json::from_str::<Value>(body) {
+                    let error_object = parsed.get("error").unwrap_or(&parsed);
+                    for key in ["code", "param", "type", "message"] {
+                        match error_object.get(key) {
+                            Some(Value::String(text)) => {
+                                details.insert(key.to_string(), json!(truncate_utf8(text, 300)));
+                            }
+                            Some(Value::Null) | None => {}
+                            Some(other) => {
+                                details.insert(
+                                    key.to_string(),
+                                    json!(truncate_utf8(&other.to_string(), 300)),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ApiError::Api { status, message } => {
+            details.insert("status".to_string(), json!(status.as_u16()));
+            details.insert("message".to_string(), json!(truncate_utf8(message, 300)));
+        }
+        ApiError::InvalidRequest { message } => {
+            details.insert("message".to_string(), json!(truncate_utf8(message, 300)));
+        }
+        ApiError::RateLimit(message) => {
+            details.insert("status".to_string(), json!(429));
+            details.insert("message".to_string(), json!(truncate_utf8(message, 300)));
+        }
+        ApiError::Transport(TransportError::Timeout) => {
+            details.insert(
+                "message".to_string(),
+                json!("the service did not answer in time (timed out)"),
+            );
+        }
+        _ => {
+            details.insert("message".to_string(), json!(truncate_utf8(&error.to_string(), 300)));
+        }
+    }
+    details
+}
+
 fn sideband_session_ended(error: &ApiError) -> bool {
     matches!(
         error,
@@ -212,6 +312,26 @@ fn sideband_session_ended(error: &ApiError) -> bool {
 fn reconnect_delay(attempt: u32) -> Duration {
     let exponent = attempt.saturating_sub(1).min(5);
     Duration::from_millis((200u64 << exponent).min(5_000))
+}
+
+/// The reconnect attempt after a connection ended: a fresh budget only when
+/// the connection was stable, so an accept-then-close loop still ends.
+fn attempt_after_disconnect(attempt: u32, connected_for: Duration) -> u32 {
+    if connected_for >= STABLE_CONNECTION {
+        1
+    } else {
+        attempt.saturating_add(1)
+    }
+}
+
+/// Whether a failed connect ends the sideband. A 404/410 means the call is
+/// over once the sideband has been connected; before that it is retried a few
+/// times, since the call may not be registered yet.
+fn connect_failure_is_final(error: &ApiError, ever_connected: bool, attempt: u32) -> bool {
+    if attempt > MAX_RECONNECT_ATTEMPTS {
+        return true;
+    }
+    sideband_session_ended(error) && (ever_connected || attempt > FIRST_CONNECT_NOT_FOUND_RETRIES)
 }
 
 fn push_pending(pending: &mut VecDeque<SidebandCommand>, command: SidebandCommand) {
@@ -277,28 +397,44 @@ async fn run_sideband(
     let client = RealtimeWebsocketClient::new(provider);
     let mut pending: VecDeque<SidebandCommand> = VecDeque::new();
     let mut attempt: u32 = 0;
+    let mut ever_connected = false;
     loop {
         if !is_current(generation) {
             return;
         }
-        let connection = match client
-            .connect_webrtc_sideband(
+        // Bounded, and a close request is honoured while the handshake runs.
+        let connect = tokio::time::timeout(
+            SIDEBAND_CONNECT_TIMEOUT,
+            client.connect_webrtc_sideband(
                 config.clone(),
                 &call_id,
                 headers.clone(),
                 HeaderMap::new(),
                 RealtimeTranscriptState::default(),
-            )
-            .await
+            ),
+        );
+        tokio::pin!(connect);
+        let outcome = loop {
+            tokio::select! {
+                outcome = &mut connect => break outcome,
+                command = rx.recv() => match command {
+                    Some(SidebandCommand::Close) | None => return,
+                    Some(command) => push_pending(&mut pending, command),
+                },
+            }
+        };
+        let connected_at = Instant::now();
+        let connection = match outcome
+            .unwrap_or_else(|_| Err(ApiError::Transport(TransportError::Timeout)))
         {
             Ok(connection) => {
-                attempt = 0;
+                ever_connected = true;
                 set_sideband_status(generation, "connected");
                 connection
             }
             Err(error) => {
                 attempt += 1;
-                if sideband_session_ended(&error) || attempt > MAX_RECONNECT_ATTEMPTS {
+                if connect_failure_is_final(&error, ever_connected, attempt) {
                     set_sideband_status(generation, format!("ended: connect failed: {error}"));
                     return;
                 }
@@ -372,7 +508,7 @@ async fn run_sideband(
             },
         };
 
-        attempt += 1;
+        attempt = attempt_after_disconnect(attempt, connected_at.elapsed());
         if attempt > MAX_RECONNECT_ATTEMPTS {
             set_sideband_status(generation, format!("ended: {reason}"));
             return;
@@ -497,9 +633,16 @@ fn bridge_call(
     let mut sideband_headers = headers.clone();
     auth.add_auth_headers(&mut sideband_headers);
     let result = runtime.block_on(async {
-        RealtimeCallClient::new(transport, provider, auth)
-            .create_with_session_and_headers(sdp.to_string(), config, headers)
-            .await
+        tokio::time::timeout(
+            CALL_CREATE_TIMEOUT,
+            RealtimeCallClient::new(transport, provider, auth).create_with_session_and_headers(
+                sdp.to_string(),
+                config,
+                headers,
+            ),
+        )
+        .await
+        .unwrap_or_else(|_| Err(ApiError::Transport(TransportError::Timeout)))
     });
     match result {
         Ok(response) => {
@@ -517,6 +660,10 @@ fn bridge_call(
         Err(error) => {
             summary.insert("ok".to_string(), json!(false));
             summary.insert("error".to_string(), json!(error.to_string()));
+            summary.insert(
+                "error_details".to_string(),
+                Value::Object(error_details(&error)),
+            );
             Value::Object(summary)
         }
     }
@@ -735,5 +882,93 @@ mod tests {
     #[test]
     fn truncation_respects_char_boundaries() {
         assert_eq!(truncate_utf8("çğü", 3), "ç");
+    }
+
+    #[test]
+    fn http_errors_keep_status_code_param_and_request_id() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-request-id", HeaderValue::from_static("req_abc123"));
+        let error = ApiError::Transport(TransportError::Http {
+            status: StatusCode::BAD_REQUEST,
+            url: None,
+            headers: Some(headers),
+            body: Some(
+                r#"{"error":{"message":"Invalid value for voice.","type":"invalid_request_error","param":"session.voice","code":"invalid_value"}}"#
+                    .to_string(),
+            ),
+        });
+        let details = error_details(&error);
+        assert_eq!(details.get("kind"), Some(&json!("http")));
+        assert_eq!(details.get("status"), Some(&json!(400)));
+        assert_eq!(details.get("code"), Some(&json!("invalid_value")));
+        assert_eq!(details.get("param"), Some(&json!("session.voice")));
+        assert_eq!(details.get("type"), Some(&json!("invalid_request_error")));
+        assert_eq!(details.get("message"), Some(&json!("Invalid value for voice.")));
+        assert_eq!(details.get("request_id"), Some(&json!("req_abc123")));
+        assert!(details.contains_key("body_excerpt"));
+    }
+
+    #[test]
+    fn other_errors_still_report_their_kind_and_bodies_are_bounded() {
+        let long_body = "x".repeat(5_000);
+        let error = ApiError::Transport(TransportError::Http {
+            status: StatusCode::BAD_GATEWAY,
+            url: None,
+            headers: None,
+            body: Some(long_body),
+        });
+        let details = error_details(&error);
+        assert_eq!(details.get("status"), Some(&json!(502)));
+        assert!(!details.contains_key("code"), "not JSON: no fields invented");
+        let excerpt = details.get("body_excerpt").and_then(Value::as_str).unwrap_or_default();
+        assert!(excerpt.len() <= MAX_ERROR_BODY_BYTES);
+        let timeout = error_details(&ApiError::Transport(TransportError::Timeout));
+        assert_eq!(timeout.get("kind"), Some(&json!("timeout")));
+        assert!(!timeout.contains_key("status"));
+        let message = timeout.get("message").and_then(Value::as_str).unwrap_or_default();
+        assert!(message.contains("timed out"), "the app words a timeout from this: {message}");
+    }
+
+    #[test]
+    fn a_short_lived_sideband_keeps_counting_and_a_stable_one_starts_over() {
+        // Accepted and closed at once, again and again: the budget runs out.
+        let mut attempt = 0;
+        for _ in 0..MAX_RECONNECT_ATTEMPTS {
+            attempt = attempt_after_disconnect(attempt, Duration::from_millis(50));
+        }
+        assert_eq!(attempt, MAX_RECONNECT_ATTEMPTS);
+        assert!(attempt_after_disconnect(attempt, Duration::from_secs(1)) > MAX_RECONNECT_ATTEMPTS);
+        // A connection that held for a while starts a fresh budget.
+        assert_eq!(attempt_after_disconnect(attempt, STABLE_CONNECTION), 1);
+        assert_eq!(attempt_after_disconnect(5, Duration::from_secs(600)), 1);
+    }
+
+    #[test]
+    fn a_first_connect_not_found_is_retried_but_a_later_one_ends_the_sideband() {
+        let not_found = ApiError::Api {
+            status: StatusCode::NOT_FOUND,
+            message: "realtime websocket handshake failed".to_string(),
+        };
+        let gone = ApiError::Api {
+            status: StatusCode::GONE,
+            message: "gone".to_string(),
+        };
+        for attempt in 1..=FIRST_CONNECT_NOT_FOUND_RETRIES {
+            assert!(!connect_failure_is_final(&not_found, false, attempt), "attempt {attempt}");
+        }
+        assert!(connect_failure_is_final(&not_found, false, FIRST_CONNECT_NOT_FOUND_RETRIES + 1));
+        assert!(connect_failure_is_final(&not_found, true, 1), "after a connect, 404 means the call ended");
+        assert!(connect_failure_is_final(&gone, true, 1));
+        // Other failures are retried until the budget is spent.
+        let network = ApiError::Transport(TransportError::Timeout);
+        assert!(!connect_failure_is_final(&network, true, MAX_RECONNECT_ATTEMPTS));
+        assert!(connect_failure_is_final(&network, true, MAX_RECONNECT_ATTEMPTS + 1));
+    }
+
+    #[test]
+    fn timeouts_are_bounded() {
+        assert!(CALL_CREATE_TIMEOUT <= Duration::from_secs(20));
+        assert!(SIDEBAND_CONNECT_TIMEOUT <= Duration::from_secs(10));
+        assert!(STABLE_CONNECTION >= Duration::from_secs(30));
     }
 }

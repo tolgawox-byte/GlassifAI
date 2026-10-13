@@ -350,6 +350,39 @@ enum StillPhotoProcessor {
     return orientation >= 5 ? (height, width) : (width, height)
   }
 
+  /// Location (GPS) or camera/device metadata that should not leave the phone.
+  static func hasPrivateMetadata(_ data: Data) -> Bool {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else { return false }
+    if properties[kCGImagePropertyGPSDictionary] != nil { return true }
+    let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
+    if tiff[kCGImagePropertyTIFFMake] != nil || tiff[kCGImagePropertyTIFFModel] != nil || tiff[kCGImagePropertyTIFFSoftware] != nil {
+      return true
+    }
+    let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+    let identifying: [CFString] = [
+      kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifMakerNote, kCGImagePropertyExifUserComment,
+      kCGImagePropertyExifBodySerialNumber, kCGImagePropertyExifLensSerialNumber, kCGImagePropertyExifCameraOwnerName,
+    ]
+    return identifying.contains { exif[$0] != nil }
+  }
+
+  /// The same image with its metadata removed, copied without recompression.
+  static func strippingMetadata(_ data: Data) -> Data? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let type = CGImageSourceGetType(source) else { return nil }
+    let output = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(output, type, 1, nil) else { return nil }
+    let options: [CFString: Any] = [
+      kCGImageDestinationMetadata: CGImageMetadataCreateMutable(),
+      kCGImageDestinationMergeMetadata: false,
+      kCGImageMetadataShouldExcludeGPS: true,
+      kCGImageMetadataShouldExcludeXMP: true,
+    ]
+    guard CGImageDestinationCopyImageSource(destination, source, options as CFDictionary, nil) else { return nil }
+    return output as Data
+  }
+
   static func prepare(_ data: Data, detail: VisionDetail) -> VisionFrameEncoder.Output? {
     guard let size = pixelSize(of: data),
           let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
@@ -358,8 +391,14 @@ enum StillPhotoProcessor {
     let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
     let upright = (properties?[kCGImagePropertyOrientation] as? UInt32 ?? 1) == 1
     if isJPEG, upright, fitted.width == size.width, fitted.height == size.height, data.count <= detail.maxBytes {
-      return VisionFrameEncoder.Output(
-        jpeg: data, width: size.width, height: size.height, quality: 1, reencoded: false)
+      // The still goes to a cloud model: never with its location or camera
+      // metadata. Copied without recompression when possible; otherwise the
+      // re-encode below (which writes no such metadata) is used.
+      let clean = hasPrivateMetadata(data) ? strippingMetadata(data) : data
+      if let clean, !hasPrivateMetadata(clean) {
+        return VisionFrameEncoder.Output(
+          jpeg: clean, width: size.width, height: size.height, quality: 1, reencoded: false)
+      }
     }
     let options: [CFString: Any] = [
       kCGImageSourceCreateThumbnailFromImageAlways: true,

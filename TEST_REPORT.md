@@ -7,6 +7,25 @@ Result categories:
 
 Environment: Windows 11 (no Xcode). Everything compiles and runs on GitHub Actions (`xcode-27` runner). Test names and counts come from the `.xcresult` bundle and are published as annotations on each run page, and so are compiler errors.
 
+## JARVIS Ultimate — phase 1 (`autoloom-glasses-jarvis-v1`)
+
+Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and **PC companion** (`pc-companion.yml`, Windows, Node 24).
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| [38324379853](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38324379853) | `2e32c2a` | **BUILD PASS · iOS 331/333 (2 skipped) · Rust 8/8** | Audit documents, iOS PC client (pairing, approvals), the model can no longer confirm its own actions, start/stop race, data-channel reconnect, mic permission, faster ICE, offline launch, DAT version alerts, image source named to the model, CI hardening. 23 screenshots (`ci-screenshots`, folder `run-38324379853-2e32c2a`) |
+| [38324379861](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38324379861) | `2e32c2a` | **PC companion 71/71** | `get_task`/`cancel_task` default to the newest task |
+| [38299661724](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38299661724) | `9f0f355` | **BUILD PASS · iOS 321/323 (2 skipped) · Rust 8/8** | Baseline before the iOS changes (the PC companion was added; no iOS change). 20 screenshots |
+| [38299661765](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38299661765) | `9f0f355` | **PC companion 71/71** | First run of the Windows companion |
+
+The screenshot step reports "not running after launch" for a few screens on both runs (6 on the baseline, 3 on `2e32c2a`): the simulator launch is retried and the screens are captured; it is not a crash (no crash report).
+
+The next commit adds `AutoLoomSecurityHardeningTests`, `AutoLoomRealtimeReliabilityTests` and five Rust tests (structured call errors, sideband budget and first-connect 404, timeouts). **Its run is pending**; its result is added here when it finishes.
+
+### What CI cannot show
+
+Everything that needs the glasses, the phone's audio hardware, a real ChatGPT call or a second device on the Wi-Fi stays **PHYSICAL TEST REQUIRED** (`docs/PHYSICAL_TEST_MATRIX.md`): the voice start ladder against the live service, the audio-flow watchdog, WebRTC's effective audio session, Remote Assist on Wi-Fi only, and the PC companion with a real iPhone.
+
 ## Ultimate Jarvis expansion (v1.5)
 
 | Run | Commit | Result | Notes |

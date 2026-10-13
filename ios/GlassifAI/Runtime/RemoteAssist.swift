@@ -11,6 +11,8 @@ final class RemoteAssistHub: @unchecked Sendable {
   private let queue = DispatchQueue(label: "autoloom.remoteassist")
   private var code = ""
   private var streams: [ObjectIdentifier: NWConnection] = [:]
+  /// Connections that have not sent their request yet.
+  private var waiting: Set<ObjectIdentifier> = []
   private var failures = 0
   /// Called on the main actor with the number of viewers.
   var viewersChanged: @Sendable (Int) -> Void = { _ in }
@@ -18,6 +20,19 @@ final class RemoteAssistHub: @unchecked Sendable {
   var tooManyAttempts: @Sendable () -> Void = {}
 
   static let maxFailures = 10
+  /// More viewers are refused (each one gets every frame).
+  static let maxViewers = 4
+  /// A client that connects and sends nothing is dropped after this long.
+  static let requestTimeout: TimeInterval = 10
+
+  /// Only the Wi-Fi interface, and only clients on the local network: never
+  /// cellular, a VPN or a global IPv6 address (JARVIS audit M3).
+  static func listenerParameters() -> NWParameters {
+    let parameters = NWParameters.tcp
+    parameters.requiredInterfaceType = .wifi
+    parameters.acceptLocalOnly = true
+    return parameters
+  }
 
   func reset(code: String) {
     queue.async {
@@ -29,13 +44,25 @@ final class RemoteAssistHub: @unchecked Sendable {
   var hasViewers: Bool { queue.sync { !streams.isEmpty } }
 
   func accept(_ connection: NWConnection) {
-    connection.start(queue: queue)
-    connection.receive(minimumIncompleteLength: 1, maximumLength: 8_192) { [weak self] data, _, _, _ in
-      guard let self, let data, let request = String(data: data, encoding: .utf8) else {
+    queue.async {
+      let id = ObjectIdentifier(connection)
+      self.waiting.insert(id)
+      connection.start(queue: self.queue)
+      // The closure keeps the connection alive, so its identifier cannot be
+      // reused by a newer connection before this check runs.
+      self.queue.asyncAfter(deadline: .now() + Self.requestTimeout) { [weak self] in
+        guard let self, self.waiting.remove(id) != nil else { return }
         connection.cancel()
-        return
       }
-      self.handle(request, on: connection)
+      connection.receive(minimumIncompleteLength: 1, maximumLength: 8_192) { [weak self] data, _, _, _ in
+        guard let self else { return }
+        self.waiting.remove(id)
+        guard let data, let request = String(data: data, encoding: .utf8) else {
+          connection.cancel()
+          return
+        }
+        self.handle(request, on: connection)
+      }
     }
   }
 
@@ -55,6 +82,9 @@ final class RemoteAssistHub: @unchecked Sendable {
           DispatchQueue.main.async { callback() }
         }
         return reply(connection, status: "403 Forbidden", body: "Wrong code")
+      }
+      guard streams.count < Self.maxViewers else {
+        return reply(connection, status: "503 Service Unavailable", body: "Too many viewers")
       }
       let header = "HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
       connection.send(content: Data(header.utf8), completion: .contentProcessed { [weak self] error in
@@ -194,7 +224,7 @@ final class RemoteAssistServer: ObservableObject {
     }
     let listener: NWListener
     do {
-      listener = try NWListener(using: .tcp, on: .any)
+      listener = try NWListener(using: RemoteAssistHub.listenerParameters(), on: .any)
     } catch {
       MediaResourceCoordinator.shared.end(.remoteAssist)
       return L.t("The local network share could not start.", "Yerel ağ paylaşımı başlatılamadı.")
@@ -381,8 +411,8 @@ struct RemoteAssistView: View {
           }
         } footer: {
           Text(L.t(
-            "Someone on the same Wi-Fi opens the address in a browser and types the code. Video only, about two frames a second; the connection is not encrypted, so share only on a network you trust.",
-            "Aynı Wi-Fi'deki kişi adresi tarayıcıda açıp kodu girer. Yalnızca görüntü, saniyede yaklaşık iki kare; bağlantı şifreli değildir, yalnızca güvendiğin ağda paylaş."))
+            "Someone on the same Wi-Fi opens the address in a browser and types the code (at most four viewers; only devices on this Wi-Fi can connect). Video only, about two frames a second; the connection is not encrypted, so share only on a network you trust.",
+            "Aynı Wi-Fi'deki kişi adresi tarayıcıda açıp kodu girer (en fazla dört izleyici; yalnızca bu Wi-Fi'deki cihazlar bağlanabilir). Yalnızca görüntü, saniyede yaklaşık iki kare; bağlantı şifreli değildir, yalnızca güvendiğin ağda paylaş."))
         }
       } else {
         Section {

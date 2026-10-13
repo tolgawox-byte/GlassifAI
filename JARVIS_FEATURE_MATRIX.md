@@ -42,7 +42,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Glasses video capture | Partial (stream video, no audio) | Pending device M2 | `RayBanVideoRecorder` | DAT 1.x mic for audio (F13/F23) | P2 |
 | Original media from the glasses' gallery | **Blocked** | — | No API in DAT 0.5.0 or 1.0.1 (VERIFIED) | Meta adds an API | — |
 | Full-resolution still (4032×3024) | Blocked on this build | — | DAT 1.x beta only | DAT 1.x port (plan 3.4) | P2 |
-| Originals kept separate from AI derivatives; EXIF | Partial | Automated | Originals saved byte-for-byte; AI copies separate | Strip EXIF from stills sent to providers (plan 1.13) | P1 |
+| Originals kept separate from AI derivatives; EXIF | Built (CI run pending) | Automated once the run passes | Originals saved byte-for-byte; AI copies separate; stills sent to providers carry no GPS or camera metadata (`StillPhotoProcessor`) | — | P1 |
 | DAT version warnings | Working in code | Automated build; pending device DAT1 | `WearableConnection.alertIfIncompatible` | DAT1 pass | P0 |
 | Temple tap / gestures | Working in code | Pending device | `GlassesGestureSession` | Gesture rows | P2 |
 | Hey Meta invocation | Blocked on this build | — | DAT 1.0 + Meta approval | `DAT_1_MIGRATION.md` | P3 |
@@ -52,11 +52,11 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Feature | Status | Verification | Evidence | Completion criterion | Pri |
 |---|---|---|---|---|---|
 | Realtime voice call (ChatGPT plan, `gpt-live-1-codex`) | Working | Device (v1.0 era); pending device for v1.5 | Upstream wire code identical (`JARVIS_AUDIT.md` §4) | Physical start/stop | P0 |
-| HTTP 400 / session mode investigated | Done | Automated (code + upstream diff) | No 400 in history; session mode not sent | Structured errors (plan 1.4) | P0 |
+| HTTP 400 / session mode investigated | Done; structured errors built (CI run pending) | Automated (code + upstream diff) | No 400 in history; session mode not sent; bridge 4 reports status, code, param, request id per failed step | Physical VC4 on the live service | P0 |
 | Start/stop race closed | Done | Automated build; pending device VC1 | `startGeneration` | VC1 pass | P0 |
 | No "failed" UI with a live mic; data-channel loss reconnects | Done | Automated build; pending device | `error`/`halted`/`dataChannelClosed` | Physical | P0 |
 | Microphone permission checked | Done | Pending device VC3 | `RealtimeError.microphoneDenied` | VC3 pass | P0 |
-| Audio-flow watchdog | Missing | — | — | Plan 1.6 | P0 |
+| Audio-flow watchdog | Built (CI run pending) | Pending device (AU3) | WebRTC counters 1 s and 5 s after Ready; spoken explanation; one reconnect per conversation | No false alarms on the device | P0 |
 | Faster start (no 2.5 s ICE wait) | Done | Pending device VC2 | ICE loop | VC2 pass | P1 |
 | Barge-in / interruptions | Working in code (server-side + local silencing) | Pending device | `stopWordMutedTurn` | M3 pass | P1 |
 | Reconnect with backoff | Partial | Automated (budget tests) | `RealtimeReconnectPolicy` | Backoff loop that waits for the network (plan 1.5) | P1 |
@@ -159,7 +159,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Lifecycle states, approvals, retries, timeouts, cancellation, verification (PC) | Done | Automated | `tasks.ts` | — | P0 |
 | Same on the phone (single pending slot) | Partial | Automated | `PendingDeviceAction` | Approval inbox (plan 2.4) | P1 |
 | Model cannot approve its own actions | Done | Automated | Phone + PC tests | SEC1 | P0 |
-| Untrusted content wrapped; prompt-injection defence | Partial | Automated | `UntrustedContent`, PC `<untrusted_pc_content>` | Session-wide taint (plan 1.14) | P0 |
+| Untrusted content wrapped; prompt-injection defence | Built (CI run pending) | Pending device (SEC2, SEC3) | `UntrustedContent` (any tag spelling defused), PC `<untrusted_pc_content>`, conversation-wide `ConversationTaint`, memory saves only from the user's words, personal reads need a yes, memories as quoted data | Model-started Live Vision not gated yet (plan 1.14) | P0 |
 | Secrets never in code or logs | Verified | Automated (secrets scan of all history) | `JARVIS_AUDIT.md` §8 | gitleaks in CI | P0 |
 | CI least privilege | Done | CI | `main.yml` | — | P0 |
 

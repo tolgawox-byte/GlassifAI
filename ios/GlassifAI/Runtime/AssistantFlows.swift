@@ -124,7 +124,7 @@ enum TaskTrace {
       lines.append(
         "voice start: requested \(start.requestedVoice)/\(start.requestedModel), active \(start.activeVoice ?? "—")/\(start.activeModel ?? "—"), " +
         "step \(start.step?.rawValue ?? "failed"), connect \(start.connectMs.map { "\($0) ms" } ?? "—"), fallback \(start.fallbackReason ?? "none")")
-      for attempt in start.attempts { lines.append("  attempt: \(LogSanitizer.sanitize(attempt, limit: 200))") }
+      for attempt in start.attempts { lines.append("  attempt: \(LogSanitizer.sanitize(attempt, limit: 320))") }
     }
     for record in records.suffix(12) {
       let phase: String

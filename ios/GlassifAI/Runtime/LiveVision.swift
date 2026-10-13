@@ -226,6 +226,19 @@ final class LiveVisionController: ObservableObject {
     do {
       let summary = try await orchestrator.describeLiveView(chosen)
       guard isActive else { return }
+      // The camera was switched (or turned off) while the frame was being
+      // described: the note would be about a view the user no longer has.
+      let stillSameSource: Bool
+      switch orchestrator.captureSource() {
+      case .glasses: stillSameSource = source == .glasses
+      case .iPhoneCamera: stillSameSource = source == .iPhone
+      case .off: stillSameSource = false
+      }
+      guard stillSameSource, FrameStore.shared.currentEpoch == chosen.epoch else {
+        lastError = "camera switched while describing; note dropped"
+        status = .watching
+        return
+      }
       lastThumbnail = thumbnail
       lastSentAt = CACurrentMediaTime()
       lastSummary = summary
@@ -236,8 +249,12 @@ final class LiveVisionController: ObservableObject {
       // Opt-in Scene Timeline (off by default): one line of text, no image.
       SceneTimeline.shared.note(summary)
       lastError = nil
+      // The note describes the camera view, which can contain text written
+      // by anyone: the conversation counts as holding outside content, and
+      // the note cannot pose as a message from the app.
+      orchestrator.noteUntrustedContent(origin: "Live Vision")
       let time = Date().formatted(date: .omitted, time: .standard)
-      if !contextSink("[Live view \(time)] \(summary)") {
+      if !contextSink("[Live view \(time)] \(PromptData.defuseAppMarkers(summary))") {
         lastError = "voice session did not accept the note"
       }
       status = .watching

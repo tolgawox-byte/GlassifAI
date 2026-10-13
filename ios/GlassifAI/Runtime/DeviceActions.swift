@@ -65,6 +65,15 @@ enum DeviceActionKind: String, CaseIterable, Codable, Equatable {
     }
   }
 
+  /// Reads the user's contacts, calendar or reminders into the conversation
+  /// (and so to the voice model's provider).
+  var readsPersonalData: Bool {
+    switch self {
+    case .listReminders, .todayEvents, .upcomingEvents, .findContact: true
+    default: false
+    }
+  }
+
   /// Kinds the action planner may choose.
   static var plannable: [DeviceActionKind] {
     allCases.filter { $0 != .agentTask && $0 != .forgetMemory && $0 != .deleteNote && $0 != .skillCall }
@@ -181,14 +190,16 @@ struct DeviceActionPlan: Equatable {
 
   /// Agent requests that sound destructive (deleting, deploying, payments,
   /// email) need a tap, even though other agent requests accept a spoken yes.
-  /// A change planned right after camera, web or agent content may carry
-  /// instructions from that content, so it waits for the user's yes;
-  /// outbound actions need a tap anyway.
+  /// A change planned after camera, web or agent content may carry
+  /// instructions from that content, so it waits for the user's yes; so does
+  /// a read of contacts, calendar or reminders, which an injection could use
+  /// to pull personal data into the conversation. Outbound actions need a
+  /// tap anyway.
   var risk: DeviceActionKind.Risk {
     if kind == .agentTask, ActionGuard.soundsDestructive(text ?? "") { return .strongConfirm }
     // A skill call keeps its tool's risk, never less than a yes.
     if kind == .skillCall { return skill?.risk == .strongConfirm ? .strongConfirm : .confirm }
-    if afterUntrustedContent, kind.writes, kind.risk == .safe { return .confirm }
+    if afterUntrustedContent, kind.risk == .safe, kind.writes || kind.readsPersonalData { return .confirm }
     return kind.risk
   }
 

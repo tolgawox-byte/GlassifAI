@@ -115,6 +115,8 @@ struct FindVehicleIntent: AppIntent {
   static var title: LocalizedStringResource = "Find Vehicle"
   static var description = IntentDescription("Finds a Dealer Mode vehicle by model, stock number or VIN.")
   static var openAppWhenRun: Bool = false
+  /// Vehicle records (VIN, customer notes) are read out only to an unlocked phone.
+  static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
   @Parameter(title: "Vehicle", requestValueDialog: "Which vehicle?")
   var query: String

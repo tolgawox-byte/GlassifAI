@@ -287,6 +287,7 @@ extension AssistantOrchestrator {
       let en = "I couldn't find text to read; move a little closer."
       return IntentOutcome(spoken: BridgeSpeech.done("No text was read.", tr: tr, en: en), reply: L.t(en, tr), failed: "no text", said: L.t(en, tr))
     }
+    noteUntrustedContent(origin: "document text")
     let now = Date()
     var record = DocumentExtractor.record(from: text, kind: command == .saveReceipt ? .receipt : .document, now: now)
     record.vehicleID = DealerStore.shared.active?.id

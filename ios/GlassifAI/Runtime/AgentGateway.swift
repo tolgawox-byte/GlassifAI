@@ -52,19 +52,39 @@ enum AgentGatewayPolicy {
   /// Loopback, private and carrier-grade NAT (Tailscale) addresses, `.local`
   /// names and Tailscale MagicDNS names.
   static func isPrivateHost(_ host: String) -> Bool {
-    let value = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+    let value = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
     if value == "localhost" || value.hasSuffix(".local") || value.hasSuffix(".ts.net") { return true }
-    let parts = value.split(separator: ".").compactMap { Int($0) }
-    if parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) {
-      return !URLSafety.isPublicIPv4(parts)
+    let parts = value.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+    if parts.count == 4, parts.allSatisfy({ $0.map { (0...255).contains($0) } ?? false }) {
+      return !URLSafety.isPublicIPv4(parts.compactMap { $0 })
     }
-    return value == "::1" || value.hasPrefix("fd") || value.hasPrefix("fc")
+    // IPv6 literals only: loopback, unique local (fc00::/7), link-local
+    // (fe80::/10). A host name such as "fdic.gov" is not an address.
+    guard value.contains(":") else { return false }
+    return value == "::1" || value.hasPrefix("fc") || value.hasPrefix("fd")
+      || value.hasPrefix("fe8") || value.hasPrefix("fe9") || value.hasPrefix("fea") || value.hasPrefix("feb")
   }
 
-  /// Public hosts work over https but go against OpenClaw's guidance.
+  /// Loopback and Tailscale (WireGuard-encrypted) are safe for plain http;
+  /// a home network is not: anyone on the same Wi-Fi can read the token.
+  static func isEncryptedOrLocalOnly(_ host: String) -> Bool {
+    let value = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+    if value == "localhost" || value == "::1" || value.hasPrefix("127.") || value.hasSuffix(".ts.net") { return true }
+    let parts = value.split(separator: ".").compactMap { Int($0) }
+    return parts.count == 4 && parts[0] == 100 && (64...127).contains(parts[1])
+  }
+
+  /// Public hosts work over https but go against OpenClaw's guidance; plain
+  /// http on a home network works but sends the owner token in clear text.
   static func warning(for url: URL) -> String? {
-    guard let host = url.host?.lowercased(), !isPrivateHost(host) else { return nil }
-    return "OpenClaw recommends keeping the gateway on a private network or tailnet; a public address exposes an owner-level credential to the internet."
+    guard let host = url.host?.lowercased() else { return nil }
+    if !isPrivateHost(host) {
+      return "OpenClaw recommends keeping the gateway on a private network or tailnet; a public address exposes an owner-level credential to the internet."
+    }
+    if url.scheme?.lowercased() == "http", !isEncryptedOrLocalOnly(host) {
+      return "Plain http on a home network sends the owner token unencrypted: anyone on the same Wi-Fi can read it. Prefer https or a Tailscale address."
+    }
+    return nil
   }
 }
 

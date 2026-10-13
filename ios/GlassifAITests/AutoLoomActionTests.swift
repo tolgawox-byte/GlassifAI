@@ -127,9 +127,15 @@ final class AutoLoomActionTests: XCTestCase {
     }
     for kind: DeviceActionKind in [.listReminders, .todayEvents, .upcomingEvents, .findContact] {
       var plan = DeviceActionPlan(kind: kind)
+      XCTAssertEqual(plan.risk, .safe, "without outside content a read runs at once: \(kind.rawValue)")
       plan.afterUntrustedContent = true
-      XCTAssertEqual(plan.risk, .safe, "reading changes nothing: \(kind.rawValue)")
+      // JARVIS audit M1: outside content must not pull contacts, calendar or
+      // reminders into the conversation without the user's yes.
+      XCTAssertEqual(plan.risk, .confirm, "personal-data read after outside content: \(kind.rawValue)")
     }
+    var nothing = DeviceActionPlan(kind: .none)
+    nothing.afterUntrustedContent = true
+    XCTAssertEqual(nothing.risk, .safe, "a plan that does nothing needs no yes")
     var call = DeviceActionPlan(kind: .call)
     call.afterUntrustedContent = true
     XCTAssertEqual(call.risk, .strongConfirm, "outbound actions still need a tap")

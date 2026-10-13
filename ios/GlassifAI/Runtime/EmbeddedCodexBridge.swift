@@ -11,6 +11,8 @@ struct EmbeddedCodexResult: Decodable {
   var model: String?
   /// Set when the bridge replaced an unknown voice name.
   var voiceNote: String?
+  /// What the service said about a failed start (bridge 4 and later).
+  var errorDetails: RealtimeErrorDetails?
 
   enum CodingKeys: String, CodingKey {
     case ok
@@ -20,7 +22,58 @@ struct EmbeddedCodexResult: Decodable {
     case voice
     case model
     case voiceNote = "voice_note"
+    case errorDetails = "error_details"
   }
+}
+
+/// A failed call creation, as the service reported it: HTTP status, the
+/// error's code, param, type and message, the request id, a body excerpt.
+struct RealtimeErrorDetails: Decodable, Equatable {
+  var kind: String?
+  var status: Int?
+  var code: String?
+  var param: String?
+  var type: String?
+  var message: String?
+  var requestId: String?
+  var bodyExcerpt: String?
+
+  enum CodingKeys: String, CodingKey {
+    case kind
+    case status
+    case code
+    case param
+    case type
+    case message
+    case requestId = "request_id"
+    case bodyExcerpt = "body_excerpt"
+  }
+
+  /// "HTTP 400 · invalid_value · param session.voice · request req_… — Invalid value for voice."
+  var summary: String { line(includingRequestId: true) }
+
+  /// The summary without the request id, for the message shown to the user
+  /// (whose wording is matched against "401", "429" and so on).
+  var headline: String { line(includingRequestId: false) }
+
+  private func line(includingRequestId: Bool) -> String {
+    var parts: [String] = []
+    if let status { parts.append("HTTP \(status)") } else if let kind { parts.append(kind) }
+    if let code { parts.append(code) }
+    if let param { parts.append("param \(param)") }
+    if includingRequestId, let requestId { parts.append("request \(requestId)") }
+    var line = parts.joined(separator: " · ")
+    if let message = message ?? bodyExcerpt { line += (line.isEmpty ? "" : " — ") + message }
+    return LogSanitizer.sanitize(line, limit: 300)
+  }
+
+  /// Another start step with the same offer and token cannot fix these.
+  var isUnfixableByRetrying: Bool {
+    guard let status else { return false }
+    return status == 429 || status >= 500
+  }
+
+  var isAuthenticationFailure: Bool { status == 401 || status == 403 }
 }
 
 /// Options for a realtime call. `nil` fields keep the baseline values that the

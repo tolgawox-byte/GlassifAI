@@ -112,6 +112,7 @@ extension AssistantOrchestrator {
     guard let jpeg = image.jpeg else { return nil }
     let text = await SignReader.read(jpeg: jpeg)
     guard text.count >= 2 else { return nil }
+    noteUntrustedContent(origin: "camera text (translation)")
     let result = await LocalTranslator.translate(text, to: target)
     let targetName = SpokenLanguage.name(target, turkish: false)
     switch result {

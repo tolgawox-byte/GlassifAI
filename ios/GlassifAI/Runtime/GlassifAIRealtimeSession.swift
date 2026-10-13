@@ -56,6 +56,15 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   private var peer: LKRTCPeerConnection?
   /// Samples the microphone and assistant voice levels for the orb.
   private var levelSamplerTask: Task<Void, Never>?
+  /// Checks after Ready that audio really flows (`AudioFlowWatchdog`).
+  private var audioFlowTask: Task<Void, Never>?
+  /// One audio-flow reconnect per conversation (kept across reconnects).
+  private var audioFlowRecoveryUsed = false
+  /// The last audio-flow problem found (Settings → Developer).
+  @Published private(set) var lastAudioFlowIssue: String?
+  /// Category, mode, options, rate and buffer as they really were a few
+  /// seconds after Ready (WebRTC may have changed what the app set).
+  @Published private(set) var effectiveAudioSession: String?
   private var dataChannel: LKRTCDataChannel?
   private var audioTrack: LKRTCAudioTrack?
   private var audioRouteObserver: NSObjectProtocol?
@@ -203,7 +212,11 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     isAssistantAudioSuppressed = false
     resetInterception()
     _ = orchestrator.beginVoiceSession()
-    if freshConversation { orchestrator.beginConversation() }
+    if freshConversation {
+      orchestrator.beginConversation()
+      audioFlowRecoveryUsed = false
+      lastAudioFlowIssue = nil
+    }
     AudioRouteMonitor.shared.onMediaServicesReset = { [weak self] in
       Task { @MainActor in await self?.handleMediaServicesReset() }
     }
@@ -217,6 +230,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
         throw RealtimeError.microphoneDenied
       }
       try configureAudioSession(prefersBluetoothHFP: prefersBluetoothHFP)
+      alignWebRTCAudioConfiguration()
       let configuration = LKRTCConfiguration()
       configuration.sdpSemantics = .unifiedPlan
       configuration.bundlePolicy = .maxBundle
@@ -306,6 +320,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       noteActivity()
       startIdleMonitor()
       startLevelSampler()
+      if !isPreviewSession { startAudioFlowWatchdog(generation: generation) }
       orchestrator.speakInConversation = { [weak self] text in
         self?.sayAppMessage(text) ?? false
       }
@@ -543,7 +558,7 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   /// fails, so a fallback is visible (Selected vs Active voice) instead of
   /// silently speaking with another voice.
   private func createDirectRealtimeCall(sdp: String) async throws -> String {
-    let tokens = try await ChatGPTAuthSession.shared.freshTokens()
+    var tokens = try await ChatGPTAuthSession.shared.freshTokens()
     let requestedVoice = voiceOverride ?? AssistantPreferences.voice
     let resume = isPreviewSession ? nil : orchestrator.context.resumeSummary()
     // Session resume: the profile, a few relevant memories and the last
@@ -561,7 +576,13 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     var report = RealtimeStartReport(requestedVoice: requestedVoice, requestedModel: ModelSelector.realtimeModel)
     report.isPreview = isPreviewSession
     var lastError: String?
-    for step in RealtimeStartLadder.steps(requestedVoice: requestedVoice, hasResume: resume != nil) {
+    var lastDetail: String?
+    let steps = RealtimeStartLadder.steps(requestedVoice: requestedVoice, hasResume: resume != nil)
+    var index = 0
+    var refreshedAfterAuthFailure = false
+    ladder: while index < steps.count {
+      let step = steps[index]
+      index += 1
       if let lastError, RealtimeStartLadder.shouldSkip(step, after: lastError) { continue }
       let result: EmbeddedCodexResult
       let sentVoice: String
@@ -593,13 +614,35 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       }
       let error = result.error ?? (result.ok ? "the answer was not a valid session description" : "no answer")
       lastError = error
-      report.attempts.append("\(step.rawValue): \(LogSanitizer.sanitize(error, limit: 160))")
+      // The service's own status, code, param and request id when the bridge
+      // reports them (a 400 says exactly which field it rejected).
+      let detail = result.errorDetails?.summary ?? LogSanitizer.sanitize(error, limit: 160)
+      lastDetail = result.errorDetails?.headline
+      report.attempts.append("\(step.rawValue): \(detail)")
       if report.fallbackReason == nil { report.fallbackReason = RealtimeStartLadder.reason(from: error) }
-      NSLog("[AutoLoom] realtime start step %@ failed: %@", step.rawValue, LogSanitizer.sanitize(error, limit: 200))
+      NSLog("[AutoLoom] realtime start step %@ failed: %@", step.rawValue, LogSanitizer.sanitize(detail, limit: 300))
+      switch RealtimeStartLadder.recovery(after: result.errorDetails, alreadyRefreshed: refreshedAfterAuthFailure) {
+      case .nextStep:
+        continue
+      case .refreshAndRepeat:
+        refreshedAfterAuthFailure = true
+        do {
+          tokens = try await ChatGPTAuthSession.shared.freshTokens(forceRefresh: true)
+        } catch {
+          report.attempts.append("sign-in refresh: \(LogSanitizer.sanitize(error.localizedDescription, limit: 160))")
+          startReport = report
+          throw error
+        }
+        lastError = nil
+        index -= 1
+      case .stop:
+        // The remaining steps would resend the same offer and cannot fix it.
+        break ladder
+      }
     }
     startReport = report
     throw RealtimeError.signalingFailed(
-      "Could not start ChatGPT voice. \(LogSanitizer.sanitize(lastError ?? "Unknown error"))")
+      "Could not start ChatGPT voice. \(LogSanitizer.sanitize(lastDetail ?? lastError ?? "Unknown error"))")
   }
 
   private static func isAnswerSDP(_ sdp: String?) -> Bool {
@@ -755,9 +798,92 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     }
   }
 
+  /// Two statistics reads a few seconds apart after Ready (see
+  /// `AudioFlowWatchdog`). A stuck microphone, uplink or downlink is said
+  /// out loud and gets one reconnect per conversation; never a loop.
+  private func startAudioFlowWatchdog(generation: Int) {
+    audioFlowTask?.cancel()
+    audioFlowTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: UInt64(AudioFlowWatchdog.settleSeconds * 1_000_000_000))
+      guard let self, !Task.isCancelled, self.isCurrentCall(generation),
+            let first = await self.audioFlowSnapshot() else { return }
+      let startedAt = CACurrentMediaTime()
+      var muted = self.isMicrophoneMuted
+      var interrupted = AudioRouteMonitor.shared.isInterrupted
+      var speakingPolls = 0
+      for _ in 0..<Int(AudioFlowWatchdog.windowSeconds * 4) {
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        guard !Task.isCancelled, self.isCurrentCall(generation) else { return }
+        muted = muted || self.isMicrophoneMuted
+        interrupted = interrupted || AudioRouteMonitor.shared.isInterrupted
+        if self.state == .speaking { speakingPolls += 1 }
+      }
+      // What the session really is once WebRTC's audio unit has started.
+      let effective = EffectiveAudioSession.current()
+      self.effectiveAudioSession = effective
+      NSLog("[AutoLoom] audio session after Ready: %@", effective)
+      // Another app or a phone call holding the audio is not a fault.
+      guard !interrupted, let second = await self.audioFlowSnapshot(),
+            !Task.isCancelled, self.isCurrentCall(generation) else { return }
+      let verdict = AudioFlowWatchdog.verdict(
+        first: first,
+        second: second,
+        elapsed: CACurrentMediaTime() - startedAt,
+        microphoneMuted: muted || self.isMicrophoneMuted,
+        assistantSpokeSeconds: Double(speakingPolls) / 4)
+      NSLog("[AutoLoom] audio flow %@: sent %ld→%ld received %ld captured %.1f→%.1f s",
+            verdict.rawValue, first.packetsSent ?? -1, second.packetsSent ?? -1, second.packetsReceived ?? -1,
+            first.capturedSeconds ?? -1, second.capturedSeconds ?? -1)
+      self.handleAudioFlow(verdict, generation: generation)
+    }
+  }
+
+  private func isCurrentCall(_ generation: Int) -> Bool {
+    generation == startGeneration && isConnected
+  }
+
+  private func audioFlowSnapshot() async -> AudioFlowWatchdog.Snapshot? {
+    guard let peer else { return nil }
+    return await withCheckedContinuation { continuation in
+      let request = AudioFlowStatisticsRequest(continuation)
+      peer.statistics { @Sendable report in
+        let statistics = report.statistics.values.map {
+          AudioFlowWatchdog.Statistic(type: $0.type, values: $0.values)
+        }
+        request.finish(AudioFlowWatchdog.snapshot(from: statistics))
+      }
+      Task.detached {
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        request.finish(nil)
+      }
+    }
+  }
+
+  private func handleAudioFlow(_ verdict: AudioFlowWatchdog.Verdict, generation: Int) {
+    guard verdict.isProblem else { return }
+    lastAudioFlowIssue = verdict.rawValue
+    let retrying = !audioFlowRecoveryUsed
+    if ConnectionFeedback.current != .off {
+      LocalAnnouncer.shared.say(
+        AudioFlowWatchdog.spokenText(verdict, retrying: retrying, turkish: L.isTurkish), turkish: L.isTurkish)
+    }
+    guard retrying else { return }
+    audioFlowRecoveryUsed = true
+    Task { @MainActor [weak self] in
+      // Let the explanation finish before the audio session is torn down.
+      try? await Task.sleep(nanoseconds: 2_500_000_000)
+      guard let self, self.isCurrentCall(generation) else { return }
+      self.handleMidCallFailure(
+        reason: "audio flow: \(verdict.rawValue)",
+        userMessage: "Audio was not flowing. Tap to reconnect.")
+    }
+  }
+
   private func tearDown() async {
     levelSamplerTask?.cancel()
     levelSamplerTask = nil
+    audioFlowTask?.cancel()
+    audioFlowTask = nil
     AudioLevelMeter.shared.reset()
     sidebandEventTask?.cancel()
     sidebandEventTask = nil
@@ -824,6 +950,21 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
 
     try applyPreferredAudioRoute()
     AudioRouteMonitor.shared.start()
+  }
+
+  /// WebRTC re-applies a process-wide audio configuration whenever its audio
+  /// unit starts. Built with the iOS 26 SDK its options are only
+  /// `.allowBluetoothHFP`, which would drop `.mixWithOthers` and
+  /// `.defaultToSpeaker` (speech from the earpiece, music stopped), and its
+  /// category and mode are whatever the session had when WebRTC first looked.
+  /// Mirror the app's own choice instead. `webRTC()` is that shared object;
+  /// LiveKit's Swift SDK updates it the same way.
+  private func alignWebRTCAudioConfiguration() {
+    let session = AVAudioSession.sharedInstance()
+    let configuration = LKRTCAudioSessionConfiguration.webRTC()
+    configuration.category = session.category.rawValue
+    configuration.categoryOptions = session.categoryOptions
+    configuration.mode = session.mode.rawValue
   }
 
   private func refreshPreferredAudioRoute() {

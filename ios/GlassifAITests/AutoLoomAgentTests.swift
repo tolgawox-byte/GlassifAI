@@ -19,6 +19,21 @@ final class AutoLoomAgentTests: XCTestCase {
     XCTAssertNil(AgentGatewayPolicy.warning(for: URL(string: "https://my-mac.tail1234.ts.net")!))
   }
 
+  /// Security audit M4: host names that merely start like an IPv6 prefix are
+  /// public, and plain http on a home network is flagged.
+  func testGatewayHostNamesAreNotMistakenForPrivateAddresses() {
+    XCTAssertNotNil(AgentGatewayPolicy.problem(with: URL(string: "http://fdic.gov")!), "a host name is not fd00::/8")
+    XCTAssertNotNil(AgentGatewayPolicy.problem(with: URL(string: "http://fc2.com")!))
+    XCTAssertTrue(AgentGatewayPolicy.isPrivateHost("fd7a:115c:a1e0::1"), "Tailscale IPv6 is private")
+    XCTAssertTrue(AgentGatewayPolicy.isPrivateHost("fe80::1"))
+    XCTAssertFalse(AgentGatewayPolicy.isPrivateHost("2001:4860:4860::8888"))
+    XCTAssertFalse(AgentGatewayPolicy.isPrivateHost("192.168.1"), "not a full address")
+    XCTAssertNotNil(AgentGatewayPolicy.warning(for: URL(string: "http://192.168.1.20:18789")!),
+                    "plain http on a home network is flagged")
+    XCTAssertNil(AgentGatewayPolicy.warning(for: URL(string: "http://100.101.102.103:18789")!), "Tailscale is encrypted")
+    XCTAssertNil(AgentGatewayPolicy.warning(for: URL(string: "https://192.168.1.20:18789")!))
+  }
+
   func testRequestAndReplyShapes() {
     let body = AgentGatewayClient.requestBody(agent: "openclaw/default", prompt: "check my repo", sessionUser: "autoloom-1")
     XCTAssertEqual(body["model"] as? String, "openclaw/default")

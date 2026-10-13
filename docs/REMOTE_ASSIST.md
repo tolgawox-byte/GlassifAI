@@ -16,7 +16,7 @@ Remote Assist lets a colleague on the **same Wi-Fi** see what the wearer's camer
 ## How it works
 
 1. `RemoteAssistServer.start()` asks the `MediaResourceCoordinator` for `.remoteAssist` (see "Resource rules" below).
-2. An `NWListener` (TCP, any free port) starts; the address uses the iPhone's `en0` IPv4 address.
+2. An `NWListener` (TCP, any free port) starts on the **Wi-Fi interface only** (`requiredInterfaceType = .wifi`) and accepts **only clients on the local network** (`acceptLocalOnly`): never cellular, a VPN or a global IPv6 address. The address uses the iPhone's `en0` IPv4 address. At most **four** viewers are served (a fifth gets "Too many viewers"), and a connection that sends no request within **10 s** is closed.
 3. A random six-digit room code is made for this session.
 4. The viewer's browser loads `/`: a small page (Turkish and English) that asks for the code.
 5. `/stream?code=…` is compared with the code in constant time. Wrong code → HTTP 403; after **10 wrong codes** sharing stops. Right code → `multipart/x-mixed-replace` stream. Other methods get 405 and other paths 404.
@@ -34,13 +34,14 @@ Remote Assist lets a colleague on the **same Wi-Fi** see what the wearer's camer
 | Critical thermal state (`PerformanceGuard`) | "Telefon çok ısındığı için paylaşım durdu." |
 | The listener fails | "Paylaşım bir hata yüzünden durdu." |
 
-A "camera stopped" reason and sentence exist, but no code triggers it in this build. Stopping closes every viewer connection and clears the code.
+Sharing stops by itself when no camera frame has arrived for 10 s ("camera stopped"). Stopping closes every viewer connection and clears the code.
 
 ## Privacy and security
 
 - **Starts only by a tap** on the phone; the voice command only opens the screen. The assistant's own planner cannot start it.
 - A **red bar** ("Görüntün paylaşılıyor · <viewers>") with Stop is shown at the top of every screen while sharing, and a red chip on the Assistant screen.
-- **Not encrypted**: plain HTTP on the local network. Anyone on the same network who has the code can watch. Share only on a network you trust.
+- **Not encrypted**: plain HTTP on the local network. Anyone on the same network who has the code can watch, and the code travels in the address of the stream. Share only on a network you trust. TLS is planned (JARVIS plan 1.15): a per-session certificate makes browsers warn, so the viewer experience needs a device test first.
+- Wi-Fi only and local network only (JARVIS audit M3); four viewers at most; idle connections are dropped after 10 s.
 - The code is six digits and changes every session; there is no other account or login.
 - Video only; nothing is recorded or uploaded by Remote Assist itself.
 - The app's Local Network usage text mentions Remote Assist; whether iOS shows the Local Network prompt when sharing starts must be checked on the device.

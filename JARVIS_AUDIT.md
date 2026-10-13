@@ -127,13 +127,13 @@ Status words: **WORKING-IN-CODE** (complete path + automated tests; no device te
 
 | Problem | Where | Status |
 |---|---|---|
-| Error details lost: one string cut to 120–200 characters; `param`, `code` and request IDs dropped; sideband handshake bodies dropped; diagnostics copy omits per-step attempts | `lib.rs:517-521`, vendored `methods.rs:969-977`, Swift report | **Open (P0 next)**: return structured errors from Rust |
+| Error details lost: one string cut to 120–200 characters; `param`, `code` and request IDs dropped; sideband handshake bodies dropped; diagnostics copy omits per-step attempts | `lib.rs:517-521`, vendored `methods.rs:969-977`, Swift report | **IN CI (bridge 4)**: status, code, param, type, message, request id and a 600-byte body excerpt per failed step, in Voice diagnostics and the copied report. Sideband handshake bodies are still dropped inside the vendored code |
 | A data-channel `error` event marked the call failed without hanging up; nested `error.message` ignored | `GlassifAIRealtimeSession.swift` `case "error"` | **FIXED-NOW**: recorded with code, call kept; a closed data channel now reconnects |
 | `start()` never closed an existing peer; a stop during a start could let the old start tear down the new call | `start()`, catch block | **FIXED-NOW**: generation token, leftover peer torn down |
 | `halted` set "disconnected" while the peer stayed alive | `applyLegacyState` | **FIXED-NOW**: hangs up properly |
-| No timeouts on call creation or sideband connect | `lib.rs` | Open (P1) |
-| Sideband retry counter resets on every connect; a first-connect 404 ends the sideband (upstream #35094 reports this 404) | `lib.rs:294-297` | Open (P1) |
-| The start ladder resends the same offer for errors no step can fix (401/403/429/5xx), never refreshes on 401 | `VoiceCatalog.swift` `RealtimeStartLadder` | Open (P1) |
+| No timeouts on call creation or sideband connect | `lib.rs` | **IN CI**: 20 s call creation, 10 s sideband handshake (a stop is honoured meanwhile) |
+| Sideband retry counter resets on every connect; a first-connect 404 ends the sideband (upstream #35094 reports this 404) | `lib.rs:294-297` | **IN CI**: the budget starts over only after 30 s of stable connection; a first-connect 404 is retried 3 times |
+| The start ladder resends the same offer for errors no step can fix (401/403/429/5xx), never refreshes on 401 | `VoiceCatalog.swift` `RealtimeStartLadder` | **IN CI**: 401/403 refresh once and repeat the step, then stop; 429/5xx stop |
 | Static `x-oai-attestation` claiming `com.openai.codex`; no User-Agent / `x-session-id` | `lib.rs:443-449` | Open: owner decision (see §8, legal) and an on-device A/B test |
 | 2.5 s fixed wait for ICE gathering on every start (never completes with continual gathering and no STUN servers) | `start()` | **FIXED-NOW**: proceeds 200 ms after the first host candidate |
 
@@ -198,10 +198,10 @@ Status words: **WORKING-IN-CODE** (complete path + automated tests; no device te
 
 | Symptom | Likely root cause (VERIFIED in code unless noted) | Status |
 |---|---|---|
-| "Listening" but nobody hears / nothing heard | Ready = data channel open + any input route; no RTP/mic-energy watchdog; no mic-permission check; glasses HFP set up after the camera stream (Meta: can fail silently); interruption end never resumes | Mic permission check **FIXED-NOW**; audio-flow watchdog and HFP order **open (P0/P1)** |
+| "Listening" but nobody hears / nothing heard | Ready = data channel open + any input route; no RTP/mic-energy watchdog; no mic-permission check; glasses HFP set up after the camera stream (Meta: can fail silently); interruption end never resumes | Mic permission check **FIXED-NOW**; audio-flow watchdog **IN CI** (one reconnect per conversation, physical AU3); HFP-before-stream order **open** (needs an owner decision after AU2/AU3, see plan 1.7) |
 | A stopped call comes back or a new call dies | Stop/start race (old start tears down new call) | **FIXED-NOW** |
 | UI "failed" while the mic is live | `error` / `halted` handling | **FIXED-NOW** |
-| Speech from the earpiece / music interrupted | WebRTC re-applies its own `RTCAudioSessionConfiguration` (VERIFIED in LiveKit source, not in the shipped binary) | Open (P0: set it explicitly, log the effective options at Ready) |
+| Speech from the earpiece / music interrupted | WebRTC re-applies its own `RTCAudioSessionConfiguration` (VERIFIED in LiveKit source, not in the shipped binary) | **IN CI**: the app's category, mode and options are mirrored into WebRTC's configuration before each start; the effective session is shown in Voice diagnostics (physical AU2) |
 | Call ends after a short network blip | One reconnect attempt after a fixed 1 s; ICE `.disconnected`, data-channel close and network changes ignored | Data-channel close **FIXED-NOW**; backoff loop open (P1) |
 | Glasses go deaf mid-call (UNVERIFIED) | `setPreferredInput` re-applied on every route change (VisionClaw notes this exact failure) | Open: physical test, then a once-per-call rule |
 | CarPlay/wired audio forced to the speaker | Route policy when glasses are preferred but absent | Open (P1) |
@@ -256,13 +256,13 @@ No real secrets in the working tree or the full history of all refs: 296 pattern
 | H2 | High | CI job had `contents: write` for all steps, credentials persisted, `dtolnay/rust-toolchain@stable` unpinned, 550+ crate build scripts running with the token; the IPAs from this job are installed on the phone | **FIXED-NOW**: read-only build job, `persist-credentials: false`, all actions SHA-pinned, a separate 10-line publish job holds the only write token; IPA retention 30 days |
 | H3 | High (legal) | Private ChatGPT/Codex endpoints under the Codex CLI identity with a static attestation header | **Owner decision.** Fine for personal use at your own risk; any commercial release needs the official API (§4) |
 | H4 | High (legal) | Meta DAT is a developer preview for test users; sample-code terms bar production use without Meta's written permission; six files carry Meta headers pointing at the now-MIT LICENSE | **Owner decision** + header fix (open) |
-| M1 | Medium | Untrusted-content flag lasts one turn; QR/translation/document/Live Vision text never sets it; model-delegated memory saves need no user words and memories are injected into every prompt | Open (P1) |
+| M1 | Medium | Untrusted-content flag lasts one turn; QR/translation/document/Live Vision text never sets it; model-delegated memory saves need no user words and memories are injected into every prompt | **IN CI**: conversation-wide mark set by all of those sources; model-delegated saves refused while it is set; personal-data reads need a yes; memories and the previous summary are quoted data; outside text cannot pose as an app message. Model-started Live Vision is not gated yet (plan 1.14) |
 | M2 | Medium | Contact names/numbers are sent to the realtime model although the docs say "not uploaded" | Open (P1: wording + local speech) |
-| M3 | Medium | Remote Assist: plain HTTP, code in URL, listener on all interfaces | Open (P1: Wi-Fi only + TLS) |
-| M4 | Medium | OpenClaw token may travel over plain HTTP; hostnames starting "fc"/"fd" count as private | Open (P1) |
-| M5 | Medium | Personal-data App Intents have no authentication policy (may run from a locked phone) | Open (P1) |
+| M3 | Medium | Remote Assist: plain HTTP, code in URL, listener on all interfaces | **Partly IN CI**: Wi-Fi only, local network only, four viewers, 10 s request timeout. TLS and the code in the URL are still open |
+| M4 | Medium | OpenClaw token may travel over plain HTTP; hostnames starting "fc"/"fd" count as private | **IN CI**: host names are parsed properly; the token goes over plain HTTP only to loopback or Tailscale; home-network HTTP shows a warning |
+| M5 | Medium | Personal-data App Intents have no authentication policy (may run from a locked phone) | **IN CI**: briefing, find-vehicle and remember intents require an unlocked phone; tasks, notes and the shopping list stay hands-free |
 | M6–M9 | Medium | Privacy docs wrong in places; third-party notices incomplete (LiveKit was listed as Apache — **FIXED-NOW** to MIT; WebRTC/BoringSSL and Rust crate notices still missing); no `PrivacyInfo.xcprivacy`; private vulnerability reporting disabled while SECURITY.md points to it | Partly fixed; rest open |
-| L1–L12 | Low | IPv6/DNS gaps in URL safety, wrapper escaping, log gaps, data-at-rest class C, wipe residue, Keychain survives uninstall, tokens deleted on any error (**FIXED-NOW**), URLSession.shared redirects, screenshot mode in Release, public CI artifacts growth | Mostly open (P2) |
+| L1–L12 | Low | IPv6/DNS gaps in URL safety, wrapper escaping (**IN CI**: any spelling of the tag is defused, origin escaped), log gaps, data-at-rest class C, wipe residue, Keychain survives uninstall, tokens deleted on any error (**FIXED-NOW**), URLSession.shared redirects, screenshot mode in Release, public CI artifacts growth | Mostly open (P2) |
 
 ## 9. Tests and CI
 
@@ -272,6 +272,7 @@ No real secrets in the working tree or the full history of all refs: 296 pattern
 - **New in this session:**
   - Windows companion: 71 tests, plus tsc strict, plus a Windows CI workflow.
   - iOS: `AutoLoomPCCompanionTests` (9) and a security test for model self-confirmation.
+  - Phase 1b (run pending): `AutoLoomSecurityHardeningTests` (metadata strip, locked-phone intents, structured start errors and ladder, multi-turn memory poisoning, wrapper escaping), `AutoLoomRealtimeReliabilityTests` (audio-flow watchdog, effective audio session), and 5 more Rust tests (call error JSON, sideband budget, first-connect 404, timeouts).
 - **Not covered by automated tests at all:**
   - the glasses (camera, HFP, gestures);
   - the realtime call;

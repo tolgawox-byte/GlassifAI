@@ -27,6 +27,8 @@ struct RememberInAutoLoomIntent: AppIntent {
   static var title: LocalizedStringResource = "Remember This"
   static var description = IntentDescription("Saves something to AutoLoom memory on this iPhone.")
   static var openAppWhenRun: Bool = false
+  /// Memories reach every future conversation, so a locked phone cannot add one.
+  static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
   @Parameter(title: "What to remember", requestValueDialog: "What should AutoLoom remember?")
   var text: String
@@ -56,6 +58,8 @@ struct TodaysBriefingIntent: AppIntent {
   static var title: LocalizedStringResource = "Today's Briefing"
   static var description = IntentDescription("Your AutoLoom tasks, reminders and calendar for today.")
   static var openAppWhenRun: Bool = false
+  /// It reads out the day's calendar and reminders: not for whoever holds a locked phone.
+  static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {

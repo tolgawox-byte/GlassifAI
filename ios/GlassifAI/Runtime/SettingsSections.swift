@@ -383,6 +383,8 @@ struct DiagnosticsView: View {
         ForEach(Array((voice?.startReport?.attempts ?? []).enumerated()), id: \.offset) { item in
           row("Start attempt \(item.offset + 1)", item.element)
         }
+        row("Audio flow check", voice?.lastAudioFlowIssue ?? "no problem found")
+        row("Audio session after Ready", voice?.effectiveAudioSession ?? "—")
         row("Service default model", catalog.first(where: \.isListed)?.slug ?? models.first ?? "—")
         row("General model", pick(.generalChat))
         row("Vision model", pick(.vision, images: true))
@@ -639,7 +641,7 @@ struct DiagnosticsView: View {
       "oauth: \(oauthStatus); models: \(models.count) [\(models.prefix(12).joined(separator: ","))]; realtime \(ModelSelector.realtimeModel) start: \(voice?.startReport?.step?.rawValue ?? "—"); voice selected \(AssistantPreferences.voice) active \(voice?.startReport?.activeVoice ?? "—"); fallback \(voice?.startReport?.fallbackReason ?? "none")",
       "model picks: general \(pick(.generalChat)); vision \(pick(.vision, images: true)); reasoning \(pick(.deepReasoning)); web \(pick(.webSearch, web: true)); status \(modelHealthSummary)",
       "gpt-6 astra: \(ModelRouting.gpt6AstraStatus(catalog: catalog, health: ModelHealth.shared.entries))",
-      "voice: \(voiceState); sideband: \(sidebandStatus); connect \(voice?.lastConnectMs.map { "\($0) ms" } ?? "—"); response median \(voice?.responseLatencyMedianMs.map { "\($0) ms" } ?? "—"); reconnects \(voice?.reconnectCount ?? 0) (\(voice?.lastReconnectReason ?? "—")); realtime error: \(voice?.lastRealtimeError ?? "none")",
+      "voice: \(voiceState); sideband: \(sidebandStatus); connect \(voice?.lastConnectMs.map { "\($0) ms" } ?? "—"); response median \(voice?.responseLatencyMedianMs.map { "\($0) ms" } ?? "—"); reconnects \(voice?.reconnectCount ?? 0) (\(voice?.lastReconnectReason ?? "—")); audio flow \(voice?.lastAudioFlowIssue ?? "no problem found"); session \(voice?.effectiveAudioSession ?? "—"); realtime error: \(voice?.lastRealtimeError ?? "none")",
       "glasses: \(glassesStream?.lastStreamState ?? "—"); DAT \(GlassesSDKInfo.datVersion); device \(glassesStream?.deviceDescription ?? "—"); profile \(glassesStream?.streamProfile.rawValue ?? "—"); requested \(requestedStream); actual \(actualStream); transport note \(glassesStream?.transportNote ?? "none"); stream error \(glassesStream?.lastStreamError ?? "none")",
       "camera: \(metrics.source) \(metrics.inputResolution) \(metrics.pixelFormat) fps \(String(format: "%.1f", metrics.measuredFPS)) received \(metrics.framesReceived) rendered \(metrics.previewRendered) dropped \(metrics.previewDropped) failures \(metrics.previewFailures)",
       "glasses samples: \(metrics.glassesCompressed.map { $0 ? "compressed" : "raw" } ?? "—") \(metrics.glassesCodec) \(metrics.glassesSampleSize) raw \(metrics.rawSamples) compressed \(metrics.compressedSamples) decoded \(metrics.decodedFrames) decodeFail \(metrics.decodeFailures) copyFallback \(metrics.copyFailures) seq \(metrics.latestSequence)",
@@ -652,6 +654,11 @@ struct DiagnosticsView: View {
       "power: thermal \(thermalLabel); battery \(batteryLabel)",
       "live vision: \(liveVision.status.label); notes \(liveVision.updateCount); stable skips \(liveVision.skippedStable); error \(liveVision.lastError ?? "none"); last stop \(liveVision.lastStopReason ?? "—"); thermal \(thermalLabel)",
     ]
+    // Each failed start step with the service's status, code, param and
+    // request id (bridge 4 and later).
+    for attempt in voice?.startReport?.attempts ?? [] {
+      lines.append("voice start attempt: \(attempt)")
+    }
     for record in ledger.records.suffix(6) {
       let timeline = record.timeline.breakdown.map { "\($0.stage)=\($0.ms)" }.joined(separator: " ")
       lines.append("task \(record.kind?.rawValue ?? "ROUTING") \(phaseLabel(record.phase)) via \(record.routeOrigin?.rawValue ?? "—") model \(record.model ?? "—") \(timeline)")
