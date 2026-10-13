@@ -82,13 +82,20 @@ for screen in $SCREENS; do
     xcrun simctl launch "$UDID" "$BUNDLE" -AutoLoomScreenshot "$screen" >>"$LOGS/$screen.launch.txt" 2>&1 || true
     sleep 8
   fi
-  # A launch that did not stay up: say why (crash report, app output).
+  # A launch that did not stay up: say why (crash report, app output, and
+  # what the simulator's process manager logged, since these launches end
+  # without a crash report).
   if ! xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE"; then
     report="$(python3 "$ROOT/scripts/crash-summary.py" GlassifAI "$started" 2>&1 | head -c 1500)"
     newest="$(ls -t ~/Library/Logs/DiagnosticReports/GlassifAI*.ips 2>/dev/null | head -1)"
     [ -n "$newest" ] && cp "$newest" "$LOGS/$screen.crash.ips"
     output="$(tail -c 400 "$LOGS/$screen.err.txt" 2>/dev/null | tr '\n' ' ')"
-    echo "::warning title=Screenshot $screen::not running after launch — $report — stderr: ${output:-none}"
+    xcrun simctl spawn "$UDID" log show --last 40s --style compact \
+      --predicate '(process == "runningboardd" OR process == "SpringBoard" OR process == "launchd") AND eventMessage CONTAINS[c] "glassifai"' \
+      > "$LOGS/$screen.termination.txt" 2>/dev/null || true
+    reason="$(grep -iE 'terminat|exit|kill|jetsam|watchdog|memory|crash' "$LOGS/$screen.termination.txt" 2>/dev/null \
+      | tail -n 3 | cut -c1-240 | tr '\n' ' ')"
+    echo "::warning title=Screenshot $screen::not running after launch — $report — system log: ${reason:-nothing about the app} — stderr: ${output:-none}"
     crashed=$((crashed + 1))
     if [ "$crashed" -ge 8 ]; then
       echo "::warning title=Screenshots::stopped after 8 launches that did not stay up"

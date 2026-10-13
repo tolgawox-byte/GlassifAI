@@ -161,7 +161,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+      # Independent of the iOS tests: it runs even when that step failed
+      # (phase 1c's simulator failure skipped it).
       - name: Native bridge unit tests (host)
+        if: ${{ !cancelled() }}
         run: |
           set -o pipefail
           cargo test --manifest-path native/GlassifAICodexBridge/Cargo.toml --lib 2>&1 | tee cargo-test.log

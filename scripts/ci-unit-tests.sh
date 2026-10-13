@@ -17,6 +17,8 @@ TESTS="${AUTOLOOM_UNIT_TESTS:-$DISCOVERED}"
 echo "Test classes: $TESTS"
 LOG="$ROOT/build-tests-output.log"
 RESULT="$ROOT/build-tests/UnitTests.xcresult"
+RERUN_RESULT="$ROOT/build-tests/UnitTestsRerun.xcresult"
+MISSING="$ROOT/build-tests/missing-classes.txt"
 
 UDID="$(xcrun simctl list devices available -j | python3 -c '
 import json, sys
@@ -41,9 +43,12 @@ for test in $TESTS; do
   fi
 done
 
-rm -rf "$RESULT"
+rm -rf "$RESULT" "$RERUN_RESULT" "$MISSING"
 # A test that hangs fails on its own after its time allowance (named in the
 # results) instead of the whole step being killed without any results.
+# Parallel testing clones the simulator once per worker; on a slow runner a
+# clone can miss its 60-second boot (phase 1c, run 38330128872). Two workers
+# keep most of the speed with fewer simulators booting at once.
 set +e
 xcodebuild test \
   -project "$ROOT/ios/GlassifAI.xcodeproj" \
@@ -52,6 +57,7 @@ xcodebuild test \
   -destination "platform=iOS Simulator,id=$UDID" \
   -derivedDataPath "$ROOT/build-tests" \
   -resultBundlePath "$RESULT" \
+  -maximum-parallel-testing-workers 2 \
   -test-timeouts-enabled YES \
   -default-test-execution-time-allowance 180 \
   -maximum-test-execution-time-allowance 300 \
@@ -75,81 +81,39 @@ if [ "$status" -ne 0 ]; then
     | while IFS= read -r line; do echo "::error title=Test build::${line}"; done || true
 fi
 
-python3 - "$RESULT" "$status" <<'PY'
-import json
-import subprocess
-import sys
+# A failure that is only the simulator's (a clone that never booted) is
+# reported as such and keeps the step red; the classes that did not run
+# because of it run again on one simulator, without clones.
+if [ "$status" -ne 0 ] && [ -d "$RESULT" ]; then
+  set +e
+  python3 "$ROOT/scripts/xcresult-classify.py" "$RESULT" "$ROOT/ios/GlassifAITests" "$MISSING"
+  classified=$?
+  set -e
+  if [ "$classified" -eq 10 ] && [ -s "$MISSING" ]; then
+    RERUN=()
+    while IFS= read -r class_name; do
+      [ -n "$class_name" ] && RERUN+=("-only-testing:GlassifAITests/$class_name")
+    done < "$MISSING"
+    set +e
+    xcodebuild test-without-building \
+      -project "$ROOT/ios/GlassifAI.xcodeproj" \
+      -scheme GlassifAI \
+      -configuration Debug \
+      -destination "platform=iOS Simulator,id=$UDID" \
+      -derivedDataPath "$ROOT/build-tests" \
+      -resultBundlePath "$RERUN_RESULT" \
+      -parallel-testing-enabled NO \
+      -test-timeouts-enabled YES \
+      -default-test-execution-time-allowance 180 \
+      -maximum-test-execution-time-allowance 300 \
+      CODE_SIGNING_ALLOWED=NO \
+      "${RERUN[@]}" 2>&1 | tee -a "$LOG"
+    rerun_status=${PIPESTATUS[0]}
+    set -e
+    python3 "$ROOT/scripts/xcresult-summary.py" "$RERUN_RESULT" "$rerun_status" "Rerun: " || true
+  fi
+fi
 
-result_path, status = sys.argv[1], sys.argv[2]
-
-
-def xcresult(kind):
-    output = subprocess.run(
-        ["xcrun", "xcresulttool", "get", "test-results", kind, "--path", result_path, "--format", "json"],
-        capture_output=True, text=True)
-    if output.returncode != 0:
-        print(f"::warning title=xcresult {kind}::{output.stderr.strip()[:300]}")
-        return None
-    return json.loads(output.stdout)
-
-
-summary = xcresult("summary") or {}
-run_time = ""
-try:
-    run_time = f", test run {float(summary['finishTime']) - float(summary['startTime']):.0f}s"
-except (KeyError, TypeError, ValueError):
-    pass
-print(
-    "::notice title=iOS unit tests::"
-    f"result={summary.get('result')} total={summary.get('totalTestCount')} "
-    f"passed={summary.get('passedTests')} failed={summary.get('failedTests')} "
-    f"skipped={summary.get('skippedTests')} (xcodebuild exit {status}{run_time})")
-
-cases = []
-
-
-def seconds(node):
-    value = node.get("durationInSeconds")
-    if isinstance(value, (int, float)):
-        return float(value)
-    try:
-        return float(str(node.get("duration", "")).replace(",", ".").rstrip("s").strip())
-    except ValueError:
-        return 0.0
-
-
-def walk(node, suite):
-    kind = node.get("nodeType")
-    name = node.get("name", "")
-    if kind == "Test Case":
-        cases.append((suite, name, node.get("result", "?"), seconds(node)))
-        return
-    next_suite = name if kind == "Test Suite" else suite
-    for child in node.get("children", []) or []:
-        walk(child, next_suite)
-
-
-tests = xcresult("tests") or {}
-for node in tests.get("testNodes", []):
-    walk(node, "")
-
-passed = [f"{suite}.{name}" for suite, name, result, _ in cases if result == "Passed"]
-failed = [f"{suite}.{name}" for suite, name, result, _ in cases if result not in ("Passed", "Skipped")]
-slowest = sorted(cases, key=lambda case: case[3], reverse=True)[:5]
-if slowest and slowest[0][3] > 0:
-    print("::notice title=Slowest iOS tests::" + "; ".join(f"{suite}.{name} {took:.1f}s" for suite, name, _, took in slowest))
-if passed:
-    print("::notice title=Passed iOS tests (" + str(len(passed)) + ")::" + "; ".join(passed))
-if failed:
-    print("::error title=Failed iOS tests (" + str(len(failed)) + ")::" + "; ".join(failed))
-# The assertion messages, so a failure can be fixed from the run page.
-for failure in (summary.get("testFailures") or [])[:25]:
-    text = " ".join(str(failure.get("failureText", "")).split())[:900]
-    print("::error title=Failure " + str(failure.get("testName", "?")) + "::" + text)
-if not cases:
-    # A green step must mean tests actually ran.
-    print("::error title=iOS unit tests::No test cases found in the result bundle")
-    sys.exit(3)
-PY
+python3 "$ROOT/scripts/xcresult-summary.py" "$RESULT" "$status"
 
 exit "$status"

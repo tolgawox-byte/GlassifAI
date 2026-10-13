@@ -19,3 +19,6 @@ native/GlassifAICodexBridge/build/
 .env
 .env.*
 !.env.example
+
+# Python caches from the CI helper scripts
+__pycache__/
