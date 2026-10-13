@@ -1,0 +1,1127 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-13 04:06:59.293 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Common] [FBSystemService] Request received from CoreSimulatorBr.86371 to terminate application com.marcoiannello.GlassifAI: "Termination requested by simulator host"
+2026-10-13 04:06:59.293 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89548] SpringBoard requested termination ("Termination requested by simulator host")
+2026-10-13 04:06:59.293 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89548] Now flagged as pending exit for reason: explicit kill request from client
+2026-10-13 04:06:59.293 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89548] Received termination request: <FBSProcessTerminationRequest: 0x119c600c0; label: "Termination requested by simulator host"; exceptionCode: "Force Quit (0xFBFBFBFB)"; reportType: (none); explanation: "Termination requested by simulator host">
+2026-10-13 04:06:59.293 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89548] Executing termination request: <FBSProcessTerminationRequest: 0x119c62480; label: "Termination requested by simulator host"; exceptionCode: "Force Quit (0xFBFBFBFB)"; reportType: (none); explanation: "Termination requested by simulator host">
+2026-10-13 04:06:59.294 Df runningboardd[86344:32162] [com.apple.runningboard:connection] Received termination request from [osservice<com.apple.SpringBoard>:86341] on <RBSProcessPredicate <RBSProcessHandlePredicateImpl| app<com.marcoiannello.GlassifAI((null))>:89548>> with context <RBSTerminateContext| domain:10 code:0xFBFBFBFB explanation:Termination requested by simulator host
+
+ProcessVisibility: Foreground
+ProcessState: Running reportType:None maxTerminationResistance:Interactive>
+2026-10-13 04:06:59.294 Df runningboardd[86344:32162] [com.apple.runningboard:process] Executing termination request for: <RBSProcessPredicate <RBSProcessHandlePredicateImpl| app<com.marcoiannello.GlassifAI((null))>:89548>>
+2026-10-13 04:06:59.294 Df runningboardd[86344:32162] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89548] Terminating with context: <RBSTerminateContext| domain:10 code:0xFBFBFBFB explanation:Termination requested by simulator host
+
+ProcessVisibility: Foreground
+ProcessState: Running reportType:None maxTerminationResistance:Interactive>
+2026-10-13 04:06:59.294 Df runningboardd[86344:32162] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89548] terminate_with_reason() success
+2026-10-13 04:06:59.294 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89548] Workspace connection invalidated.
+2026-10-13 04:06:59.306 Df runningboardd[86344:32936] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:89548] termination reported by launchd (10, 4227595259, 9)
+2026-10-13 04:06:59.306 Df runningboardd[86344:32936] [com.apple.runningboard:process] Removing process: [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.307 Df runningboardd[86344:32936] [com.apple.runningboard:job] Removing launch job for: [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.307 Df runningboardd[86344:32936] [com.apple.runningboard:job] Removed job for [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.307 Df runningboardd[86344:32936] [com.apple.runningboard:process] Removing assertions for terminated process: [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.307 Df runningboardd[86344:32936] [com.apple.runningboard:assertion] Removed last relative-start-date-defining assertion for process app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:06:59.308 Df runningboardd[86344:342d5] [com.apple.runningboard:process] Notifying connection [osservice<com.apple.SpringBoard>:86341] that process [app<com.marcoiannello.GlassifAI((null))>:89548] exited with context <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>
+2026-10-13 04:06:59.308 Df SpringBoard[86341:31e8c] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89548] Workspace assertion invalidated: <NSError: 0x119f9b660; domain: RBSAssertionErrorDomain; code: 1; "Assertions were invalidated, count = 3.
+86344-86341-5036: invalidation reason: 1
+86344-86341-5018: invalidation reason: 1
+86344-86341-5019: invalidation reason: 1">
+2026-10-13 04:06:59.308 Df runningboardd[86344:319e0] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: none (role: None) (endowments: (null))
+2026-10-13 04:06:59.308 Df runningboardd[86344:342d5] [com.apple.runningboard:process] Notifying connection [osservice<com.apple.InputUI>:86599] that process [app<com.marcoiannello.GlassifAI((null))>:89548] exited with context <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>
+2026-10-13 04:06:59.308 Df runningboardd[86344:319e1] [com.apple.runningboard:connection] Inheritance changeset: <RBSInheritanceChangeSet| gained:(null) lost:{(
+    <RBSInheritance| environment:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default name:com.apple.frontboard.visibility origID:86344-86341-5036 payload 2259809546755494016>,
+    <RBSInheritance| environment:(none) name:com.apple.frontboard.visibility origID:86344-86341-5019 0>,
+    <RBSInheritance| environment:(none) name:com.apple.boardservices.endpoint-injection origID:86344-86599-5028 payload 10087120494191707373>
+)}>
+2026-10-13 04:06:59.308 Df SpringBoard[86341:31e8c] [com.apple.runningboard:process] Calling process death completion block for handle [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.308 Df SpringBoard[86341:31e8c] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89548] Process exited: <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>.
+2026-10-13 04:06:59.308 Df SpringBoard[86341:31e8c] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89548] Setting process task state to: Not Running
+2026-10-13 04:06:59.308 Df runningboardd[86344:342d5] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: none (role: None) (endowments: (null))
+2026-10-13 04:06:59.308 Df SpringBoard[86341:31e8c] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89548] Setting process visibility to: Unknown
+2026-10-13 04:06:59.308 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89548] Invalidating workspace.
+2026-10-13 04:06:59.308 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] Removing source registration for processHandle: [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.308 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessScene] [0x11fe06100:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Invalidated for connection: 0x119f9bc60.
+2026-10-13 04:06:59.309 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] Removing: <FBApplicationProcess: 0x11fe16700; app<com.marcoiannello.GlassifAI>:89548(v27267)>
+2026-10-13 04:06:59.309 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Workspace] Process exited: <FBApplicationProcess: 0x11fe16700; app<com.marcoiannello.GlassifAI>:89548(v27267)> -> <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>
+2026-10-13 04:06:59.309 Df runningboardd[86344:32162] [com.apple.runningboard:process] XPC connection invalidated: [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.309 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Application process state changed for com.marcoiannello.GlassifAI: (null)
+2026-10-13 04:06:59.309 Df SpringBoard[86341:31a38] [com.apple.runningboard:monitor] Received state update for 89548 (app<com.marcoiannello.GlassifAI((null))>, none-NotVisible
+2026-10-13 04:06:59.310 Df runningboardd[86344:32162] [com.apple.runningboard:process] XPC connection invalidated: [app<com.marcoiannello.GlassifAI((null))>:89548]
+2026-10-13 04:06:59.312 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:06:59.312 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:06:59.315 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ZStack] Resolved Stack (update(Switcher)) [
+    Highest: ⬇ ,
+    SystemAperture: ⬇ ,
+    HUD: ⬇ ,
+    TransientOverlayPresentation: ⬇ ,
+    Switcher: ownsHomeGesture; FGActive; homeAffordanceDrawingSuppressed: N->Y; suppressedBundles: com.marcoiannello.GlassifAI->(none); suppressedScenes: 1->0,
+    HomeScreen: BG->FGActive
+]
+2026-10-13 04:06:59.316 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] [coordinator] _removeSceneFromRecents didRemoveExternalForegroundApplicationSceneHandle pid:89548 scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default now:<empty>
+2026-10-13 04:06:59.322 Df SpringBoard[86341:342e6] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] com.marcoiannello.GlassifAI application state changed to <RBSProcessState| task:none debug:none>
+2026-10-13 04:06:59.324 Df SpringBoard[86341:342e6] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] Ignore becoming background for application without push registration
+2026-10-13 04:06:59.327 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Removing parent scene.
+2026-10-13 04:06:59.327 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:06:59.328 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] No longer tracking: <FBScene: 0x119a70a00; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:06:59.328 Df SpringBoard[86341:31970] [com.apple.SpringBoard:CompanionScenes] [sceneID:com.marcoiannello.GlassifAI-default] Host foreground state will update: NO
+2026-10-13 04:06:59.328 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] scene content state changed: notReady
+2026-10-13 04:06:59.328 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:notReady hasRule:YES wantsRule:NO
+2026-10-13 04:06:59.328 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] deferFromSBWindowScene: invalidate for <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default; pid: 89548>
+2026-10-13 04:06:59.328 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(unwanted, destroyed) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:06:59.329 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SceneSnapshots] <SBSceneSnapshotRequestor: 0x115e628a0> [sceneID:com.marcoiannello.GlassifAI-default] Requesting 2 snapshot(s) because the scene actually moved to the background
+2026-10-13 04:06:59.329 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] Created: <FBSceneSnapshotAction: 0x10a29be80; sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:06:59.332 Df runningboardd[86344:32162] [com.apple.runningboard:ttl] Acquiring assertion targeting 89548 from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "FBSceneSnapshotAction:sceneID:com.marcoiannello.GlassifAI-default" ID:86344-86341-5045 target:89548 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SceneSnapshotAction" sourceEnvironment:"(null)">,
+	<RBSDurationAttribute| invalidationDuration:5.00 warningDuration:0.00 startPolicy:Fixed endPolicy:Invalidate>
+	]>
+2026-10-13 04:06:59.332 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] <BSCompoundAssertion:0x119a37de0> (SBApplicationAppProtectionAssistant: 0x119c1c940 - com.marcoiannello.GlassifAI) invalidate acq:0x119e7a980 count:1
+2026-10-13 04:06:59.332 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] Informing <APSystemAppOutlet: 0x10776f6c0> that <APApplication: com.marcoiannello.GlassifAI> will become background as far as we know
+2026-10-13 04:06:59.332 Df SpringBoard[86341:31970] [com.apple.appprotection:framework] All scenes dismissed for <APApplication: com.marcoiannello.GlassifAI>
+2026-10-13 04:06:59.333 Df SpringBoard[86341:348f2] [com.apple.appprotection:framework] told auth provider com.marcoiannello.GlassifAI was dimissed. result:true err:(null)
+2026-10-13 04:06:59.388 E  runningboardd[86344:34367] [com.apple.runningboard:general] RBSStateCapture remove item called for untracked item <RBConnectionClient| 89548 name:app<com.marcoiannello.GlassifAI((null))> entitlements:<RBEntitlements| [
+			
+			]> inheritanceManager:<RBClientInheritanceManager| >>
+2026-10-13 04:06:59.391 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:NO contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:06:59.391 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:06:59.391 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:06:59.391 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:NO contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:06:59.391 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:06:59.392 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] <SBFullScreenSwitcherLiveContentOverlayCoordinator: 0x10a2c5a80> Removing SwitcherScene overlay for: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>, animated: NO
+2026-10-13 04:06:59.392 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Hosting policy changed for sceneID:com.marcoiannello.GlassifAI-default: Enforce -> NotApplicable
+2026-10-13 04:06:59.392 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SuspendedUnderLock] Suspension under lock policy updated for sceneID:com.marcoiannello.GlassifAI-default: NotApplicable
+2026-10-13 04:06:59.393 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:06:59.412 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Deactivating scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:06:59.412 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] Invalidating: <FBSceneSnapshotAction: 0x10a29be80; sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:06:59.413 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Common] Got response for <FBSceneSnapshotAction: 0x10a29be80; sceneID:com.marcoiannello.GlassifAI-default>: <NSError: 0x11fc541b0; domain: BSActionErrorDomain; code: 6 ("anulled")>
+2026-10-13 04:06:59.413 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default][1] Scene deactivated.
+2026-10-13 04:06:59.413 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Invalidating scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:06:59.413 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default][1] Scene invalidated.
+2026-10-13 04:06:59.413 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Ignoring update for invalidated scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:06:59.413 Df SpringBoard[86341:31970] [com.apple.SpringBoard:CompanionScenes] [sceneID:com.marcoiannello.GlassifAI-default] Host scene invalidated, unregistering all presentations.
+2026-10-13 04:06:59.413 Df SpringBoard[86341:31970] [com.apple.SpringBoard:CompanionScenes] [sceneID:com.marcoiannello.GlassifAI-default] Component invalidated, unregistering all presentations.
+2026-10-13 04:06:59.413 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Ignoring update for invalidated scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:06:59.413 Df SpringBoard[86341:31970] [com.apple.UIKit:KBProxyForwarding] <StateMachine:0x10a430ec0> Presentation environment invalidated: <_UISceneKeyboardProxyLayerForwardingPresentationScene: 0x115e42c10> Tracking scene: <FBScene: 0x119a70a00; (null):sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:06:59.414 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Update failed: <NSError: 0x11fc54240; domain: FBSceneErrorDomain; code: 1 ("operation-failed"); "Scene update failed."> {
+    NSUnderlyingError = <NSError: 0x119f9ae80; domain: FBWorkspace; code: 1; "Scene client is invalid.">;
+}
+2026-10-13 04:06:59.414 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Update failed: <NSError: 0x11fc54240; domain: FBSceneErrorDomain; code: 1 ("operation-failed"); "Scene update failed."> {
+    NSUnderlyingError = <NSError: 0x119f99d10; domain: FBWorkspace; code: 1; "Scene client is invalid.">;
+}
+2026-10-13 04:07:00.728 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Common] [FBSystemService][0xc747] Received request to open "com.marcoiannello.GlassifAI" from CoreSimulatorBr:86371.
+2026-10-13 04:07:00.728 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Common] [FBSystemService][0xc747] Activation request for com.marcoiannello.GlassifAI contained LSCacheGUID 6B8402F0-89F1-431C-A7E6-B26AEC06362C and LSSequenceNumber 728.
+2026-10-13 04:07:00.728 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBSystemService][0xc747] Activation request for com.marcoiannello.GlassifAI will wait 10.00s for app availability, with retry every 2.00s.
+2026-10-13 04:07:00.728 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBSystemService][0xc747] Attempting activation of com.marcoiannello.GlassifAI with {UUID: 6B8402F0-89F1-431C-A7E6-B26AEC06362C, Sequence: 728} vs {UUID: 6B8402F0-89F1-431C-A7E6-B26AEC06362C, Sequence: 728}
+2026-10-13 04:07:00.728 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Workspace] Received trusted open application request for "com.marcoiannello.GlassifAI" from <FBProcess: 0x107678c00; osservice<com.apple.CoreSimulator.bridge>:86371(v25918)>.
+2026-10-13 04:07:00.729 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Executing request: <SBMainWorkspaceTransitionRequest: 0x109d04b40; eventLabel: OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371); display: Main; source: FBSystemService>
+2026-10-13 04:07:00.729 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBWorkspaceEvent] Executing: <FBWorkspaceEvent: 0x11fe535e0; OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371)>
+2026-10-13 04:07:00.730 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [SwitcherOrientation] outSwitcherOrientation: portrait (1), outElementsOrientations: {
+    "sceneID:com.marcoiannello.GlassifAI-default" = 1;
+}
+2026-10-13 04:07:00.730 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Transaction] Running <SBAppToAppWorkspaceTransaction: 0x11fe16700> for transition request:
+<SBMainWorkspaceTransitionRequest: 0x109d04b40; eventLabel: OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371); display: Main; source: FBSystemService> {
+    applicationContext = <SBWorkspaceApplicationSceneTransitionContext: 0x109c98640; background: NO> entities = {
+        SBLayoutRolePrimary = <SBDeviceApplicationSceneEntity: 0x116b93020; ID: sceneID:com.marcoiannello.GlassifAI-default; layoutRole: primary>;
+    };
+}
+2026-10-13 04:07:00.730 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.730 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.731 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Generating initialization context on main thread for: com.marcoiannello.GlassifAI
+2026-10-13 04:07:00.731 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Process] Asked to bootstrap a new process with identity: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:00.731 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Process] Creating process (sync=true) with identity: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:00.731 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] Created <FBWorkspace: 0x109d04a00; <FBApplicationProcess: 0x11fe16100; app<com.marcoiannello.GlassifAI>:<invalid>>>
+2026-10-13 04:07:00.731 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Process] Bootstrapping app<com.marcoiannello.GlassifAI> with intent foreground-interactive
+2026-10-13 04:07:00.731 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Acquiring assertion targeting app<com.marcoiannello.GlassifAI((null))> from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "FBApplicationProcess" ID:86344-86341-5051 target:app<com.marcoiannello.GlassifAI((null))> attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Resume" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"Visibility" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-UIFocal" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Foreground" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableBootstrapping" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.pagein-prefetching" name:"LaunchPrefetch" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:00.732 Df runningboardd[86344:32162] [com.apple.DynamicPrefetching:default] start_scenario: recording pageins for bundleid "com.marcoiannello.GlassifAI" scenario "Launch"
+2026-10-13 04:07:00.732 Df runningboardd[86344:32162] [com.apple.DynamicPrefetching:default] start_scenario: Prefetching clean profile for bundleid "com.marcoiannello.GlassifAI" scenario "Launch"
+2026-10-13 04:07:00.732 E  runningboardd[86344:34366] [com.apple.runningboard:assertion] Multiple RBSRunningReasonAttribute provided: 10000 vs 20838. First one wins, but client should be fixed for assertion 86344-86341-5051 (target:app<com.marcoiannello.GlassifAI((null))>)
+2026-10-13 04:07:00.732 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Assertion 86344-86341-5051 (target:app<com.marcoiannello.GlassifAI((null))>) will be created as active
+2026-10-13 04:07:00.732 Df runningboardd[86344:34366] [com.apple.runningboard:job] Creating and launching job for: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:00.732 Df runningboardd[86344:34366] [com.apple.runningboard:general] _mutateContextIfNeeded called for com.marcoiannello.GlassifAI
+2026-10-13 04:07:00.733 Df runningboardd[86344:34366] [com.apple.runningboard:job] app<com.marcoiannello.GlassifAI((null))> Looking up container path with persona (null) using container identifier 'com.marcoiannello.GlassifAI'
+2026-10-13 04:07:00.733 Df runningboardd[86344:32162] [com.apple.runningboard:job_oversize] 'app<com.marcoiannello.GlassifAI((null))>' Constructed job description:
+<dictionary: 0x109527540> { count = 23, transaction: 0, voucher = 0x0, contents =
+	"ProcessType" => <string: 0x109b28a20> { string cache = 0x0, length = 3, contents = "App" }
+	"EnableTransactions" => <bool: 0x222423a90>: false
+	"_ManagedBy" => <string: 0x109b2bd80> { string cache = 0x0, length = 22, contents = "com.apple.runningboard" }
+	"RootedSimulatorPath" => <bool: 0x222423a70>: true
+	"StandardOutPath" => <string: 0x109b2a880> { string cache = 0x0, length = 70, contents = "/Users/runner/work/GlassifAI/GlassifAI/screenshots/logs/memory.out.txt" }
+	"CFBundleIdentifier" => <string: 0x109b2a370> { string cache = 0x0, length = 27, contents = "com.marcoiannello.GlassifAI" }
+	"_ResourceCoalition" => <string: 0x109b28840> { string cache = 0x0, length = 40, contents = "app<com.marcoiannello.GlassifAI((null))>" }
+	"_POSIXSpawnTelemetryPageIn" => <bool: 0x222423a70>: true
+	"ThrottleInterval" => <int64: 0x84f7dd4b42ecbe4f>: 2147483647
+	"StandardErrorPath" => <string: 0x109b28720> { string cache = 0x0, length = 70, contents = "/Users/runner/work/GlassifAI/GlassifAI/screenshots/logs/memory.err.txt" }
+	"MachServices" => <dictionary: 0x1095272a0> { count = 0, transaction: 0, voucher = 0x0, contents =
+	}
+	"EnablePressuredExit" => <bool: 0x222423a90>: false
+	"InitialTaskRole" => <int64: 0x84f7dd48bd1341bf>: 1
+	"UserName" => <string: 0x109b286c0> { string cache = 0x0, length = 6, contents = "mobile" }
+	"EnvironmentVariables" => <dictionary: 0x1095244e0> { count = 5, transaction: 0, voucher = 0x0, contents =
+		"TMPDIR" => <string: 0x109b29ec0> { string cache = 0x0, length = 164, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1/tmp" }
+		"DYLD_FRAMEWORK_PATH" => <string: 0x109b2bf00> { string cache = 0x0, length = 193, contents = "/Users/runner/work/GlassifAI/GlassifAI/build-tests/Build/Products/Debug-iphonesimulator/PackageFrameworks:/Users/runner/work/GlassifAI/GlassifAI/build-tests/Build/Products/Debug-iphonesimulator" }
+		"HOME" => <string: 0x109b2b000> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+		"CFFIXED_USER_HOME" => <string: 0x109b2bba0> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+		"_DYLD_CLOSURE_HOME" => <string: 0x109b28d20> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+	}
+	"_AdditionalProperties" => <dictionary: 0x109526fa0> { count = 1, transaction: 0, voucher = 0x0, contents =
+		"RunningBoard" => <dictionary: 0x109526820> { count = 3, transaction: 0, voucher = 0x0, contents =
+			"Managed" => <bool: 0x222423a70>: true
+			"RunningBoardLaunchedIdentity" => <dictionary: 0x1095243c0> { count = 2, transaction: 0, voucher = 0x0, contents =
+				"TYPE" => <int64: 0x84f7dd48bd1341a7>: 2
+				"EAI" => <string: 0x109b29110> { string cache = 0x0, length = 27, contents = "com.marcoiannello.GlassifAI" }
+			}
+			"RunningBoardLaunched" => <bool: 0x222423a70>: true
+		}
+	}
+	"ExitTimeOut" => <int64: 0x84f7dd48bd1341bf>: 1
+	"Label" => <string: 0x109b2bcf0> { string cache = 0x0, length = 61, contents = "UIKitApplication:com.marcoiannello.GlassifAI[1741][rb-legacy]" }
+	"MaterializeDatalessFiles" => <bool: 0x222423a70>: true
+	"SandboxContainer" => <string: 0x109b28750> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+	"_LaunchType" => <int64: 0x84f7dd48bd1341af>: 3
+	"ProgramArguments" => <array: 0x109b29860> { count = 3, capacity = 10, contents =
+		0: <string: 0x109b28ab0> { string cache = 0x0, length = 186, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Bundle/Application/3AE03E05-DB9C-4BB3-93ED-5A9C50FC39C7/GlassifAI.app/GlassifAI" }
+		1: <string: 0x109b29200> { string cache = 0x0, length = 19, contents = "-AutoLoomScreenshot" }
+		2: <string: 0x109b2bd50> { string cache = 0x0, length = 6, contents = "memory" }
+	}
+	"Program" => <string: 0x109b2a4f0> { string cache = 0x0, length = 186, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Bundle/Application/3AE03E05-DB9C-4BB3-93ED-5A9C50FC39C7/GlassifAI.app/GlassifAI" }
+}
+2026-10-13 04:07:00.739 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:07:00.739 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:00.739 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] init without scene; waiting for scene creation
+2026-10-13 04:07:00.739 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:00.739 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:07:00.739 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:00.739 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] <SBFullScreenSwitcherLiveContentOverlayCoordinator: 0x10a2c5a80> Adding SwitcherScene overlay for: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>, animated: NO
+2026-10-13 04:07:00.750 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ZStack] _updatePreferences <Switcher>: {
+    activationPolicyForParticipantsBelow: AtMostBG;
+    homeAffordanceDrawingSuppression: Default;
+    associatedSceneIdentifiersToSuppressInSystemAperture: (
+        sceneID:com.marcoiannello.GlassifAI-default
+    );
+    associatedBundleIdentifiersToSuppressInSystemAperture: (
+        com.marcoiannello.GlassifAI
+    );
+    allowsDimmingWhenForegroundInactive: No;
+}
+2026-10-13 04:07:00.750 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SystemApertureViewController] Invalidating promoted elements with coversheet suppression NO liquid detection suppression NO proximity reader suppression NO system chrome suppression NO bundleIDs {(
+    "com.marcoiannello.GlassifAI"
+)} sceneIds {(
+    "sceneID:com.marcoiannello.GlassifAI-default"
+)}
+2026-10-13 04:07:00.750 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ZStack] Resolved Stack (update(Switcher)) [
+    Highest: ⬇ ,
+    SystemAperture: ⬇ ,
+    HUD: ⬇ ,
+    TransientOverlayPresentation: ⬇ ,
+    Switcher: ownsHomeGesture; FGActive; homeAffordanceDrawingSuppressed: Y->N; suppressedBundles: (none)->com.marcoiannello.GlassifAI; suppressedScenes: 0->1,
+    HomeScreen: FGActive->BG
+]
+2026-10-13 04:07:00.751 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:com.marcoiannello.GlassifAI-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+2026-10-13 04:07:00.751 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:com.marcoiannello.GlassifAI-default]
+2026-10-13 04:07:00.751 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Dark displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x119bc8c80; sceneID: sceneID:com.marcoiannello.GlassifAI-default; scenePointer: 0x0>
+2026-10-13 04:07:00.751 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.751 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.751 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] com.marcoiannello.GlassifAI requiresPreflight: false false (null)
+2026-10-13 04:07:00.752 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] com.marcoiannello.GlassifAI not running preflight as not restricted
+2026-10-13 04:07:00.752 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBSceneReadySwitcherModifierEvent: 0x119bfc630; type: SceneReady; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main> {
+    environment = main;
+    centerConfiguration = undefined;
+    preferredDisplayOrdinal = 0;
+    continuousExposeIdentifier = com.marcoiannello.GlassifAI;
+    layoutItems = {
+        primary = <SBDisplayItem: 0x116a42a40; type: App; bundleIdentifier: com.marcoiannello.GlassifAI; uniqueIdentifier: sceneID:com.marcoiannello.GlassifAI-default>;
+    }
+}>
+2026-10-13 04:07:00.756 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.757 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.757 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] <BSCompoundAssertion:0x119a37de0> (SBApplicationAppProtectionAssistant: 0x119c1c940 - com.marcoiannello.GlassifAI) acquire for reason:NULL scene acq:0x119c9ab00 count:1
+2026-10-13 04:07:00.757 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] Informing <APSystemAppOutlet: 0x10776f6c0> that <APApplication: com.marcoiannello.GlassifAI> will become foreground visible
+2026-10-13 04:07:00.757 Df SpringBoard[86341:31970] [com.apple.appprotection:framework] scene will become FG visible for <APApplication: com.marcoiannello.GlassifAI>
+2026-10-13 04:07:00.757 Df SpringBoard[86341:31970] [com.apple.appprotection:framework] auth result for <APApplication: com.marcoiannello.GlassifAI>: true (null)
+2026-10-13 04:07:00.757 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] didCreateScene
+2026-10-13 04:07:00.757 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.758 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:00.758 Df SpringBoard[86341:31970] [preflight:PreflightSceneExtension] sceneID:com.marcoiannello.GlassifAI-default: returning requiresPreflight FALSE as there's no activePreflightSource
+2026-10-13 04:07:00.758 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:00.758 Df SpringBoard[86341:31970] [com.apple.UIKit:KBProxyForwarding] <StateMachine:0x119d7bcc0> Created with presentation environment: <0x1139e76c0:<_UISceneKeyboardProxyLayerForwardingPresentationScene: 0x1139e76c0> Tracking scene: <FBScene: 0x119a70800; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default>>
+2026-10-13 04:07:00.759 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:com.marcoiannello.GlassifAI-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+2026-10-13 04:07:00.759 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] orientationMode=dynamic for <SBTraitsSceneParticipantDelegate: 0x109d04d20> (
+    "com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default"
+)
+2026-10-13 04:07:00.759 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:com.marcoiannello.GlassifAI-default]
+2026-10-13 04:07:00.759 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Dark displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x119bc8c80; sceneID: sceneID:com.marcoiannello.GlassifAI-default; scenePointer: 0x119a70800>
+2026-10-13 04:07:00.759 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] No capture application found for the com.marcoiannello.GlassifAI, launchCameraCapture: NO, isCaptureApplication: NO
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Process] Asked to bootstrap a new process with identity: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Process] Did not create a new process: A pending process for app<com.marcoiannello.GlassifAI((null))> already exists.
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31970] [com.apple.FrontBoard:ProcessScene] [0x11fec55c0:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Initialized with connection: 0x119c82070.
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31970] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:-1] Registered new scene: <FBWorkspaceScene: 0x11fec55c0; (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default> (fromRemnant = 0)
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default][1] Scene activated.
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31a38] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:-1] Setting process visibility to: Foreground
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] Now tracking: <FBScene: 0x119a70800; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:07:00.760 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] [sceneID:com.marcoiannello.GlassifAI-default] Setting deactivation reasons to: 'systemAnimation' for reason: scene settings update - settings are eligible for deactivation reasons.
+2026-10-13 04:07:00.761 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] scene content state changed: preparing
+2026-10-13 04:07:00.761 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:preparing hasRule:NO wantsRule:YES
+2026-10-13 04:07:00.761 E  SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] invalid pid for scene sceneID:com.marcoiannello.GlassifAI-default, returning nil target
+2026-10-13 04:07:00.761 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(wanted, but focusTarget is nil) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:00.762 Df SpringBoard[86341:347ce] [com.apple.FrontBoard:ProcessScene] [0x11fec55c0:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Scene lifecycle state did change: Foreground
+2026-10-13 04:07:00.762 Df SpringBoard[86341:347ce] [com.apple.FrontBoard:ProcessScene] [0x11fec55c0:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Scene state did change: FV-Focal[100].
+2026-10-13 04:07:00.762 Df SpringBoard[86341:347ce] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:-1] Workspace state did change: XX-None[0] --> FV-Focal[100] (awaiting concrete target).
+2026-10-13 04:07:00.763 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBTransitionSwitcherModifierEvent: 0x119ba6700; type: MainTransition; transitionID: 816E6787-98A5-4D2B-A408-AEBD4022E702; phase: Prepare; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+)}; morphingPIPLayoutRole: undefined; previousDesktopItems: {(
+)}>
+2026-10-13 04:07:00.764 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] handle response:
+<SBSwitcherModifierEventResponse: 0x109d1d9e0> {
+    <SBSwitcherModifierEventResponse: 0x109d1f270> {
+	    <SBSwitcherModifierEventResponse: 0x1139e7cf0> {
+		    <SBTimerEventSwitcherEventResponse: 0x11fc57210; delay: 0.240000; reason: kSBTransitionModifierInvalidateAsyncRenderingReason>;
+		    <SBInvalidateAdjustedAppLayoutsSwitcherEventResponse: 0x119cf12c0>;
+		};
+	    <SBTimerEventSwitcherEventResponse: 0x109d1cc90; delay: 0.060000; reason: kSBFullScreenToHomeCornerRadiusDelayReason>;
+	};
+    <SBSwitcherModifierEventResponse: 0x115c2a700> {
+	    <SBUpdateLayoutSwitcherEventResponse: 0x119d7b140; updateVisibleItems; layout; style; mode: None>;
+	    <SBRequestFolderSnapshotsSwitcherEventResponse: 0x109d1d890; snapshotRequested: YES>;
+	    <SBIconOverlayVisibilitySwitcherEventResponse: 0x119d7b600; visible: YES; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+	    <SBIconViewVisibilitySwitcherEventResponse: 0x119861
+2026-10-13 04:07:00.765 Df runningboardd[86344:34366] [com.apple.runningboard:general] Full encoding handle [app<com.marcoiannello.GlassifAI((null))>:89901], with data e95f7dd500015f2d, and pid 89901
+2026-10-13 04:07:00.765 Df runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] Memory Limits: active 0 inactive 0
+ <RBJetsamProperties| tasklimit=0
+(null)>
+2026-10-13 04:07:00.765 Df runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] This process will be managed.
+2026-10-13 04:07:00.765 E  runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] Memorystatus failed with unexpected error: Operation not permitted (1)
+2026-10-13 04:07:00.765 Df runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] is not freezer eligible, disabling freezing.
+2026-10-13 04:07:00.765 E  runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] Memorystatus failed with unexpected error: Invalid argument (22)
+2026-10-13 04:07:00.765 E  runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] Memorystatus failed with unexpected error: Operation not permitted (1)
+2026-10-13 04:07:00.765 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Now tracking process: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:00.765 Df runningboardd[86344:34366] [com.apple.runningboard:assertion] [app<com.marcoiannello.GlassifAI((null))>:89901]: applying persistent assertion '86344-86341-5051 (target:app<com.marcoiannello.GlassifAI((null))>)'
+2026-10-13 04:07:00.766 Df runningboardd[86344:34366] [com.apple.runningboard:assertion] Using default underlying assertion for app: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:00.766 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [app<com.marcoiannello.GlassifAI((null))>:89901] with description <RBSAssertionDescriptor| "RB Underlying Assertion" ID:86344-86344-5052 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.underlying" name:"defaultUnderlyingAppAssertion" sourceEnvironment:"(null)">,
+	<RBSAcquisitionCompletionAttribute| policy:AfterApplication>
+	]>
+2026-10-13 04:07:00.766 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Assertion 86344-86344-5052 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as active
+2026-10-13 04:07:00.766 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Bootstrap success!
+2026-10-13 04:07:00.767 Df runningboardd[86344:32162] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:00.767 Df SpringBoard[86341:31ab9] [com.apple.runningboard:process] Hit the server for a process handle 95f7dd500015f2d that resolved to: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:00.767 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Setting process task state to: Running
+2026-10-13 04:07:00.767 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Registering event dispatcher after bootstrap
+2026-10-13 04:07:00.767 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Initial launch state: FV-Focal[100].
+2026-10-13 04:07:00.768 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "FBWorkspace (FV-Focal[100])" ID:86344-86341-5053 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Resume" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"Visibility" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-UIFocal" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Foreground" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:00.768 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Assertion 86344-86341-5053 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as active
+2026-10-13 04:07:00.769 Df runningboardd[86344:319e1] [com.apple.runningboard:general] [app<com.marcoiannello.GlassifAI((null))>:89901] reported to RB as running
+2026-10-13 04:07:00.769 Df runningboardd[86344:32936] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:89901] Resuming task.
+2026-10-13 04:07:00.770 Df runningboardd[86344:32936] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:89901] Set darwin role to: UserInteractiveFocal
+2026-10-13 04:07:00.770 E  runningboardd[86344:32936] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] Error 1 setting Carplay mode to 0: Operation not permitted
+2026-10-13 04:07:00.770 Df runningboardd[86344:32936] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:89901] visiblity is yes
+2026-10-13 04:07:00.770 Df runningboardd[86344:342d5] [com.apple.runningboard:assertion] Successfully acquired underlying assertion for [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:00.771 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Workspace state did change: XX-None[0] --> FV-Focal[100] (assertion acquired).
+2026-10-13 04:07:00.771 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Workspace interruption policy did change: reconnect
+2026-10-13 04:07:00.771 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "com.apple.frontboard.after-life.interrupted" ID:86344-86341-5054 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"AfterLife-Interrupted" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:00.771 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Assertion 86344-86341-5054 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as inactive as originator process has not exited
+2026-10-13 04:07:00.771 Df SpringBoard[86341:31ab9] [com.apple.runningboard:process] Starting death monitoring for handle [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:00.771 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Process] Adding: <FBApplicationProcess: 0x11fe16100; app<com.marcoiannello.GlassifAI>:89901(v27537)>
+2026-10-13 04:07:00.771 Df SpringBoard[86341:347ce] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:00.772 Df runningboardd[86344:342d5] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:00.772 Df runningboardd[86344:342d5] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:00.782 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Icon] Creating ISIcon on main thread for app com.marcoiannello.GlassifAI
+2026-10-13 04:07:00.784 Df SpringBoard[86341:348f1] [com.apple.UserNotifications:Settings] [com.marcoiannello.GlassifAI] Foreground app will not request ephemeral notifications
+2026-10-13 04:07:00.786 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBTransitionSwitcherModifierEvent: 0x11fe16880; type: MainTransition; transitionID: 816E6787-98A5-4D2B-A408-AEBD4022E702; phase: Animate; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+)}; morphingPIPLayoutRole: undefined; previousDesktopItems: {(
+)}>
+2026-10-13 04:07:00.828 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Application process state changed for com.marcoiannello.GlassifAI: <SBApplicationProcessState: 0x119e7a920; pid: 89901; taskState: Running; visibility: Foreground>
+2026-10-13 04:07:00.831 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Returning cached initialization context for com.marcoiannello.GlassifAI
+2026-10-13 04:07:00.832 Df SpringBoard[86341:31970] [com.apple.SpringBoard:StatusBarish] Verify background audio activity for com.marcoiannello.GlassifAI, Recording: 0
+2026-10-13 04:07:00.887 Df SpringBoard[86341:347ce] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:00.990 Df SpringBoard[86341:348f1] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] com.marcoiannello.GlassifAI application state changed to <RBSProcessState| task:running-active debug:none endowmentNamespace:[
+	com.apple.frontboard.visibility
+	]>
+2026-10-13 04:07:00.991 Df SpringBoard[86341:348f1] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] Ignore becoming foreground for application without push registration
+2026-10-13 04:07:01.007 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] [sceneID:com.marcoiannello.GlassifAI-default] Setting deactivation reasons to: '(none)' for reason: updateAllScenesForBand - Assertion removed.
+2026-10-13 04:07:01.247 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBTransitionSwitcherModifierEvent: 0x11fe16280; type: MainTransition; transitionID: 816E6787-98A5-4D2B-A408-AEBD4022E702; phase: Complete; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+)}; morphingPIPLayoutRole: undefined; previousDesktopItems: {(
+)}>
+2026-10-13 04:07:01.248 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] handle response:
+<SBSwitcherModifierEventResponse: 0x11fc54d80> {
+    <SBPreemptAnimationSwitcherEventResponse: 0x11fc57cf0>;
+    <SBSwitcherModifierEventResponse: 0x11fc548a0> {
+	    <SBInvalidateAdjustedAppLayoutsSwitcherEventResponse: 0x11fc56700>;
+	    <SBSwitcherModifierEventResponse: 0x11fc55080> {
+		    <SBRequestFolderSnapshotsSwitcherEventResponse: 0x11fc556e0; snapshotRequested: NO>;
+		    <SBIconOverlayVisibilitySwitcherEventResponse: 0x119911340; visible: NO; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+		    <SBIconViewVisibilitySwitcherEventResponse: 0x1139e8b90; visible: YES; animationSettings: 0x0; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+		    <SBMatchMoveToIconViewSwitcherEventResponse: 0x119f96400; active: NO; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+		};
+	};
+}
+2026-10-13 04:07:04.089 Df SpringBoard[86341:348f2] [com.apple.SpringBoard:Common] Fetching initialization context for: com.marcoiannello.GlassifAI
+2026-10-13 04:07:04.089 Df SpringBoard[86341:348f2] [com.apple.SpringBoard:Common] Returning cached initialization context for com.marcoiannello.GlassifAI
+2026-10-13 04:07:04.089 Df SpringBoard[86341:348f2] [com.apple.SpringBoard:Common] Returning cached initialization context for com.marcoiannello.GlassifAI
+2026-10-13 04:07:04.157 Df runningboardd[86344:34367] [com.apple.runningboard:connection] Setting client for [app<com.marcoiannello.GlassifAI((null))>:89901] as ready
+2026-10-13 04:07:04.158 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [app<com.marcoiannello.GlassifAI((null))>:89901] with description <RBSAssertionDescriptor| "Shared Background Assertion 0 for com.marcoiannello.GlassifAI" ID:86344-89901-5058 target:89901 attributes:[
+	<RBSLegacyAttribute| requestedReason:FinishTask reason:FinishTask flags:( PreventTaskSuspend )>,
+	<RBSAcquisitionCompletionAttribute| policy:AfterValidation>
+	]>
+2026-10-13 04:07:04.158 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Assertion 86344-89901-5058 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as inactive as start-time-defining assertions exist
+2026-10-13 04:07:04.158 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Connection established.
+2026-10-13 04:07:04.158 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] created proxy of <BSXPCServiceConnectionProxy<FBSWorkspaceServiceServerInterface>: 0x11fedd400>
+2026-10-13 04:07:04.159 Df SpringBoard[86341:348f2] [com.apple.FrontBoard:ProcessScene] [0x11fec55c0:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Sending scene action [Create Active][0x7c7d] to process 0x11fe16100 (watchdog: 600.00s)
+2026-10-13 04:07:04.159 Df SpringBoard[86341:348f2] [com.apple.FrontBoard:ProcessScene] [0x11fec55c0:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Sending scene create.
+2026-10-13 04:07:04.159 Df SpringBoard[86341:348f2] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Connection to remote process established!
+2026-10-13 04:07:04.160 Df SpringBoard[86341:348f2] [com.apple.FrontBoard:ProcessWorkspace] received incoming handshake : process=<FBApplicationProcess: 0x11fe16100; app<com.marcoiannello.GlassifAI>:89901(v27537); taskState: Running; visibility: Foreground> remote=<BSAuditToken: 0x119c60800; AUID: 501; EUID: 501; EGID: 20; RUID: 501; RGID: 20; PID: 89901; ASID: 100014; PIDVersion: 161079> remnants=0
+2026-10-13 04:07:04.160 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Client process connected: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:04.161 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ResourceConditions] Considering foreground scene <FBScene: 0x119a70800; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default> with handle=[app<com.marcoiannello.GlassifAI((null))>:89901] (isApp=YES) and parentScene=(null)
+2026-10-13 04:07:04.161 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ResourceConditions] Setting resource conditions for scene=<FBScene: 0x119a70800; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default> to memoryPressure=normal
+2026-10-13 04:07:04.161 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Host window scene changed for sceneID:com.marcoiannello.GlassifAI-default: <SBWindowScene: 0x109f10000; scene: "<FBSScene: 0x109ebd400; identifier: SB-main>"; persistentIdentifier: SB-main>
+2026-10-13 04:07:04.161 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SuspendedUnderLock] Started observing hosted policy component for sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:04.161 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] [coordinator] didAddExternalForegroundApplicationSceneHandle pid:89901 scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default now:<recentPIDs: [89901]; recentSceneIdentityTokensByPID: {89901: [com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default]}>
+2026-10-13 04:07:04.162 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(clientConnected) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:preparing hasRule:NO wantsRule:YES
+2026-10-13 04:07:04.162 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] deferFromSBWindowScene: adding rule for <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default; pid: 89901>
+2026-10-13 04:07:04.162 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(clientConnected) outcome:(wanted, created) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:04.163 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Application process state changed for com.marcoiannello.GlassifAI: <SBApplicationProcessState: 0x119e78ea0; pid: 89901; taskState: Running; visibility: Foreground>
+2026-10-13 04:07:04.163 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25230-com.apple.SpringBoard.SceneWorkspace.PrototypeTools] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.163 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24840-com.apple.SpringBoard.SceneWorkspace.DruidUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.163 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d249c0-com.apple.SpringBoard.SceneWorkspace.FullKeyboardAccessUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.163 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25410-com.apple.SpringBoard.SceneWorkspace.SiriHUD] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25140-com.apple.SpringBoard.SceneWorkspace.AudioHUD] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24f60-com.apple.SpringBoard.SceneWorkspace.PerfPowerHUD] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d248d0-com.apple.SpringBoard.SceneWorkspace.InputUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25320-com.apple.SpringBoard.SceneWorkspace.GlitchHUD] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24ba0-com.apple.SpringBoard.SceneWorkspace.AssistiveTouchUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25500-com.apple.SpringBoard.SceneWorkspace.AssistantIslandStageCoordinator] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24780-com.apple.SpringBoard.SceneWorkspace.OverlayUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24ab0-com.apple.SpringBoard.SceneWorkspace.VoiceControlUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24d80-com.apple.SpringBoard.SceneWorkspace.EyedropperUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25050-com.apple.SpringBoard.SceneWorkspace.InternalPerfPowerHUD] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24e70-com.apple.SpringBoard.SceneWorkspace.Moments] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.164 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24c90-com.apple.SpringBoard.SceneWorkspace.AccessibilityUIServerUI] client did connect with handshake: <FBSceneClientHandshake:0x119e7b980; [app<com.marcoiannello.GlassifAI((null))>:89901] remnants=0>
+2026-10-13 04:07:04.169 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] deliveryChainDidUpdate: scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default in windowScene:SB-main
+2026-10-13 04:07:04.203 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [app<com.marcoiannello.GlassifAI((null))>:89901] with description <RBSAssertionDescriptor| "app_launch_measurement: pageins recording enabled" ID:86344-89901-5059 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.pagein-prefetching" name:"LaunchPrefetch" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:04.203 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Assertion 86344-89901-5059 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as active
+2026-10-13 04:07:04.203 Df runningboardd[86344:34366] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:04.204 Df SpringBoard[86341:348f2] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:04.225 Df runningboardd[86344:32162] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "FBApplicationProcess" ID:86344-86599-5060 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Suspend" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-NonUI" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Active" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableBootstrapping" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:04.225 Df runningboardd[86344:32162] [com.apple.runningboard:ttl] Assertion 86344-86599-5060 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as active
+2026-10-13 04:07:04.226 Df runningboardd[86344:32162] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:04.226 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "FBWorkspaceDomain: injecting saved endowment" ID:86344-86599-5061 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"WorkspaceEndpointInjection" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:04.226 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Assertion 86344-86599-5061 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as active
+2026-10-13 04:07:04.226 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Attempting to rename power assertion 65535 for target app<com.marcoiannello.GlassifAI((null))> to app<com.marcoiannello.GlassifAI((null))>;86344-86341-5051:FBApplicationProcess;86344-86599-5060:FBApplicationProcess
+2026-10-13 04:07:04.227 Df runningboardd[86344:319e0] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2292824116883850683>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:04.227 Df SpringBoard[86341:347ce] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:04.229 Df SpringBoard[86341:348f2] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:04.232 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "com.apple.frontboard.after-life.interrupted" ID:86344-86599-5063 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"AfterLife-Interrupted" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:04.232 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Assertion 86344-86599-5063 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as inactive as originator process has not exited
+2026-10-13 04:07:04.233 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "FBWorkspace (BG-Active[40])" ID:86344-86599-5064 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Suspend" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-NonUI" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Active" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:04.233 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Assertion 86344-86599-5064 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) will be created as active
+2026-10-13 04:07:04.233 Df runningboardd[86344:319e1] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2292824116883850683>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:04.235 Df SpringBoard[86341:348f2] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:05.073 Df SpringBoard[86341:348f2] [com.apple.FrontBoard:ProcessScene] [0x11fec55c0:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Scene action [Create Active][0x7c7d] completed with success: 1
+2026-10-13 04:07:05.073 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] scene content state changed: ready
+2026-10-13 04:07:05.073 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:ready hasRule:YES wantsRule:YES
+2026-10-13 04:07:05.073 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:05.074 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:89901](UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default) from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "injecting  inherited from 'UIScene:com.apple.frontboard.systemappservices/SSK.primary.root(mainDisplay):SB-main'" ID:86344-86341-5071 target:89901<UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default> attributes:[
+	<RBSHereditaryGrant| endowmentNamespace:com.apple.boardservices.endpoint-injection UIScene:com.apple.frontboard.systemappservices/SSK.primary.root(mainDisplay):SB-main>,
+	<RBSHereditaryGrant| endowmentNamespace:com.apple.frontboard.visibility UIScene:com.apple.frontboard.systemappservices/SSK.primary.root(mainDisplay):SB-main>
+	]>
+2026-10-13 04:07:05.074 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Assertion 86344-86341-5071 (target:[app<com.marcoiannello.GlassifAI((null))>:89901](UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default)) will be created as active
+2026-10-13 04:07:05.074 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Setting parent scene: SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:05.075 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] propagating 8 settings from SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:05.075 Df runningboardd[86344:34366] [com.apple.runningboard:connection] Inheritance changeset: <RBSInheritanceChangeSet| gained:{(
+    <RBSInheritance| environment:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default name:com.apple.frontboard.visibility origID:86344-86341-5071 payload 2259809546755494016>
+)} lost:{(
+)}>
+2026-10-13 04:07:05.075 Df runningboardd[86344:34366] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2292824116883850683>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default payload: 2259809546755494016>
+)})
+2026-10-13 04:07:05.075 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ResourceConditions] Considering foreground scene <FBScene: 0x119a70800; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default> with handle=[app<com.marcoiannello.GlassifAI((null))>:89901] (isApp=YES) and parentScene=SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:05.077 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Removing parent scene.
+2026-10-13 04:07:05.077 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Setting parent scene: SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:05.077 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] propagating 8 settings from SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:05.078 Df SpringBoard[86341:31ab9] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:05.078 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Invalidating assertion 86344-89901-5058 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) from originator [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:05.079 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBSceneReadySwitcherModifierEvent: 0x109d1cc90; type: SceneReady; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main> {
+    environment = main;
+    centerConfiguration = undefined;
+    preferredDisplayOrdinal = 0;
+    continuousExposeIdentifier = com.marcoiannello.GlassifAI;
+    layoutItems = {
+        primary = <SBDisplayItem: 0x116a42a40; type: App; bundleIdentifier: com.marcoiannello.GlassifAI; uniqueIdentifier: sceneID:com.marcoiannello.GlassifAI-default>;
+    }
+}>
+2026-10-13 04:07:05.080 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppResize] updating _lastInteractedResizableSceneHandle: sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:05.081 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] [coordinator] userFocusRequestForScene: requesting target <environment: keyboardFocus; target: <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default; pid: 89901>> for reason:inflexible windowing app is foreground
+2026-10-13 04:07:05.085 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Hosting assertion requested for sceneID:com.marcoiannello.GlassifAI-default (valid: YES) with policy Default, reason: SBSwitcherController
+2026-10-13 04:07:05.085 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Hosting policy changed for sceneID:com.marcoiannello.GlassifAI-default: NotApplicable -> Enforce
+2026-10-13 04:07:05.086 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SuspendedUnderLock] Suspension under lock policy updated for sceneID:com.marcoiannello.GlassifAI-default: Enforce
+2026-10-13 04:07:05.086 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Front display did change: <SBApplication: 0x115fc3f00; com.marcoiannello.GlassifAI>
+2026-10-13 04:07:05.119 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Acquiring assertion targeting osservice<com.apple.InputUI> from originator [app<com.marcoiannello.GlassifAI((null))>:89901] with description <RBSAssertionDescriptor| "BSNSXPCTransport[C:3-2]" ID:86344-89901-5072 target:osservice<com.apple.InputUI> attributes:[
+	<RBSDomainAttribute| domain:"com.apple.common" name:"BasicAngelIPC" sourceEnvironment:"(null)">,
+	<RBSConstraintsAttribute| constraints:7>
+	]>
+2026-10-13 04:07:05.121 Df runningboardd[86344:319e1] [com.apple.runningboard:assertion] found a new process to check [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:05.123 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] Invalidating assertion 86344-89901-5072 (target:osservice<com.apple.InputUI>) from originator [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:05.207 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Dropping launch assertion.
+2026-10-13 04:07:05.207 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Invalidating assertion 86344-86341-5051 (target:app<com.marcoiannello.GlassifAI((null))>) from originator [osservice<com.apple.SpringBoard>:86341]
+2026-10-13 04:07:05.254 Df runningboardd[86344:319e1] [com.apple.runningboard:ttl] Attempting to rename power assertion 65535 for target app<com.marcoiannello.GlassifAI((null))> to app<com.marcoiannello.GlassifAI((null))>86344-86599-5060:FBApplicationProcess
+2026-10-13 04:07:05.254 Df runningboardd[86344:34367] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2292824116883850683>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default payload: 2259809546755494016>
+)})
+2026-10-13 04:07:05.255 Df SpringBoard[86341:31ab9] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:05.273 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Invalidating assertion 86344-86599-5060 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) from originator [osservice<com.apple.InputUI>:86599]
+2026-10-13 04:07:05.286 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Invalidating assertion 86344-89901-5059 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) from originator [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:05.347 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Invalidating assertion 86344-86599-5064 (target:[app<com.marcoiannello.GlassifAI((null))>:89901]) from originator [osservice<com.apple.InputUI>:86599]
+2026-10-13 04:07:05.568 Df runningboardd[86344:34366] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2292824116883850683>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default payload: 2259809546755494016>
+)})
+2026-10-13 04:07:05.569 Df runningboardd[86344:32162] [com.apple.DynamicPrefetching:default] end_scenario: Called with bundleid "com.marcoiannello.GlassifAI" scenario "Launch"
+2026-10-13 04:07:05.569 E  runningboardd[86344:32162] [com.apple.DynamicPrefetching:default] mark_profile_seen_this_boot: exists() failed for "/private/var/root/Library/Caches/com.apple.runningboardd/DynamicPrefetching/com.marcoiannello.GlassifAI/0.profile": Permission denied
+2026-10-13 04:07:05.569 Df runningboardd[86344:32162] [com.apple.DynamicPrefetching:default] end_scenario_internal: first launch after boot for bundleid com.marcoiannello.GlassifAI scenario Launch — discarded 0 pageins, refreshed profile mtime
+2026-10-13 04:07:05.569 Df SpringBoard[86341:348f2] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:10.390 Df SpringBoard[86341:31ab9] [com.apple.SplashBoard:SnapshotReaper] <XBApplicationSnapshotManifestImpl: 0x10a39a800> [com.marcoiannello.GlassifAI] Reaping invalid snapshot <XBApplicationSnapshot: 0x119cce140; …13214960A8B4> [com.marcoiannello.GlassifAI]
+ invalidReason: expired. expirationDate: 2026-10-13 04:07:04 +0000; how long ago (seconds): 6.060892
+2026-10-13 04:07:10.390 Df SpringBoard[86341:31ab9] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x10a39a800> [com.marcoiannello.GlassifAI] Deleting snapshot <XBApplicationSnapshot: 0x119cce140; …13214960A8B4> [com.marcoiannello.GlassifAI] for reason: _contentType: SceneContent(0)
+2026-10-13 04:07:11.015 Df SpringBoard[86341:348f2] [com.apple.FrontBoard:Common] [FBSystemService][0x3817] Received request to open "com.marcoiannello.GlassifAI" from CoreSimulatorBr:86371.
+2026-10-13 04:07:11.016 Df SpringBoard[86341:348f2] [com.apple.FrontBoard:Common] [FBSystemService][0x3817] Activation request for com.marcoiannello.GlassifAI contained LSCacheGUID 6B8402F0-89F1-431C-A7E6-B26AEC06362C and LSSequenceNumber 728.
+2026-10-13 04:07:11.016 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBSystemService][0x3817] Activation request for com.marcoiannello.GlassifAI will wait 10.00s for app availability, with retry every 2.00s.
+2026-10-13 04:07:11.016 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBSystemService][0x3817] Attempting activation of com.marcoiannello.GlassifAI with {UUID: 6B8402F0-89F1-431C-A7E6-B26AEC06362C, Sequence: 728} vs {UUID: 6B8402F0-89F1-431C-A7E6-B26AEC06362C, Sequence: 728}
+2026-10-13 04:07:11.016 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Workspace] Received trusted open application request for "com.marcoiannello.GlassifAI" from <FBProcess: 0x107678c00; osservice<com.apple.CoreSimulator.bridge>:86371(v25918)>.
+2026-10-13 04:07:11.016 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Executing request: <SBMainWorkspaceTransitionRequest: 0x11fe26d00; eventLabel: OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371); display: Main; source: FBSystemService>
+2026-10-13 04:07:11.017 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBWorkspaceEvent] Executing: <FBWorkspaceEvent: 0x119e4d7a0; OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371)>
+2026-10-13 04:07:11.018 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [SwitcherOrientation] outSwitcherOrientation: portrait (1), outElementsOrientations: {
+    "sceneID:com.marcoiannello.GlassifAI-default" = 1;
+}
+2026-10-13 04:07:11.018 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Transaction] Running <SBAppToAppWorkspaceTransaction: 0x11fe16700> for transition request:
+<SBMainWorkspaceTransitionRequest: 0x11fe26d00; eventLabel: OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371); display: Main; source: FBSystemService> {
+    applicationContext = <SBWorkspaceApplicationSceneTransitionContext: 0x115d24c80; background: NO> entities = {
+        SBLayoutRolePrimary = <SBDeviceApplicationSceneEntity: 0x119861360; ID: sceneID:com.marcoiannello.GlassifAI-default; layoutRole: primary>;
+    };
+}
+2026-10-13 04:07:11.018 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:11.018 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:11.019 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:11.020 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:com.marcoiannello.GlassifAI-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+2026-10-13 04:07:11.020 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] orientationMode=dynamic for <SBTraitsSceneParticipantDelegate: 0x109d04d20> (
+    "com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default"
+)
+2026-10-13 04:07:11.020 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:com.marcoiannello.GlassifAI-default]
+2026-10-13 04:07:11.020 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Dark displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x119bc8c80; sceneID: sceneID:com.marcoiannello.GlassifAI-default; scenePointer: 0x119a70800>
+2026-10-13 04:07:11.021 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:11.021 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:11.021 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] com.marcoiannello.GlassifAI requiresPreflight: false false (null)
+2026-10-13 04:07:11.022 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] com.marcoiannello.GlassifAI not running preflight as not restricted
+2026-10-13 04:07:11.022 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBSceneReadySwitcherModifierEvent: 0x11fe55020; type: SceneReady; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main> {
+    environment = main;
+    centerConfiguration = undefined;
+    preferredDisplayOrdinal = 0;
+    continuousExposeIdentifier = com.marcoiannello.GlassifAI;
+    layoutItems = {
+        primary = <SBDisplayItem: 0x116a42a40; type: App; bundleIdentifier: com.marcoiannello.GlassifAI; uniqueIdentifier: sceneID:com.marcoiannello.GlassifAI-default>;
+    }
+}>
+2026-10-13 04:07:11.023 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:com.marcoiannello.GlassifAI-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+2026-10-13 04:07:11.023 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] orientationMode=dynamic for <SBTraitsSceneParticipantDelegate: 0x109d04d20> (
+    "com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default"
+)
+2026-10-13 04:07:11.023 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:com.marcoiannello.GlassifAI-default]
+2026-10-13 04:07:11.023 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Dark displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x119bc8c80; sceneID: sceneID:com.marcoiannello.GlassifAI-default; scenePointer: 0x119a70800>
+2026-10-13 04:07:11.024 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] No capture application found for the com.marcoiannello.GlassifAI, launchCameraCapture: NO, isCaptureApplication: NO
+2026-10-13 04:07:11.029 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBSceneReadySwitcherModifierEvent: 0x115c28f60; type: SceneReady; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main> {
+    environment = main;
+    centerConfiguration = undefined;
+    preferredDisplayOrdinal = 0;
+    continuousExposeIdentifier = com.marcoiannello.GlassifAI;
+    layoutItems = {
+        primary = <SBDisplayItem: 0x116a42a40; type: App; bundleIdentifier: com.marcoiannello.GlassifAI; uniqueIdentifier: sceneID:com.marcoiannello.GlassifAI-default>;
+    }
+}>
+2026-10-13 04:07:11.031 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Front display did change: <SBApplication: 0x115fc3f00; com.marcoiannello.GlassifAI>
+2026-10-13 04:07:26.526 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Common] [FBSystemService] Request received from CoreSimulatorBr.86371 to terminate application com.marcoiannello.GlassifAI: "Termination requested by simulator host"
+2026-10-13 04:07:26.526 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] SpringBoard requested termination ("Termination requested by simulator host")
+2026-10-13 04:07:26.526 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Now flagged as pending exit for reason: explicit kill request from client
+2026-10-13 04:07:26.526 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Received termination request: <FBSProcessTerminationRequest: 0x119c62800; label: "Termination requested by simulator host"; exceptionCode: "Force Quit (0xFBFBFBFB)"; reportType: (none); explanation: "Termination requested by simulator host">
+2026-10-13 04:07:26.526 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Executing termination request: <FBSProcessTerminationRequest: 0x119c623c0; label: "Termination requested by simulator host"; exceptionCode: "Force Quit (0xFBFBFBFB)"; reportType: (none); explanation: "Termination requested by simulator host">
+2026-10-13 04:07:26.527 Df runningboardd[86344:34366] [com.apple.runningboard:connection] Received termination request from [osservice<com.apple.SpringBoard>:86341] on <RBSProcessPredicate <RBSProcessHandlePredicateImpl| app<com.marcoiannello.GlassifAI((null))>:89901>> with context <RBSTerminateContext| domain:10 code:0xFBFBFBFB explanation:Termination requested by simulator host
+
+ProcessVisibility: Foreground
+ProcessState: Running reportType:None maxTerminationResistance:Interactive>
+2026-10-13 04:07:26.527 Df runningboardd[86344:34366] [com.apple.runningboard:process] Executing termination request for: <RBSProcessPredicate <RBSProcessHandlePredicateImpl| app<com.marcoiannello.GlassifAI((null))>:89901>>
+2026-10-13 04:07:26.527 Df runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] Terminating with context: <RBSTerminateContext| domain:10 code:0xFBFBFBFB explanation:Termination requested by simulator host
+
+ProcessVisibility: Foreground
+ProcessState: Running reportType:None maxTerminationResistance:Interactive>
+2026-10-13 04:07:26.527 Df runningboardd[86344:34366] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:89901] terminate_with_reason() success
+2026-10-13 04:07:26.529 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Workspace connection invalidated.
+2026-10-13 04:07:26.562 Df runningboardd[86344:34367] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:89901] termination reported by launchd (10, 4227595259, 9)
+2026-10-13 04:07:26.562 Df runningboardd[86344:34367] [com.apple.runningboard:process] Removing process: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.562 Df runningboardd[86344:34367] [com.apple.runningboard:job] Removing launch job for: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.563 Df runningboardd[86344:34367] [com.apple.runningboard:job] Removed job for [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.563 Df runningboardd[86344:34367] [com.apple.runningboard:process] Removing assertions for terminated process: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.563 Df runningboardd[86344:34367] [com.apple.runningboard:assertion] Removed last relative-start-date-defining assertion for process app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:26.563 Df runningboardd[86344:3537b] [com.apple.runningboard:process] Notifying connection [osservice<com.apple.SpringBoard>:86341] that process [app<com.marcoiannello.GlassifAI((null))>:89901] exited with context <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>
+2026-10-13 04:07:26.563 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Workspace assertion invalidated: <NSError: 0x11fe57780; domain: RBSAssertionErrorDomain; code: 1; "Assertions were invalidated, count = 3.
+86344-86341-5054: invalidation reason: 1
+86344-86341-5053: invalidation reason: 1
+86344-86341-5071: invalidation reason: 1">
+2026-10-13 04:07:26.564 Df runningboardd[86344:319e0] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: none (role: None) (endowments: (null))
+2026-10-13 04:07:26.564 Df runningboardd[86344:342d5] [com.apple.runningboard:connection] Inheritance changeset: <RBSInheritanceChangeSet| gained:(null) lost:{(
+    <RBSInheritance| environment:(none) name:com.apple.frontboard.visibility origID:86344-86341-5053 0>,
+    <RBSInheritance| environment:(none) name:com.apple.boardservices.endpoint-injection origID:86344-86599-5061 payload 2292824116883850683>,
+    <RBSInheritance| environment:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default name:com.apple.frontboard.visibility origID:86344-86341-5071 payload 2259809546755494016>
+)}>
+2026-10-13 04:07:26.564 Df runningboardd[86344:3537b] [com.apple.runningboard:process] Notifying connection [osservice<com.apple.InputUI>:86599] that process [app<com.marcoiannello.GlassifAI((null))>:89901] exited with context <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>
+2026-10-13 04:07:26.564 Df runningboardd[86344:3537b] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: none (role: None) (endowments: (null))
+2026-10-13 04:07:26.564 Df SpringBoard[86341:31ab9] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, none-NotVisible
+2026-10-13 04:07:26.564 Df runningboardd[86344:34366] [com.apple.runningboard:process] XPC connection invalidated: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.565 Df runningboardd[86344:34366] [com.apple.runningboard:process] XPC connection invalidated: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.566 Df SpringBoard[86341:342e6] [com.apple.runningboard:process] Calling process death completion block for handle [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.566 Df SpringBoard[86341:31ab9] [com.apple.runningboard:monitor] Received state update for 89901 (app<com.marcoiannello.GlassifAI((null))>, none-NotVisible
+2026-10-13 04:07:26.566 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Process exited: <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>.
+2026-10-13 04:07:26.566 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Setting process task state to: Not Running
+2026-10-13 04:07:26.566 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:89901] Setting process visibility to: Unknown
+2026-10-13 04:07:26.567 Df SpringBoard[86341:348f0] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:89901] Invalidating workspace.
+2026-10-13 04:07:26.567 Df SpringBoard[86341:348f0] [com.apple.FrontBoard:ProcessWorkspace] Removing source registration for processHandle: [app<com.marcoiannello.GlassifAI((null))>:89901]
+2026-10-13 04:07:26.567 Df SpringBoard[86341:348f0] [com.apple.FrontBoard:ProcessScene] [0x11fec55c0:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Invalidated for connection: 0x119c82070.
+2026-10-13 04:07:26.567 Df SpringBoard[86341:348f0] [com.apple.FrontBoard:Process] Removing: <FBApplicationProcess: 0x11fe16100; app<com.marcoiannello.GlassifAI>:89901(v27537)>
+2026-10-13 04:07:26.567 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Workspace] Process exited: <FBApplicationProcess: 0x11fe16100; app<com.marcoiannello.GlassifAI>:89901(v27537)> -> <RBSProcessExitContext| specific, status:<RBSProcessExitStatus| domain:frontboard(10) code:force-quit(0xfbfbfbfb)>>
+2026-10-13 04:07:26.567 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Application process state changed for com.marcoiannello.GlassifAI: (null)
+2026-10-13 04:07:26.570 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:26.570 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:26.575 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ZStack] Resolved Stack (update(Switcher)) [
+    Highest: ⬇ ,
+    SystemAperture: ⬇ ,
+    HUD: ⬇ ,
+    TransientOverlayPresentation: ⬇ ,
+    Switcher: ownsHomeGesture; FGActive; homeAffordanceDrawingSuppressed: N->Y; suppressedBundles: com.marcoiannello.GlassifAI->(none); suppressedScenes: 1->0,
+    HomeScreen: BG->FGActive
+]
+2026-10-13 04:07:26.576 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] [coordinator] _removeSceneFromRecents didRemoveExternalForegroundApplicationSceneHandle pid:89901 scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default now:<empty>
+2026-10-13 04:07:26.586 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Removing parent scene.
+2026-10-13 04:07:26.587 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:26.587 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] No longer tracking: <FBScene: 0x119a70800; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:07:26.587 Df SpringBoard[86341:31970] [com.apple.SpringBoard:CompanionScenes] [sceneID:com.marcoiannello.GlassifAI-default] Host foreground state will update: NO
+2026-10-13 04:07:26.587 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] scene content state changed: notReady
+2026-10-13 04:07:26.587 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:notReady hasRule:YES wantsRule:NO
+2026-10-13 04:07:26.587 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] deferFromSBWindowScene: invalidate for <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default; pid: 89901>
+2026-10-13 04:07:26.587 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(unwanted, destroyed) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:26.588 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SceneSnapshots] <SBSceneSnapshotRequestor: 0x119e786c0> [sceneID:com.marcoiannello.GlassifAI-default] Requesting 2 snapshot(s) because the scene actually moved to the background
+2026-10-13 04:07:26.588 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] Created: <FBSceneSnapshotAction: 0x10a1eca80; sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:07:26.589 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Acquiring assertion targeting 89901 from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "FBSceneSnapshotAction:sceneID:com.marcoiannello.GlassifAI-default" ID:86344-86341-5082 target:89901 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SceneSnapshotAction" sourceEnvironment:"(null)">,
+	<RBSDurationAttribute| invalidationDuration:5.00 warningDuration:0.00 startPolicy:Fixed endPolicy:Invalidate>
+	]>
+2026-10-13 04:07:26.589 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] <BSCompoundAssertion:0x119a37de0> (SBApplicationAppProtectionAssistant: 0x119c1c940 - com.marcoiannello.GlassifAI) invalidate acq:0x119c9ab00 count:1
+2026-10-13 04:07:26.589 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] Informing <APSystemAppOutlet: 0x10776f6c0> that <APApplication: com.marcoiannello.GlassifAI> will become background as far as we know
+2026-10-13 04:07:26.590 Df SpringBoard[86341:31970] [com.apple.appprotection:framework] All scenes dismissed for <APApplication: com.marcoiannello.GlassifAI>
+2026-10-13 04:07:26.590 Df SpringBoard[86341:355ed] [com.apple.appprotection:framework] told auth provider com.marcoiannello.GlassifAI was dimissed. result:true err:(null)
+2026-10-13 04:07:26.616 Df SpringBoard[86341:3537f] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] com.marcoiannello.GlassifAI application state changed to <RBSProcessState| task:none debug:none>
+2026-10-13 04:07:26.626 Df SpringBoard[86341:3537f] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] Ignore becoming background for application without push registration
+2026-10-13 04:07:26.638 E  runningboardd[86344:319e0] [com.apple.runningboard:general] RBSStateCapture remove item called for untracked item <RBConnectionClient| 89901 name:app<com.marcoiannello.GlassifAI((null))> entitlements:<RBEntitlements| [
+			
+			]> inheritanceManager:<RBClientInheritanceManager| >>
+2026-10-13 04:07:26.641 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:NO contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:07:26.641 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:26.641 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:26.641 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:NO contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:07:26.641 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:26.642 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] <SBFullScreenSwitcherLiveContentOverlayCoordinator: 0x10a2c5a80> Removing SwitcherScene overlay for: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>, animated: NO
+2026-10-13 04:07:26.642 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Hosting policy changed for sceneID:com.marcoiannello.GlassifAI-default: Enforce -> NotApplicable
+2026-10-13 04:07:26.642 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SuspendedUnderLock] Suspension under lock policy updated for sceneID:com.marcoiannello.GlassifAI-default: NotApplicable
+2026-10-13 04:07:26.644 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:26.665 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Deactivating scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:26.665 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] Invalidating: <FBSceneSnapshotAction: 0x10a1eca80; sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:07:26.665 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default][1] Scene deactivated.
+2026-10-13 04:07:26.665 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Invalidating scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:26.665 Df SpringBoard[86341:3537f] [com.apple.FrontBoard:Common] Got response for <FBSceneSnapshotAction: 0x10a1eca80; sceneID:com.marcoiannello.GlassifAI-default>: <NSError: 0x119ca0030; domain: BSActionErrorDomain; code: 6 ("anulled")>
+2026-10-13 04:07:26.665 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default][1] Scene invalidated.
+2026-10-13 04:07:26.666 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Ignoring update for invalidated scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:26.666 Df SpringBoard[86341:31970] [com.apple.SpringBoard:CompanionScenes] [sceneID:com.marcoiannello.GlassifAI-default] Host scene invalidated, unregistering all presentations.
+2026-10-13 04:07:26.666 Df SpringBoard[86341:31970] [com.apple.SpringBoard:CompanionScenes] [sceneID:com.marcoiannello.GlassifAI-default] Component invalidated, unregistering all presentations.
+2026-10-13 04:07:26.667 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] Ignoring update for invalidated scene: (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:26.667 Df SpringBoard[86341:31970] [com.apple.UIKit:KBProxyForwarding] <StateMachine:0x119d7bcc0> Presentation environment invalidated: <_UISceneKeyboardProxyLayerForwardingPresentationScene: 0x1139e76c0> Tracking scene: <FBScene: 0x119a70800; (null):sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:07:26.668 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Update failed: <NSError: 0x119ca3990; domain: FBSceneErrorDomain; code: 1 ("operation-failed"); "Scene update failed."> {
+    NSUnderlyingError = <NSError: 0x119cf0000; domain: FBWorkspace; code: 1; "Scene client is invalid.">;
+}
+2026-10-13 04:07:26.668 E  SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Update failed: <NSError: 0x119ca3990; domain: FBSceneErrorDomain; code: 1 ("operation-failed"); "Scene update failed."> {
+    NSUnderlyingError = <NSError: 0x119c82ee0; domain: FBWorkspace; code: 1; "Scene client is invalid.">;
+}
+2026-10-13 04:07:28.078 Df SpringBoard[86341:31970] [com.apple.SpringBoard:StatusBarish] Verify background audio activity for com.marcoiannello.GlassifAI, Recording: 0
+2026-10-13 04:07:28.370 Df SpringBoard[86341:3537d] [com.apple.FrontBoard:Common] [FBSystemService][0xbdf4] Received request to open "com.marcoiannello.GlassifAI" from CoreSimulatorBr:86371.
+2026-10-13 04:07:28.370 Df SpringBoard[86341:3537d] [com.apple.FrontBoard:Common] [FBSystemService][0xbdf4] Activation request for com.marcoiannello.GlassifAI contained LSCacheGUID 6B8402F0-89F1-431C-A7E6-B26AEC06362C and LSSequenceNumber 728.
+2026-10-13 04:07:28.370 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBSystemService][0xbdf4] Activation request for com.marcoiannello.GlassifAI will wait 10.00s for app availability, with retry every 2.00s.
+2026-10-13 04:07:28.370 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBSystemService][0xbdf4] Attempting activation of com.marcoiannello.GlassifAI with {UUID: 6B8402F0-89F1-431C-A7E6-B26AEC06362C, Sequence: 728} vs {UUID: 6B8402F0-89F1-431C-A7E6-B26AEC06362C, Sequence: 728}
+2026-10-13 04:07:28.370 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Workspace] Received trusted open application request for "com.marcoiannello.GlassifAI" from <FBProcess: 0x107678c00; osservice<com.apple.CoreSimulator.bridge>:86371(v25918)>.
+2026-10-13 04:07:28.371 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Executing request: <SBMainWorkspaceTransitionRequest: 0x119c74be0; eventLabel: OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371); display: Main; source: FBSystemService>
+2026-10-13 04:07:28.371 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Common] [FBWorkspaceEvent] Executing: <FBWorkspaceEvent: 0x119e79220; OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371)>
+2026-10-13 04:07:28.372 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [SwitcherOrientation] outSwitcherOrientation: portrait (1), outElementsOrientations: {
+    "sceneID:com.marcoiannello.GlassifAI-default" = 1;
+}
+2026-10-13 04:07:28.372 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Transaction] Running <SBAppToAppWorkspaceTransaction: 0x11fe16700> for transition request:
+<SBMainWorkspaceTransitionRequest: 0x119c74be0; eventLabel: OpenApplication(sceneID:com.marcoiannello.GlassifAI-default)ForRequester(CoreSimulatorBr.86371); display: Main; source: FBSystemService> {
+    applicationContext = <SBWorkspaceApplicationSceneTransitionContext: 0x115e4ef80; background: NO> entities = {
+        SBLayoutRolePrimary = <SBDeviceApplicationSceneEntity: 0x1139eb5c0; ID: sceneID:com.marcoiannello.GlassifAI-default; layoutRole: primary>;
+    };
+}
+2026-10-13 04:07:28.372 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.372 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.373 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Generating initialization context on main thread for: com.marcoiannello.GlassifAI
+2026-10-13 04:07:28.373 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] Asked to bootstrap a new process with identity: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:28.373 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] Creating process (sync=true) with identity: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:28.373 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] Created <FBWorkspace: 0x119c75c20; <FBApplicationProcess: 0x11fe15e00; app<com.marcoiannello.GlassifAI>:<invalid>>>
+2026-10-13 04:07:28.373 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] Bootstrapping app<com.marcoiannello.GlassifAI> with intent foreground-interactive
+2026-10-13 04:07:28.375 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Acquiring assertion targeting app<com.marcoiannello.GlassifAI((null))> from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "FBApplicationProcess" ID:86344-86341-5087 target:app<com.marcoiannello.GlassifAI((null))> attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Resume" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"Visibility" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-UIFocal" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Foreground" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableBootstrapping" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.pagein-prefetching" name:"LaunchPrefetch" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:28.375 E  runningboardd[86344:319e0] [com.apple.runningboard:assertion] Multiple RBSRunningReasonAttribute provided: 10000 vs 20838. First one wins, but client should be fixed for assertion 86344-86341-5087 (target:app<com.marcoiannello.GlassifAI((null))>)
+2026-10-13 04:07:28.375 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Assertion 86344-86341-5087 (target:app<com.marcoiannello.GlassifAI((null))>) will be created as active
+2026-10-13 04:07:28.376 Df runningboardd[86344:3537b] [com.apple.runningboard:job] Creating and launching job for: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:28.376 Df runningboardd[86344:3537b] [com.apple.runningboard:general] _mutateContextIfNeeded called for com.marcoiannello.GlassifAI
+2026-10-13 04:07:28.376 Df runningboardd[86344:34367] [com.apple.DynamicPrefetching:default] start_scenario: recording pageins for bundleid "com.marcoiannello.GlassifAI" scenario "Launch"
+2026-10-13 04:07:28.376 Df runningboardd[86344:34367] [com.apple.DynamicPrefetching:default] start_scenario: Prefetching clean profile for bundleid "com.marcoiannello.GlassifAI" scenario "Launch"
+2026-10-13 04:07:28.376 Df runningboardd[86344:3537b] [com.apple.runningboard:job] app<com.marcoiannello.GlassifAI((null))> Looking up container path with persona (null) using container identifier 'com.marcoiannello.GlassifAI'
+2026-10-13 04:07:28.377 Df runningboardd[86344:34366] [com.apple.runningboard:job_oversize] 'app<com.marcoiannello.GlassifAI((null))>' Constructed job description:
+<dictionary: 0x1095245a0> { count = 23, transaction: 0, voucher = 0x0, contents =
+	"ProcessType" => <string: 0x109b28750> { string cache = 0x0, length = 3, contents = "App" }
+	"EnableTransactions" => <bool: 0x222423a90>: false
+	"_ManagedBy" => <string: 0x109b2b2d0> { string cache = 0x0, length = 22, contents = "com.apple.runningboard" }
+	"RootedSimulatorPath" => <bool: 0x222423a70>: true
+	"StandardOutPath" => <string: 0x109b2bea0> { string cache = 0x0, length = 69, contents = "/Users/runner/work/GlassifAI/GlassifAI/screenshots/logs/tasks.out.txt" }
+	"CFBundleIdentifier" => <string: 0x109b28720> { string cache = 0x0, length = 27, contents = "com.marcoiannello.GlassifAI" }
+	"_ResourceCoalition" => <string: 0x109b2bab0> { string cache = 0x0, length = 40, contents = "app<com.marcoiannello.GlassifAI((null))>" }
+	"_POSIXSpawnTelemetryPageIn" => <bool: 0x222423a70>: true
+	"ThrottleInterval" => <int64: 0x84f7dd4b42ecbe4f>: 2147483647
+	"StandardErrorPath" => <string: 0x109b2bb40> { string cache = 0x0, length = 69, contents = "/Users/runner/work/GlassifAI/GlassifAI/screenshots/logs/tasks.err.txt" }
+	"MachServices" => <dictionary: 0x109527960> { count = 0, transaction: 0, voucher = 0x0, contents =
+	}
+	"EnablePressuredExit" => <bool: 0x222423a90>: false
+	"InitialTaskRole" => <int64: 0x84f7dd48bd1341bf>: 1
+	"UserName" => <string: 0x109b2b090> { string cache = 0x0, length = 6, contents = "mobile" }
+	"EnvironmentVariables" => <dictionary: 0x1095247e0> { count = 5, transaction: 0, voucher = 0x0, contents =
+		"TMPDIR" => <string: 0x109b288d0> { string cache = 0x0, length = 164, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1/tmp" }
+		"DYLD_FRAMEWORK_PATH" => <string: 0x109b29e90> { string cache = 0x0, length = 193, contents = "/Users/runner/work/GlassifAI/GlassifAI/build-tests/Build/Products/Debug-iphonesimulator/PackageFrameworks:/Users/runner/work/GlassifAI/GlassifAI/build-tests/Build/Products/Debug-iphonesimulator" }
+		"HOME" => <string: 0x109b286c0> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+		"CFFIXED_USER_HOME" => <string: 0x109b2a9a0> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+		"_DYLD_CLOSURE_HOME" => <string: 0x109b2ba20> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+	}
+	"_AdditionalProperties" => <dictionary: 0x109524900> { count = 1, transaction: 0, voucher = 0x0, contents =
+		"RunningBoard" => <dictionary: 0x109526400> { count = 3, transaction: 0, voucher = 0x0, contents =
+			"Managed" => <bool: 0x222423a70>: true
+			"RunningBoardLaunchedIdentity" => <dictionary: 0x109524660> { count = 2, transaction: 0, voucher = 0x0, contents =
+				"TYPE" => <int64: 0x84f7dd48bd1341a7>: 2
+				"EAI" => <string: 0x109b2b3c0> { string cache = 0x0, length = 27, contents = "com.marcoiannello.GlassifAI" }
+			}
+			"RunningBoardLaunched" => <bool: 0x222423a70>: true
+		}
+	}
+	"ExitTimeOut" => <int64: 0x84f7dd48bd1341bf>: 1
+	"Label" => <string: 0x109b2b600> { string cache = 0x0, length = 61, contents = "UIKitApplication:com.marcoiannello.GlassifAI[532b][rb-legacy]" }
+	"MaterializeDatalessFiles" => <bool: 0x222423a70>: true
+	"SandboxContainer" => <string: 0x109b2b2a0> { string cache = 0x0, length = 160, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Data/Application/2EAF0CD1-A30E-4990-8C25-44AC0BABC3E1" }
+	"_LaunchType" => <int64: 0x84f7dd48bd1341af>: 3
+	"ProgramArguments" => <array: 0x109b2a7f0> { count = 3, capacity = 10, contents =
+		0: <string: 0x109b28ff0> { string cache = 0x0, length = 186, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Bundle/Application/3AE03E05-DB9C-4BB3-93ED-5A9C50FC39C7/GlassifAI.app/GlassifAI" }
+		1: <string: 0x109b29da0> { string cache = 0x0, length = 19, contents = "-AutoLoomScreenshot" }
+		2: <string: 0x109b29c50> { string cache = 0x0, length = 5, contents = "tasks" }
+	}
+	"Program" => <string: 0x109b28e70> { string cache = 0x0, length = 186, contents = "/Users/runner/Library/Developer/CoreSimulator/Devices/F916B711-E93C-4CDE-913E-1795E72EAC82/data/Containers/Bundle/Application/3AE03E05-DB9C-4BB3-93ED-5A9C50FC39C7/GlassifAI.app/GlassifAI" }
+}
+2026-10-13 04:07:28.381 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:07:28.381 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:28.381 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] init without scene; waiting for scene creation
+2026-10-13 04:07:28.382 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:28.382 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:notReady hasRule:NO wantsRule:NO
+2026-10-13 04:07:28.382 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:28.382 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] <SBFullScreenSwitcherLiveContentOverlayCoordinator: 0x10a2c5a80> Adding SwitcherScene overlay for: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>, animated: NO
+2026-10-13 04:07:28.390 Df runningboardd[86344:3537b] [com.apple.runningboard:general] Full encoding handle [app<com.marcoiannello.GlassifAI((null))>:91308], with data e8157e22000164ac, and pid 91308
+2026-10-13 04:07:28.390 Df runningboardd[86344:3537b] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:91308] Memory Limits: active 0 inactive 0
+ <RBJetsamProperties| tasklimit=0
+(null)>
+2026-10-13 04:07:28.390 Df runningboardd[86344:3537b] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:91308] This process will be managed.
+2026-10-13 04:07:28.390 E  runningboardd[86344:3537b] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:91308] Memorystatus failed with unexpected error: Operation not permitted (1)
+2026-10-13 04:07:28.390 Df runningboardd[86344:3537b] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:91308] is not freezer eligible, disabling freezing.
+2026-10-13 04:07:28.390 E  runningboardd[86344:3537b] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:91308] Memorystatus failed with unexpected error: Invalid argument (22)
+2026-10-13 04:07:28.391 E  runningboardd[86344:3537b] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:91308] Memorystatus failed with unexpected error: Operation not permitted (1)
+2026-10-13 04:07:28.391 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] Now tracking process: [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:28.391 Df runningboardd[86344:3537b] [com.apple.runningboard:assertion] [app<com.marcoiannello.GlassifAI((null))>:91308]: applying persistent assertion '86344-86341-5087 (target:app<com.marcoiannello.GlassifAI((null))>)'
+2026-10-13 04:07:28.391 Df runningboardd[86344:3537b] [com.apple.runningboard:assertion] Using default underlying assertion for app: [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:28.391 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [app<com.marcoiannello.GlassifAI((null))>:91308] with description <RBSAssertionDescriptor| "RB Underlying Assertion" ID:86344-86344-5088 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.underlying" name:"defaultUnderlyingAppAssertion" sourceEnvironment:"(null)">,
+	<RBSAcquisitionCompletionAttribute| policy:AfterApplication>
+	]>
+2026-10-13 04:07:28.391 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] Assertion 86344-86344-5088 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as active
+2026-10-13 04:07:28.392 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:91308] Bootstrap success!
+2026-10-13 04:07:28.392 Df runningboardd[86344:319e0] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:28.392 Df runningboardd[86344:319e0] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:28.392 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ZStack] _updatePreferences <Switcher>: {
+    activationPolicyForParticipantsBelow: AtMostBG;
+    homeAffordanceDrawingSuppression: Default;
+    associatedSceneIdentifiersToSuppressInSystemAperture: (
+        sceneID:com.marcoiannello.GlassifAI-default
+    );
+    associatedBundleIdentifiersToSuppressInSystemAperture: (
+        com.marcoiannello.GlassifAI
+    );
+    allowsDimmingWhenForegroundInactive: No;
+}
+2026-10-13 04:07:28.392 Df SpringBoard[86341:342e6] [com.apple.runningboard:process] Hit the server for a process handle 8157e22000164ac that resolved to: [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:28.392 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:91308] Setting process task state to: Running
+2026-10-13 04:07:28.393 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SystemApertureViewController] Invalidating promoted elements with coversheet suppression NO liquid detection suppression NO proximity reader suppression NO system chrome suppression NO bundleIDs {(
+    "com.marcoiannello.GlassifAI"
+)} sceneIds {(
+    "sceneID:com.marcoiannello.GlassifAI-default"
+)}
+2026-10-13 04:07:28.393 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ZStack] Resolved Stack (update(Switcher)) [
+    Highest: ⬇ ,
+    SystemAperture: ⬇ ,
+    HUD: ⬇ ,
+    TransientOverlayPresentation: ⬇ ,
+    Switcher: ownsHomeGesture; FGActive; homeAffordanceDrawingSuppressed: Y->N; suppressedBundles: (none)->com.marcoiannello.GlassifAI; suppressedScenes: 0->1,
+    HomeScreen: FGActive->BG
+]
+2026-10-13 04:07:28.393 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:91308] Setting process visibility to: Foreground
+2026-10-13 04:07:28.393 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] Registering event dispatcher after bootstrap
+2026-10-13 04:07:28.393 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] Initial launch state: FV-Focal[100].
+2026-10-13 04:07:28.393 Df SpringBoard[86341:342e6] [com.apple.runningboard:process] Starting death monitoring for handle [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:28.393 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:com.marcoiannello.GlassifAI-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+2026-10-13 04:07:28.393 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:com.marcoiannello.GlassifAI-default]
+2026-10-13 04:07:28.393 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Dark displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x119bc8c80; sceneID: sceneID:com.marcoiannello.GlassifAI-default; scenePointer: 0x0>
+2026-10-13 04:07:28.394 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:Process] Adding: <FBApplicationProcess: 0x11fe15e00; app<com.marcoiannello.GlassifAI>:91308(v28029)>
+2026-10-13 04:07:28.394 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.394 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Source: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.394 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] com.marcoiannello.GlassifAI requiresPreflight: false false (null)
+2026-10-13 04:07:28.395 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] com.marcoiannello.GlassifAI not running preflight as not restricted
+2026-10-13 04:07:28.395 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBSceneReadySwitcherModifierEvent: 0x11fc57c90; type: SceneReady; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main> {
+    environment = main;
+    centerConfiguration = undefined;
+    preferredDisplayOrdinal = 0;
+    continuousExposeIdentifier = com.marcoiannello.GlassifAI;
+    layoutItems = {
+        primary = <SBDisplayItem: 0x116a42a40; type: App; bundleIdentifier: com.marcoiannello.GlassifAI; uniqueIdentifier: sceneID:com.marcoiannello.GlassifAI-default>;
+    }
+}>
+2026-10-13 04:07:28.396 Df runningboardd[86344:3537b] [com.apple.runningboard:general] [app<com.marcoiannello.GlassifAI((null))>:91308] reported to RB as running
+2026-10-13 04:07:28.396 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:91308] Resuming task.
+2026-10-13 04:07:28.399 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.399 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.399 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] didCreateScene
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: TCCs] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [preflight:SceneHostedPreflight] [Preflighter: ScreenTime] com.marcoiannello.GlassifAI requires preflight: false
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [preflight:PreflightSceneExtension] sceneID:com.marcoiannello.GlassifAI-default: returning requiresPreflight FALSE as there's no activePreflightSource
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:com.marcoiannello.GlassifAI-default] tearing down vc for overlay: 0x0
+2026-10-13 04:07:28.400 Df SpringBoard[86341:355ed] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] <BSCompoundAssertion:0x119a37de0> (SBApplicationAppProtectionAssistant: 0x119c1c940 - com.marcoiannello.GlassifAI) acquire for reason:NULL scene acq:0x119e4eb80 count:1
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppProtection] Informing <APSystemAppOutlet: 0x10776f6c0> that <APApplication: com.marcoiannello.GlassifAI> will become foreground visible
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [com.apple.appprotection:framework] scene will become FG visible for <APApplication: com.marcoiannello.GlassifAI>
+2026-10-13 04:07:28.400 Df SpringBoard[86341:31970] [com.apple.appprotection:framework] auth result for <APApplication: com.marcoiannello.GlassifAI>: true (null)
+2026-10-13 04:07:28.401 Df SpringBoard[86341:31970] [com.apple.UIKit:KBProxyForwarding] <StateMachine:0x119c6bb40> Created with presentation environment: <0x115d74cc0:<_UISceneKeyboardProxyLayerForwardingPresentationScene: 0x115d74cc0> Tracking scene: <FBScene: 0x119a70500; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default>>
+2026-10-13 04:07:28.401 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:com.marcoiannello.GlassifAI-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+2026-10-13 04:07:28.401 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] orientationMode=dynamic for <SBTraitsSceneParticipantDelegate: 0x119c752c0> (
+    "com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default"
+)
+2026-10-13 04:07:28.401 Df SpringBoard[86341:31970] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:com.marcoiannello.GlassifAI-default]
+2026-10-13 04:07:28.401 Df runningboardd[86344:342d5] [com.apple.runningboard:assertion] Successfully acquired underlying assertion for [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:28.402 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Dark displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x119bc8c80; sceneID: sceneID:com.marcoiannello.GlassifAI-default; scenePointer: 0x119a70500>
+2026-10-13 04:07:28.402 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] No capture application found for the com.marcoiannello.GlassifAI, launchCameraCapture: NO, isCaptureApplication: NO
+2026-10-13 04:07:28.402 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Process] Asked to bootstrap a new process with identity: app<com.marcoiannello.GlassifAI((null))>
+2026-10-13 04:07:28.403 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Process] Did not create a new process: A process for app<com.marcoiannello.GlassifAI((null))> already exists.
+2026-10-13 04:07:28.403 Df SpringBoard[86341:31970] [com.apple.FrontBoard:ProcessScene] [0x11fe05f80:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Initialized with connection: 0x11fe55320.
+2026-10-13 04:07:28.403 Df SpringBoard[86341:31970] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] Registered new scene: <FBWorkspaceScene: 0x11fe05f80; (FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default> (fromRemnant = 0)
+2026-10-13 04:07:28.403 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default][1] Scene activated.
+2026-10-13 04:07:28.403 Df SpringBoard[86341:3537d] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] Workspace interruption policy did change: reconnect
+2026-10-13 04:07:28.403 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] Now tracking: <FBScene: 0x119a70500; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default>
+2026-10-13 04:07:28.403 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] [sceneID:com.marcoiannello.GlassifAI-default] Setting deactivation reasons to: 'systemAnimation' for reason: scene settings update - settings are eligible for deactivation reasons.
+2026-10-13 04:07:28.403 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "com.apple.frontboard.after-life.interrupted" ID:86344-86341-5089 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"AfterLife-Interrupted" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:28.403 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Assertion 86344-86341-5089 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as inactive as originator process has not exited
+2026-10-13 04:07:28.403 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] scene content state changed: preparing
+2026-10-13 04:07:28.404 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:preparing hasRule:NO wantsRule:YES
+2026-10-13 04:07:28.404 E  SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] invalid pid for scene sceneID:com.marcoiannello.GlassifAI-default, returning nil target
+2026-10-13 04:07:28.404 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(wanted, but focusTarget is nil) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:28.404 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessScene] [0x11fe05f80:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Scene lifecycle state did change: Foreground
+2026-10-13 04:07:28.404 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessScene] [0x11fe05f80:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Scene state did change: FV-Focal[100].
+2026-10-13 04:07:28.405 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "FBWorkspace (FV-Focal[100])" ID:86344-86341-5090 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Resume" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"Visibility" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-UIFocal" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Foreground" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:28.405 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Assertion 86344-86341-5090 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as active
+2026-10-13 04:07:28.407 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:91308] Set darwin role to: UserInteractiveFocal
+2026-10-13 04:07:28.407 E  runningboardd[86344:3537b] [com.apple.runningboard:process] [app<com.marcoiannello.GlassifAI((null))>:91308] Error 1 setting Carplay mode to 0: Operation not permitted
+2026-10-13 04:07:28.407 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] [app<com.marcoiannello.GlassifAI((null))>:91308] visiblity is yes
+2026-10-13 04:07:28.407 Df SpringBoard[86341:342e6] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] Workspace state did change: XX-None[0] --> FV-Focal[100] (assertion acquired).
+2026-10-13 04:07:28.407 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBTransitionSwitcherModifierEvent: 0x119ba4000; type: MainTransition; transitionID: 377D300F-57BD-4C22-8C4F-BBD22BCF6AAB; phase: Prepare; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+)}; morphingPIPLayoutRole: undefined; previousDesktopItems: {(
+)}>
+2026-10-13 04:07:28.408 Df runningboardd[86344:3537c] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:28.408 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] handle response:
+<SBSwitcherModifierEventResponse: 0x119f9a130> {
+    <SBSwitcherModifierEventResponse: 0x119f9b8d0> {
+	    <SBSwitcherModifierEventResponse: 0x119f9ab20> {
+		    <SBTimerEventSwitcherEventResponse: 0x119f99710; delay: 0.240000; reason: kSBTransitionModifierInvalidateAsyncRenderingReason>;
+		    <SBInvalidateAdjustedAppLayoutsSwitcherEventResponse: 0x119f9a760>;
+		};
+	    <SBTimerEventSwitcherEventResponse: 0x119f99e90; delay: 0.060000; reason: kSBFullScreenToHomeCornerRadiusDelayReason>;
+	};
+    <SBSwitcherModifierEventResponse: 0x119f9aeb0> {
+	    <SBUpdateLayoutSwitcherEventResponse: 0x119c68280; updateVisibleItems; layout; style; mode: None>;
+	    <SBRequestFolderSnapshotsSwitcherEventResponse: 0x119f9a070; snapshotRequested: YES>;
+	    <SBIconOverlayVisibilitySwitcherEventResponse: 0x119c6a300; visible: YES; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+	    <SBIconViewVisibilitySwitcherEventResponse: 0x119860
+2026-10-13 04:07:28.426 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Icon] Creating ISIcon on main thread for app com.marcoiannello.GlassifAI
+2026-10-13 04:07:28.429 Df SpringBoard[86341:3537f] [com.apple.UserNotifications:Settings] [com.marcoiannello.GlassifAI] Foreground app will not request ephemeral notifications
+2026-10-13 04:07:28.429 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBTransitionSwitcherModifierEvent: 0x11fdfc480; type: MainTransition; transitionID: 377D300F-57BD-4C22-8C4F-BBD22BCF6AAB; phase: Animate; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+)}; morphingPIPLayoutRole: undefined; previousDesktopItems: {(
+)}>
+2026-10-13 04:07:28.439 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Application process state changed for com.marcoiannello.GlassifAI: <SBApplicationProcessState: 0x115c49b00; pid: 91308; taskState: Running; visibility: Foreground>
+2026-10-13 04:07:28.442 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Returning cached initialization context for com.marcoiannello.GlassifAI
+2026-10-13 04:07:28.446 Df SpringBoard[86341:3537f] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] com.marcoiannello.GlassifAI application state changed to <RBSProcessState| task:running-active debug:none endowmentNamespace:[
+	com.apple.frontboard.visibility
+	]>
+2026-10-13 04:07:28.447 Df SpringBoard[86341:3537f] [com.apple.UserNotifications:RemoteNotifications] [com.marcoiannello.GlassifAI] Ignore becoming foreground for application without push registration
+2026-10-13 04:07:28.493 Df SpringBoard[86341:355f6] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:28.657 Df SpringBoard[86341:31970] [com.apple.UIKit:SceneDeactivation] [sceneID:com.marcoiannello.GlassifAI-default] Setting deactivation reasons to: '(none)' for reason: updateAllScenesForBand - Assertion removed.
+2026-10-13 04:07:28.897 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBTransitionSwitcherModifierEvent: 0x11fdfc180; type: MainTransition; transitionID: 377D300F-57BD-4C22-8C4F-BBD22BCF6AAB; phase: Complete; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+)}; morphingPIPLayoutRole: undefined; previousDesktopItems: {(
+)}>
+2026-10-13 04:07:28.898 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] handle response:
+<SBSwitcherModifierEventResponse: 0x115d742d0> {
+    <SBPreemptAnimationSwitcherEventResponse: 0x115d768b0>;
+    <SBSwitcherModifierEventResponse: 0x115d74930> {
+	    <SBInvalidateAdjustedAppLayoutsSwitcherEventResponse: 0x115d75020>;
+	    <SBSwitcherModifierEventResponse: 0x115d767f0> {
+		    <SBRequestFolderSnapshotsSwitcherEventResponse: 0x115d74510; snapshotRequested: NO>;
+		    <SBIconOverlayVisibilitySwitcherEventResponse: 0x119ce3240; visible: NO; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+		    <SBIconViewVisibilitySwitcherEventResponse: 0x119863200; visible: YES; animationSettings: 0x0; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+		    <SBMatchMoveToIconViewSwitcherEventResponse: 0x119f94fc0; active: NO; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main>>;
+		};
+	};
+}
+2026-10-13 04:07:31.541 Df SpringBoard[86341:355ee] [com.apple.SpringBoard:Common] Fetching initialization context for: com.marcoiannello.GlassifAI
+2026-10-13 04:07:31.541 Df SpringBoard[86341:355ee] [com.apple.SpringBoard:Common] Returning cached initialization context for com.marcoiannello.GlassifAI
+2026-10-13 04:07:31.541 Df SpringBoard[86341:355ee] [com.apple.SpringBoard:Common] Returning cached initialization context for com.marcoiannello.GlassifAI
+2026-10-13 04:07:31.616 Df runningboardd[86344:3537b] [com.apple.runningboard:connection] Setting client for [app<com.marcoiannello.GlassifAI((null))>:91308] as ready
+2026-10-13 04:07:31.616 Df SpringBoard[86341:355ee] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] Connection established.
+2026-10-13 04:07:31.616 Df SpringBoard[86341:355ee] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] created proxy of <BSXPCServiceConnectionProxy<FBSWorkspaceServiceServerInterface>: 0x119cfe500>
+2026-10-13 04:07:31.616 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:Process] [app<com.marcoiannello.GlassifAI>:91308] Connection to remote process established!
+2026-10-13 04:07:31.617 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessScene] [0x11fe05f80:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Sending scene action [Create Active][0x64c7] to process 0x11fe15e00 (watchdog: 596.78s)
+2026-10-13 04:07:31.617 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Client process connected: [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:31.617 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessScene] [0x11fe05f80:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Sending scene create.
+2026-10-13 04:07:31.617 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ResourceConditions] Considering foreground scene <FBScene: 0x119a70500; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default> with handle=[app<com.marcoiannello.GlassifAI((null))>:91308] (isApp=YES) and parentScene=(null)
+2026-10-13 04:07:31.617 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ResourceConditions] Setting resource conditions for scene=<FBScene: 0x119a70500; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default> to memoryPressure=normal
+2026-10-13 04:07:31.617 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Host window scene changed for sceneID:com.marcoiannello.GlassifAI-default: <SBWindowScene: 0x109f10000; scene: "<FBSScene: 0x109ebd400; identifier: SB-main>"; persistentIdentifier: SB-main>
+2026-10-13 04:07:31.617 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SuspendedUnderLock] Started observing hosted policy component for sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:31.618 Df SpringBoard[86341:31ab9] [com.apple.FrontBoard:ProcessWorkspace] received incoming handshake : process=<FBApplicationProcess: 0x11fe15e00; app<com.marcoiannello.GlassifAI>:91308(v28029); taskState: Running; visibility: Foreground> remote=<BSAuditToken: 0x119d78680; AUID: 501; EUID: 501; EGID: 20; RUID: 501; RGID: 20; PID: 91308; ASID: 100014; PIDVersion: 163881> remnants=0
+2026-10-13 04:07:31.618 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] [coordinator] didAddExternalForegroundApplicationSceneHandle pid:91308 scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default now:<recentPIDs: [91308]; recentSceneIdentityTokensByPID: {91308: [com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default]}>
+2026-10-13 04:07:31.619 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [app<com.marcoiannello.GlassifAI((null))>:91308] with description <RBSAssertionDescriptor| "Shared Background Assertion 0 for com.marcoiannello.GlassifAI" ID:86344-91308-5097 target:91308 attributes:[
+	<RBSLegacyAttribute| requestedReason:FinishTask reason:FinishTask flags:( PreventTaskSuspend )>,
+	<RBSAcquisitionCompletionAttribute| policy:AfterValidation>
+	]>
+2026-10-13 04:07:31.619 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(clientConnected) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:preparing hasRule:NO wantsRule:YES
+2026-10-13 04:07:31.619 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] deferFromSBWindowScene: adding rule for <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default; pid: 91308>
+2026-10-13 04:07:31.619 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(clientConnected) outcome:(wanted, created) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:31.619 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Assertion 86344-91308-5097 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as inactive as start-time-defining assertions exist
+2026-10-13 04:07:31.619 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Application process state changed for com.marcoiannello.GlassifAI: <SBApplicationProcessState: 0x115c49c80; pid: 91308; taskState: Running; visibility: Foreground>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25230-com.apple.SpringBoard.SceneWorkspace.PrototypeTools] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24840-com.apple.SpringBoard.SceneWorkspace.DruidUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d249c0-com.apple.SpringBoard.SceneWorkspace.FullKeyboardAccessUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25410-com.apple.SpringBoard.SceneWorkspace.SiriHUD] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25140-com.apple.SpringBoard.SceneWorkspace.AudioHUD] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24f60-com.apple.SpringBoard.SceneWorkspace.PerfPowerHUD] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d248d0-com.apple.SpringBoard.SceneWorkspace.InputUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25320-com.apple.SpringBoard.SceneWorkspace.GlitchHUD] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24ba0-com.apple.SpringBoard.SceneWorkspace.AssistiveTouchUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25500-com.apple.SpringBoard.SceneWorkspace.AssistantIslandStageCoordinator] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24780-com.apple.SpringBoard.SceneWorkspace.OverlayUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24ab0-com.apple.SpringBoard.SceneWorkspace.VoiceControlUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24d80-com.apple.SpringBoard.SceneWorkspace.EyedropperUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d25050-com.apple.SpringBoard.SceneWorkspace.InternalPerfPowerHUD] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24e70-com.apple.SpringBoard.SceneWorkspace.Moments] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.620 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x109d24c90-com.apple.SpringBoard.SceneWorkspace.AccessibilityUIServerUI] client did connect with handshake: <FBSceneClientHandshake:0x115c4a440; [app<com.marcoiannello.GlassifAI((null))>:91308] remnants=0>
+2026-10-13 04:07:31.633 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] deliveryChainDidUpdate: scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default in windowScene:SB-main
+2026-10-13 04:07:31.666 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [app<com.marcoiannello.GlassifAI((null))>:91308] with description <RBSAssertionDescriptor| "app_launch_measurement: pageins recording enabled" ID:86344-91308-5098 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.pagein-prefetching" name:"LaunchPrefetch" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:31.666 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Assertion 86344-91308-5098 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as active
+2026-10-13 04:07:31.666 Df runningboardd[86344:3537c] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:31.667 Df SpringBoard[86341:355ee] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:31.689 Df runningboardd[86344:3537c] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "FBApplicationProcess" ID:86344-86599-5099 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Suspend" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-NonUI" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Active" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableBootstrapping" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:31.689 Df runningboardd[86344:3537c] [com.apple.runningboard:ttl] Assertion 86344-86599-5099 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as active
+2026-10-13 04:07:31.691 Df runningboardd[86344:3537c] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "FBWorkspaceDomain: injecting saved endowment" ID:86344-86599-5100 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"WorkspaceEndpointInjection" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:31.691 Df runningboardd[86344:3537c] [com.apple.runningboard:ttl] Assertion 86344-86599-5100 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as active
+2026-10-13 04:07:31.692 Df runningboardd[86344:34366] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:31.692 Df runningboardd[86344:319e0] [com.apple.runningboard:ttl] Attempting to rename power assertion 65535 for target app<com.marcoiannello.GlassifAI((null))> to app<com.marcoiannello.GlassifAI((null))>;86344-86341-5087:FBApplicationProcess;86344-86599-5099:FBApplicationProcess
+2026-10-13 04:07:31.693 Df runningboardd[86344:34366] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2651198289782368205>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:31.697 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "com.apple.frontboard.after-life.interrupted" ID:86344-86599-5102 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"AfterLife-Interrupted" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:31.697 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Assertion 86344-86599-5102 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as inactive as originator process has not exited
+2026-10-13 04:07:31.698 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308] from originator [osservice<com.apple.InputUI>:86599] with description <RBSAssertionDescriptor| "FBWorkspace (BG-Active[40])" ID:86344-86599-5103 target:91308 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableLPRunReason-Suspend" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableRole-NonUI" sourceEnvironment:"(null)">,
+	<RBSDomainAttribute| domain:"com.apple.frontboard" name:"SuspendableJetsamPriority-Active" sourceEnvironment:"(null)">
+	]>
+2026-10-13 04:07:31.699 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Assertion 86344-86599-5103 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) will be created as active
+2026-10-13 04:07:31.703 Df SpringBoard[86341:31ab9] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:31.707 Df runningboardd[86344:3537b] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2651198289782368205>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>
+)})
+2026-10-13 04:07:31.708 Df SpringBoard[86341:355ed] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:32.201 Df SpringBoard[86341:31ab9] [com.apple.UserNotifications:Connections] [com.marcoiannello.GlassifAI] Getting pending notification requests
+2026-10-13 04:07:32.374 Df SpringBoard[86341:355ed] [com.apple.FrontBoard:ProcessScene] [0x11fe05f80:(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Scene action [Create Active][0x64c7] completed with success: 1
+2026-10-13 04:07:32.374 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] scene content state changed: ready
+2026-10-13 04:07:32.375 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] Acquiring assertion targeting [app<com.marcoiannello.GlassifAI((null))>:91308](UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default) from originator [osservice<com.apple.SpringBoard>:86341] with description <RBSAssertionDescriptor| "injecting  inherited from 'UIScene:com.apple.frontboard.systemappservices/SSK.primary.root(mainDisplay):SB-main'" ID:86344-86341-5104 target:91308<UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default> attributes:[
+	<RBSHereditaryGrant| endowmentNamespace:com.apple.boardservices.endpoint-injection UIScene:com.apple.frontboard.systemappservices/SSK.primary.root(mainDisplay):SB-main>,
+	<RBSHereditaryGrant| endowmentNamespace:com.apple.frontboard.visibility UIScene:com.apple.frontboard.systemappservices/SSK.primary.root(mainDisplay):SB-main>
+	]>
+2026-10-13 04:07:32.375 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] Assertion 86344-86341-5104 (target:[app<com.marcoiannello.GlassifAI((null))>:91308](UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default)) will be created as active
+2026-10-13 04:07:32.375 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Setting parent scene: SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:32.376 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] propagating 8 settings from SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:32.376 Df runningboardd[86344:34366] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2651198289782368205>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default payload: 2259809546755494016>
+)})
+2026-10-13 04:07:32.376 Df runningboardd[86344:3537b] [com.apple.runningboard:connection] Inheritance changeset: <RBSInheritanceChangeSet| gained:{(
+    <RBSInheritance| environment:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default name:com.apple.frontboard.visibility origID:86344-86341-5104 payload 2259809546755494016>
+)} lost:{(
+)}>
+2026-10-13 04:07:32.376 Df SpringBoard[86341:31970] [com.apple.SpringBoard:ResourceConditions] Considering foreground scene <FBScene: 0x119a70500; FBSceneManager:sceneID:com.marcoiannello.GlassifAI-default> with handle=[app<com.marcoiannello.GlassifAI((null))>:91308] (isApp=YES) and parentScene=SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:32.378 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Removing parent scene.
+2026-10-13 04:07:32.378 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] Setting parent scene: SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:32.379 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Invalidating assertion 86344-91308-5097 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) from originator [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:32.379 Df SpringBoard[86341:31970] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:com.marcoiannello.GlassifAI-default] propagating 8 settings from SSK.primary.root(mainDisplay):SB-main
+2026-10-13 04:07:32.380 Df SpringBoard[86341:355ed] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:32.380 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:com.marcoiannello.GlassifAI-default hasParent:YES contentState:ready hasRule:YES wantsRule:YES
+2026-10-13 04:07:32.380 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(no change) sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:32.381 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppSwitcher] [Main (EmbeddedDisplay)] dispatch event:
+<SBSceneReadySwitcherModifierEvent: 0x119bfdf80; type: SceneReady; appLayout: <SBAppLayout: 0x11386eed0; primary: com.marcoiannello.GlassifAI:default; environment: main> {
+    environment = main;
+    centerConfiguration = undefined;
+    preferredDisplayOrdinal = 0;
+    continuousExposeIdentifier = com.marcoiannello.GlassifAI;
+    layoutItems = {
+        primary = <SBDisplayItem: 0x116a42a40; type: App; bundleIdentifier: com.marcoiannello.GlassifAI; uniqueIdentifier: sceneID:com.marcoiannello.GlassifAI-default>;
+    }
+}>
+2026-10-13 04:07:32.381 Df SpringBoard[86341:31970] [com.apple.SpringBoard:AppResize] updating _lastInteractedResizableSceneHandle: sceneID:com.marcoiannello.GlassifAI-default
+2026-10-13 04:07:32.383 Df SpringBoard[86341:31970] [com.apple.SpringBoard:KeyboardFocus] [coordinator] userFocusRequestForScene: requesting target <environment: keyboardFocus; target: <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default; pid: 91308>> for reason:inflexible windowing app is foreground
+2026-10-13 04:07:32.388 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Hosting assertion requested for sceneID:com.marcoiannello.GlassifAI-default (valid: YES) with policy Default, reason: SBSwitcherController
+2026-10-13 04:07:32.388 Df SpringBoard[86341:31970] [com.apple.SpringBoard:HostedScenePolicy] Hosting policy changed for sceneID:com.marcoiannello.GlassifAI-default: NotApplicable -> Enforce
+2026-10-13 04:07:32.388 Df SpringBoard[86341:31970] [com.apple.SpringBoard:SuspendedUnderLock] Suspension under lock policy updated for sceneID:com.marcoiannello.GlassifAI-default: Enforce
+2026-10-13 04:07:32.388 Df SpringBoard[86341:31970] [com.apple.SpringBoard:Common] Front display did change: <SBApplication: 0x115fc3f00; com.marcoiannello.GlassifAI>
+2026-10-13 04:07:32.509 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] Acquiring assertion targeting osservice<com.apple.InputUI> from originator [app<com.marcoiannello.GlassifAI((null))>:91308] with description <RBSAssertionDescriptor| "BSNSXPCTransport[C:3-2]" ID:86344-91308-5105 target:osservice<com.apple.InputUI> attributes:[
+	<RBSDomainAttribute| domain:"com.apple.common" name:"BasicAngelIPC" sourceEnvironment:"(null)">,
+	<RBSConstraintsAttribute| constraints:7>
+	]>
+2026-10-13 04:07:32.512 Df runningboardd[86344:3537b] [com.apple.runningboard:assertion] found a new process to check [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:32.512 Df runningboardd[86344:355f9] [com.apple.runningboard:ttl] Invalidating assertion 86344-91308-5105 (target:osservice<com.apple.InputUI>) from originator [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:32.582 Df runningboardd[86344:3537b] [com.apple.runningboard:ttl] Invalidating assertion 86344-91308-5098 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) from originator [app<com.marcoiannello.GlassifAI((null))>:91308]
+2026-10-13 04:07:32.615 Df runningboardd[86344:355f9] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2651198289782368205>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default payload: 2259809546755494016>
+)})
+2026-10-13 04:07:32.617 Df SpringBoard[86341:355ed] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:32.640 Df runningboardd[86344:3537c] [com.apple.runningboard:ttl] Invalidating assertion 86344-86599-5103 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) from originator [osservice<com.apple.InputUI>:86599]
+2026-10-13 04:07:32.653 Df SpringBoard[86341:355ed] [com.apple.FrontBoard:ProcessWorkspace] [app<com.marcoiannello.GlassifAI>:91308] Dropping launch assertion.
+2026-10-13 04:07:32.653 Df runningboardd[86344:34366] [com.apple.runningboard:ttl] Invalidating assertion 86344-86341-5087 (target:app<com.marcoiannello.GlassifAI((null))>) from originator [osservice<com.apple.SpringBoard>:86341]
+2026-10-13 04:07:32.743 Df runningboardd[86344:3537c] [com.apple.runningboard:ttl] Invalidating assertion 86344-86599-5099 (target:[app<com.marcoiannello.GlassifAI((null))>:91308]) from originator [osservice<com.apple.InputUI>:86599]
+2026-10-13 04:07:32.751 Df runningboardd[86344:3537b] [com.apple.DynamicPrefetching:default] end_scenario: Called with bundleid "com.marcoiannello.GlassifAI" scenario "Launch"
+2026-10-13 04:07:32.751 Df runningboardd[86344:34366] [com.apple.runningboard:monitor] Calculated state for app<com.marcoiannello.GlassifAI((null))>: running-active (role: UserInteractiveFocal) (endowments: {(
+    <RBSProcessEndowmentInfo| namespace:com.apple.boardservices.endpoint-injection env:(null) payload: 2651198289782368205>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:(null)  0>,
+    <RBSProcessEndowmentInfo| namespace:com.apple.frontboard.visibility env:UIScene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Acom.marcoiannello.GlassifAI-default payload: 2259809546755494016>
+)})
+2026-10-13 04:07:32.751 E  runningboardd[86344:3537b] [com.apple.DynamicPrefetching:default] mark_profile_seen_this_boot: exists() failed for "/private/var/root/Library/Caches/com.apple.runningboardd/DynamicPrefetching/com.marcoiannello.GlassifAI/0.profile": Permission denied
+2026-10-13 04:07:32.751 Df runningboardd[86344:3537b] [com.apple.DynamicPrefetching:default] end_scenario_internal: first launch after boot for bundleid com.marcoiannello.GlassifAI scenario Launch — discarded 0 pageins, refreshed profile mtime
+2026-10-13 04:07:32.752 Df SpringBoard[86341:31ab9] [com.apple.runningboard:monitor] Received state update for 91308 (app<com.marcoiannello.GlassifAI((null))>, running-active-Visible
+2026-10-13 04:07:37.710 Df SpringBoard[86341:3537d] [com.apple.SplashBoard:SnapshotReaper] <XBApplicationSnapshotManifestImpl: 0x10a39a800> [com.marcoiannello.GlassifAI] Reaping invalid snapshot <XBApplicationSnapshot: 0x115d12680; …64718DC3CF35> [com.marcoiannello.GlassifAI]
+ invalidReason: expired. expirationDate: 2026-10-13 04:07:31 +0000; how long ago (seconds): 6.122250
+2026-10-13 04:07:37.710 Df SpringBoard[86341:3537d] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x10a39a800> [com.marcoiannello.GlassifAI] Deleting snapshot <XBApplicationSnapshot: 0x115d12680; …64718DC3CF35> [com.marcoiannello.GlassifAI] for reason: _contentType: SceneContent(0)

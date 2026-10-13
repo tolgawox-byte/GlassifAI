@@ -1,0 +1,2 @@
+2026-10-13 04:10:06.452 GlassifAI[99622:239137] [GlassifAI] Wearables SDK unavailable: WearablesError(rawValue: 0)
+IOSurfaceClientSetSurfaceNotify failed e00002c7
