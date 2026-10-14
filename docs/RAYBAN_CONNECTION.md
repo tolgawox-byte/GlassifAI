@@ -81,7 +81,7 @@ The earlier connection rework (`dd1b756`) fixed five other causes. They are stil
 - codec errors shown as connection errors;
 - the one-app rule.
 
-## What changed in this build (`9954e60` and the follow-up commit)
+## What changed in this build (`9954e60`, `6c840b5`, `66b3388`)
 
 - **Camera-safe audio (on by default).**
   - While the Ray-Ban camera is the chosen source, the glasses' hands-free microphone stays closed. Conversations use the iPhone's microphone and speaker, and the wake phrase listener uses the iPhone microphone.

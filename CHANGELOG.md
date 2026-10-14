@@ -53,7 +53,7 @@ The first of the five research ideas chosen on 2026-10-14 (`JARVIS_FEATURE_RESEA
 
 ## [JARVIS — phase R: Ray-Ban connection and camera on Meta DAT 1.0.1] — branch `autoloom-glasses-jarvis-v1`
 
-From the owner's brief of 2026-10-13: the sideloaded build did not connect to the glasses, and the camera looked choppy and possibly like the iPhone's. Commits `9954e60` and the follow-up; CI results in `TEST_REPORT.md`. **Not tried on the glasses yet** (`docs/RAYBAN_CONNECTION.md` rows A–V). Rollback: tag `rollback-43ca5f2-before-dat1-port` and the Release IPA of run 38492438643 (DAT 0.5.0).
+From the owner's brief of 2026-10-13: the sideloaded build did not connect to the glasses, and the camera looked choppy and possibly like the iPhone's. Commits `9954e60` (run 38501997387, green), `6c840b5` (run 38505949350, green) and `66b3388` (fixes from a review); CI results in `TEST_REPORT.md`. **Not tried on the glasses yet** (`docs/RAYBAN_CONNECTION.md` rows A–V). Rollback: tag `rollback-43ca5f2-before-dat1-port` and the Release IPA of run 38492438643 (DAT 0.5.0).
 
 ### Found
 - **The glasses stop the camera while their own microphone is connected.** Meta, 2026-10-13, issues #206 and #332: on current glasses software, a Bluetooth hands-free (HFP) microphone ends the DAT camera session and refuses new ones, whatever the order, until a glasses update. AutoLoom used exactly that setup with the Ray-Ban camera. This is the most likely shared cause of "no connection" and the choppy image; HFP also takes 40–70 % of the camera's Bluetooth frames.
@@ -94,6 +94,17 @@ From the owner's brief of 2026-10-13: the sideloaded build did not connect to th
   - IPA names carry the commit (`AutoLoomMediaGlasses-Release-<commit>-unsigned.ipa`);
   - each IPA is checked for its commit, callback scheme, accessory protocol, background mode and Meta frameworks.
 - **Research:** two passes over 68 new sources with licences checked; 26 new ideas scored, top five chosen (`JARVIS_FEATURE_RESEARCH.md` §8).
+
+### Fixed after a review of the two commits (`66b3388`)
+A read-through for what unit tests cannot catch on the glasses found eight problems; all are fixed:
+- the wearer's pause (temple tap) was undone after 25 s by the "starting too long" watchdog;
+- the wake-phrase listener kept the glasses' microphone after a switch to the Ray-Ban camera, so the glasses refused the camera;
+- a switch to the iPhone camera or Off could not cancel a session start in progress, so the Ray-Ban camera could come on while not chosen;
+- a retry could reuse the camera of an ended session (no frames); a stopped stream on a live session now gets a fresh session;
+- temple taps muted the wrong way round when the call began with the camera running;
+- attempts within 2 s were still possible after coming back to the app or a fresh link;
+- a short link drop cleared the glasses' refusals (now only a drop of 10 s or more, a power cycle);
+- a camera stop for the glasses' own reasons hung up a conversation on the iPhone's microphone; a permission given in Meta AI is now checked again on return.
 
 ### Not done (owner's decision)
 - DAT 1.0's in-stream audio as the glasses' microphone while the camera runs. Meta suggests it for now, but it is experimental, not beamformed, and needs a custom audio source for the WebRTC voice pipeline.

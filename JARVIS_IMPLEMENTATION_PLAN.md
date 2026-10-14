@@ -42,16 +42,17 @@ The owner's sideloaded IPA did not connect to the glasses, and the camera looked
 | # | Item | Status | What was done | Tests |
 |---|---|---|---|---|
 | R.1 | Root cause of "does not connect" | ANALYSED / DEVICE TEST | 1. The glasses' call rule: the glasses microphone (HFP) ends and refuses camera sessions on current firmware (Meta #206/#332, 2026-10-13). 2. DAT 0.5.0 seven months behind the glasses (on-glasses DAT 1.0.0.0.0, #308). 3. Developer Mode broken in Meta AI 290 for days (#310/#325). 4. Refusing glasses (#292). 5. One developer app at a time. 6. Bluetooth off or denied shown as sleeping glasses. 7. The iPhone camera stayed the source after connecting. 8. Bundle id with "-" after re-signing. Which one hit the owner needs the device report | `RAYBAN_CONNECTION.md` rows A–V |
-| R.2 | DAT 1.0.1 port | IN CI | DeviceSession + Camera.stream/photo; typed session errors; gestures from the session; Meta-AI-started registration; Mock Device Kit 1.0 | `AutoLoomRayBanDAT1Tests`, `GlassifAITests` |
-| R.3 | Connection state machine with separate layers | IN CI | New phases: Bluetooth, app/glasses update, session starting/paused, DAT app unreachable, refusing, in a call. Retries never within 2 s and none while the user must act. "Connected" only when usable | `AutoLoomConnectionTests`, `AutoLoomRayBanDAT1Tests` |
-| R.4 | Diagnostics | IN CI | Layer table (Bluetooth, SDK, registration, link with worn/folded/battery, session, camera, image source, microphone, output, AI session); signing; bundle-id check; Meta SDK log lines (IDs masked) in the report | Same; device V |
-| R.5 | IPA vs build | IN CI | IPA names carry the commit; `scripts/ci-ipa-check.sh` publishes and checks commit, callback scheme, accessory protocol, background mode and Meta frameworks | CI annotation "IPA Release" |
-| R.6 | Camera source honesty | IN CI | Connecting switches iPhone → Ray-Ban; Home offers the switch when the glasses are linked; the existing source pill and stale veil stay | Device A, T |
-| R.7 | Smoothness | IN CI / DEVICE TEST | Measured: frame interval median/p95, stutters ≥ 250 ms, longest gap. Default "Live" 504×896 @ 24 fps (720p settles at 504×896 over Bluetooth anyway); warm-up 20 s before the raw fallback; a starved stream gets a fresh session | `AutoLoomRayBanDAT1Tests`, `AutoLoomCameraTests`; device S |
-| R.8 | Detail for the AI | IN CI / DEVICE TEST | Reading requests take an in-stream photo (about 1080×1440 on DAT 1.x); the standalone full photo is opt-in, followed by a fresh session | `AutoLoomVisionPipelineTests`; device R, U |
-| R.9 | Audio with the Ray-Ban camera | IN CI / OWNER DECISION | Camera-safe audio (default on): the conversation and the wake phrase use the iPhone microphone while the Ray-Ban camera is the source. The documented microphone-first order stays for after Meta's fix. **Owner decision:** DAT in-stream audio as the glasses microphone during camera use (experimental, not beamformed, needs a custom WebRTC audio source) | `AutoLoomRayBanDAT1Tests`; device N, N2 |
+| R.2 | DAT 1.0.1 port | DONE-CI (run 38501997387) | DeviceSession + Camera.stream/photo; typed session errors; gestures from the session; Meta-AI-started registration; Mock Device Kit 1.0 | `AutoLoomRayBanDAT1Tests`, `GlassifAITests` |
+| R.3 | Connection state machine with separate layers | DONE-CI (run 38501997387, run 38505949350) | New phases: Bluetooth, app/glasses update, session starting/paused, DAT app unreachable, refusing, in a call. Retries never within 2 s and none while the user must act. "Connected" only when usable | `AutoLoomConnectionTests`, `AutoLoomRayBanDAT1Tests` |
+| R.4 | Diagnostics | DONE-CI (run 38501997387, run 38505949350) | Layer table (Bluetooth, SDK, registration, link with worn/folded/battery, session, camera, image source, microphone, output, AI session); signing; bundle-id check; Meta SDK log lines (IDs masked) in the report | Same; device V |
+| R.5 | IPA vs build | DONE-CI (run 38501997387: both IPAs annotated) | IPA names carry the commit; `scripts/ci-ipa-check.sh` publishes and checks commit, callback scheme, accessory protocol, background mode and Meta frameworks | CI annotation "IPA Release" |
+| R.6 | Camera source honesty | DONE-CI (run 38501997387) | Connecting switches iPhone → Ray-Ban; Home offers the switch when the glasses are linked; the existing source pill and stale veil stay | Device A, T |
+| R.7 | Smoothness | DONE-CI (run 38505949350) / DEVICE TEST | Measured: frame interval median/p95, stutters ≥ 250 ms, longest gap. Default "Live" 504×896 @ 24 fps (720p settles at 504×896 over Bluetooth anyway); warm-up 20 s before the raw fallback; a starved stream gets a fresh session | `AutoLoomRayBanDAT1Tests`, `AutoLoomCameraTests`; device S |
+| R.8 | Detail for the AI | DONE-CI (run 38505949350) / DEVICE TEST | Reading requests take an in-stream photo (about 1080×1440 on DAT 1.x); the standalone full photo is opt-in, followed by a fresh session | `AutoLoomVisionPipelineTests`; device R, U |
+| R.9 | Audio with the Ray-Ban camera | DONE-CI (run 38505949350) / OWNER DECISION | Camera-safe audio (default on): the conversation and the wake phrase use the iPhone microphone while the Ray-Ban camera is the source. The documented microphone-first order stays for after Meta's fix. **Owner decision:** DAT in-stream audio as the glasses microphone during camera use (experimental, not beamformed, needs a custom WebRTC audio source) | `AutoLoomRayBanDAT1Tests`; device N, N2 |
 | R.10 | Error details kept | DONE-CI (phase 1b) | Swift and Rust keep status, error code, param and request id (`http_errors_keep_status_code_param_and_request_id`); session errors keep their DAT names | Rust tests |
-| R.11 | Open-source research and skills | DONE (report) / IN CI (D2-03 incognito, D2-18 business card, D2-02 links back, D2-04 test results) / NEXT (D2-01) | D2: 44 sources, licences checked, 26 new ideas scored; top 5 in `JARVIS_FEATURE_RESEARCH.md` §8. D2-03: while incognito is on, no summary, memory, visual memory, name or Scene Timeline line is written. D2-18: a card read on the phone opens in iOS's contact card; only the user's tap saves it. D2-02: reminders and events made from a note link back to it (navigation only). D2-04: the PC's test runs report counts, failing tests and the change since the last run | `AutoLoomIncognitoTests`, `AutoLoomBusinessCardTests`, `AutoLoomSourceLinkTests`, `pc-companion/test/testReport.test.ts`; device IN1, BC1, SL1, PC11 |
+| R.12 | Review before the device test | IN CI (`66b3388`) | A read-through of `9954e60..6c840b5` found eight problems unit tests cannot catch (audit §12 C13–C20): the wearer's pause undone, HFP kept by the wake listener, a stop not cancelling a start, a stale camera, gestures inverted, attempts within 2 s, refusals cleared by a short drop, a camera stop hanging up an iPhone call. All fixed | `AutoLoomRayBanDAT1Tests` (4 new); device O, P |
+| R.11 | Open-source research and skills | DONE (report) / IN CI (D2-03 incognito, D2-18 business card, D2-02 links back, D2-04 test results) / OWNER DECISION (D2-01, several PC addresses) | D2: 44 sources, licences checked, 26 new ideas scored; top 5 in `JARVIS_FEATURE_RESEARCH.md` §8. D2-03: while incognito is on, no summary, memory, visual memory, name or Scene Timeline line is written. D2-18: a card read on the phone opens in iOS's contact card; only the user's tap saves it. D2-02: reminders and events made from a note link back to it (navigation only). D2-04: the PC's test runs report counts, failing tests and the change since the last run | `AutoLoomIncognitoTests`, `AutoLoomBusinessCardTests`, `AutoLoomSourceLinkTests`, `pc-companion/test/testReport.test.ts`; device IN1, BC1, SL1, PC11 |
 
 ## Phase 1 — Infrastructure (P0)
 
@@ -93,7 +94,7 @@ The owner's sideloaded IPA did not connect to the glasses, and the camera looked
 | 3.1 | Diagnostics: "what the AI saw" | PARTLY DONE-CI (capture age, metadata status) / NEXT | Live Vision images recorded; destination provider/model; capture age; opt-in local thumbnail of the exact bytes; metadata status; glasses-only "Actual" |
 | 3.2 | Memory supersession (F06) and memory inbox (F07) | NEXT | Outdated facts superseded with history; model proposals need approval |
 | 3.3 | Semantic visual memory (F21) | LATER | On-device embeddings with a commercially licensed model; Turkish queries work; never indexes the photo library without consent |
-| 3.4 | DAT 1.x port | IN CI (phase R.2: one build on DAT 1.0.1, no seam; the 0.5.0 build is tagged `rollback-43ca5f2-before-dat1-port`) | Full-resolution stills as an opt-in path; recording not cut by photos; rows A–V pass on V128 |
+| 3.4 | DAT 1.x port | DONE-CI (run 38501997387; phase R.2: one build on DAT 1.0.1, no seam; the 0.5.0 build is tagged `rollback-43ca5f2-before-dat1-port`) | Full-resolution stills as an opt-in path; recording not cut by photos; rows A–V pass on V128 |
 
 ## Phase 4 — Tools and device integrations
 
@@ -152,7 +153,8 @@ All of these wait on the owner supplying keys and approving costs.
    - TK1 (task alert actions), SK1 and SK2 (MCP skills, a changed tool blocked);
    - RM1–RM4 (Apple Reminders by voice: complete and undo, delete after a yes, "hangisi?", list choice);
    - TK2 and RM5 (repeating tasks, reminders and events);
-   - AP1 (several actions waiting on the phone).
+   - AP1 (several actions waiting on the phone);
+   - IN1, BC1, SL1, PC11 (incognito, business card, links back, test results from the PC).
 4. Owner decisions:
    - DAT in-stream audio as the glasses microphone while the camera runs (R.9);
    - HFP before the camera stream (1.7): superseded by R.9; on current firmware no order works (Meta);
@@ -160,6 +162,7 @@ All of these wait on the owner supplying keys and approving costs.
    - App Store privacy answers from `PrivacyInfo.xcprivacy` (1.16).
    - Turn on GitHub private vulnerability reporting (Settings → Code security), which `SECURITY.md` now waits for.
    - Whether waiting phone actions should survive an app restart (2.4): it means storing their content (message text, numbers, note text) on disk.
+   - Several PC addresses per pairing (research D2-01): the companion would also listen on a second private address, for example Tailscale's, with the same key pin. It widens where the PC answers, so it waits for the owner's yes.
 5. Remaining NEXT items:
    - 3.1 Live Vision images and an opt-in thumbnail; 3.2 memory supersession and inbox;
-   - the last of the top research ideas (`JARVIS_FEATURE_RESEARCH.md` §8): several PC addresses per pairing (incognito, the business card, the links back and the test results are in CI).
+   - the top research ideas (`JARVIS_FEATURE_RESEARCH.md` §8): four are in CI (incognito, business card, links back, test results); D2-01 waits for the owner (item 4).
