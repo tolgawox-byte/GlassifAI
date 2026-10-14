@@ -122,6 +122,7 @@ struct ConnectionDiagnosticsView: View {
 
       Section {
         Toggle(L.t("iPhone microphone with the Ray-Ban camera", "Ray-Ban kamerasıyla iPhone mikrofonu"), isOn: $cameraSafeAudio)
+          .onChange(of: cameraSafeAudio) { _, _ in Task { await WakePhraseListener.shared.audioRulesChanged() } }
         Toggle(L.t("Glasses microphone before the camera stream", "Kamera akışından önce gözlük mikrofonu"), isOn: $microphoneFirst)
           .disabled(cameraSafeAudio)
       } header: {

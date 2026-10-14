@@ -185,6 +185,50 @@ final class AutoLoomRayBanDAT1Tests: XCTestCase {
     XCTAssertEqual(interpreter.receive(.stopped, byApp: false), .endCall)
   }
 
+  /// A call that begins while the camera already runs: the first temple tap
+  /// mutes (it was ignored, and the second tap muted as the camera resumed).
+  func testGesturesStartFromTheSessionsCurrentState() {
+    var running = GlassesGestureInterpreter()
+    running.seed(.started)
+    XCTAssertEqual(running.receive(.paused), .toggleMicrophoneMute)
+    XCTAssertEqual(running.receive(.started), .toggleMicrophoneMute)
+    XCTAssertEqual(running.receive(.stopped), .endCall, "a fold before any tap ends the call")
+    var none = GlassesGestureInterpreter()
+    none.seed(nil)
+    XCTAssertNil(none.receive(.paused))
+    XCTAssertNil(none.receive(.stopped))
+  }
+
+  // MARK: Review of phase R (round 2b)
+
+  /// A temple tap pauses the camera; "starting too long" never restarts it.
+  func testTheWearersPauseIsNeverUndone() {
+    XCTAssertTrue(GlassesConnectionReducer.startWatchdogApplies(stream: .waiting, session: .starting))
+    XCTAssertTrue(GlassesConnectionReducer.startWatchdogApplies(stream: .waiting, session: .started))
+    XCTAssertFalse(GlassesConnectionReducer.startWatchdogApplies(stream: .waiting, session: .paused))
+    XCTAssertFalse(GlassesConnectionReducer.startWatchdogApplies(stream: .streaming, session: .started))
+  }
+
+  /// Meta #231: never two session attempts within 2 s, also after coming
+  /// back to the app, a fresh link or Try Again.
+  func testAttemptsStayTwoSecondsApartWhateverResetTheBackoff() {
+    let now = Date()
+    XCTAssertEqual(
+      GlassesConnectionReducer.attemptDelay(nextAttemptAt: .distantPast, lastAttemptAt: now.addingTimeInterval(-0.5), now: now),
+      1.5, accuracy: 0.001)
+    XCTAssertEqual(
+      GlassesConnectionReducer.attemptDelay(nextAttemptAt: now.addingTimeInterval(4), lastAttemptAt: now.addingTimeInterval(-10), now: now),
+      4, accuracy: 0.001)
+    XCTAssertEqual(GlassesConnectionReducer.attemptDelay(nextAttemptAt: .distantPast, lastAttemptAt: .distantPast, now: now), 0)
+  }
+
+  /// Refusals are forgotten after a power cycle, not after a short drop.
+  func testOnlyAPowerCycleClearsRefusals() {
+    XCTAssertFalse(GlassesConnectionReducer.reconnectClearsRefusals(linkDownFor: 3), "a drop at each refusal keeps the count")
+    XCTAssertTrue(GlassesConnectionReducer.reconnectClearsRefusals(linkDownFor: 12))
+    XCTAssertTrue(GlassesConnectionReducer.reconnectClearsRefusals(linkDownFor: .infinity), "the first link of the run")
+  }
+
   // MARK: The installed build
 
   func testABundleIdentifierWithADashIsReported() {

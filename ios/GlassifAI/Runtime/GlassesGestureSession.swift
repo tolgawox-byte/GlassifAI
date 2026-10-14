@@ -41,6 +41,13 @@ struct GlassesGestureInterpreter {
     previousState = nil
     becameActive = false
   }
+
+  /// Starts from the session's current state: in a call that begins with
+  /// the camera running, the first temple tap mutes and a fold ends the call.
+  mutating func seed(_ state: DeviceSessionState?) {
+    previousState = state
+    becameActive = state == .started || state == .paused
+  }
 }
 
 /// Meta's fixed temple gestures as call controls during a voice call.
@@ -63,6 +70,7 @@ final class GlassesGestureSession {
 
   func start(
     deviceId: DeviceIdentifier,
+    current: DeviceSessionState? = nil,
     onTap: @escaping () -> Void,
     onStop: @escaping () -> Void
   ) async {
@@ -70,6 +78,7 @@ final class GlassesGestureSession {
     self.onStop = onStop
     guard subscription == nil else { return }
     interpreter.reset()
+    interpreter.seed(current)
     // Only changes from now on: an old event must not toggle the microphone.
     subscription = events
       .dropFirst()

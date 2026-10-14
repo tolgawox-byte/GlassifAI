@@ -301,6 +301,30 @@ enum GlassesConnectionReducer {
     return steps[min(max(failures, 0), steps.count - 1)]
   }
 
+  /// The floor that holds whatever reset the backoff (coming back to the
+  /// app, a fresh link, Try Again).
+  static let minimumAttemptSpacing: TimeInterval = 2
+
+  static func attemptDelay(nextAttemptAt: Date, lastAttemptAt: Date, now: Date) -> TimeInterval {
+    max(0, nextAttemptAt.timeIntervalSince(now), lastAttemptAt.addingTimeInterval(minimumAttemptSpacing).timeIntervalSince(now))
+  }
+
+  /// A link down at least this long was a power cycle (the advice for
+  /// refusing glasses); a shorter drop does not clear the refusals, or a
+  /// link that drops at each refusal would never reach the block.
+  static let powerCycleMinimum: TimeInterval = 10
+
+  static func reconnectClearsRefusals(linkDownFor seconds: TimeInterval) -> Bool {
+    seconds >= powerCycleMinimum
+  }
+
+  /// "Starting" too long restarts the camera, but never while the wearer
+  /// paused the session with a temple tap (Meta: do not restart a paused
+  /// session; the wearer resumes it).
+  static func startWatchdogApplies(stream: GlassesConnectionSnapshot.Stream, session: GlassesConnectionSnapshot.Session) -> Bool {
+    stream == .waiting && session != .paused
+  }
+
   /// Meta AI opens within seconds of the request.
   static let metaAIOpenTimeout: TimeInterval = 10
   /// Back in AutoLoom this long without the approval: offer it again.
@@ -499,6 +523,8 @@ final class WearableConnectionCoordinator: ObservableObject {
   private var returnedAt: Date?
   private var failures = 0
   private var nextAttemptAt = Date.distantPast
+  private var lastAttemptAt = Date.distantPast
+  private var linkLostAt: Date?
   private var startInFlight = false
   private var permissionRequestAllowed = true
   private var lastConnectedNoticeAt = Date.distantPast
@@ -762,12 +788,16 @@ final class WearableConnectionCoordinator: ObservableObject {
     bluetoothMonitor.refresh()
     refresh()
     if snapshot.stream == .stopped {
-      // Coming back is a good moment to try at once.
+      // Coming back is a good moment to try at once (2 s after the last
+      // attempt at the earliest).
       failures = min(failures, 1)
       nextAttemptAt = .distantPast
       attemptTask?.cancel()
       attemptTask = nil
     }
+    // Permission given in Meta AI meanwhile: checked again on the next
+    // attempt (a check only; Meta AI is not opened again without Try Again).
+    if snapshot.permission == .denied { snapshot.permission = .unknown }
     evaluate(reason: "app active")
   }
 
@@ -1073,14 +1103,21 @@ final class WearableConnectionCoordinator: ObservableObject {
     let wasConnected = snapshot.link == .connected
     snapshot.link = fact
     record("link \(fact.rawValue) (\(source))")
+    if wasConnected, fact != .connected { linkLostAt = Date() }
     if fact == .connected, !wasConnected {
-      // A fresh link: try the camera at once. A link that dropped and came
-      // back (the power cycle the screen asked for) is judged afresh.
+      // A fresh link: try the camera at once. Glasses that were off long
+      // enough for a power cycle (what the screen asked for) are judged
+      // afresh; a short drop keeps the refusals.
       lastLinkedAt = Date()
+      let downFor = linkLostAt.map { Date().timeIntervalSince($0) } ?? .infinity
       if snapshot.sessionProblem?.blocksAutomaticRetry == true || snapshot.sessionProblem == .glassesAppUnavailable {
-        record("glasses back: refusals cleared")
-        stream?.clearSessionProblem()
-        snapshot.sessionProblem = nil
+        if GlassesConnectionReducer.reconnectClearsRefusals(linkDownFor: downFor) {
+          record("glasses back after \(Int(min(downFor, 9_999))) s: refusals cleared")
+          stream?.clearSessionProblem()
+          snapshot.sessionProblem = nil
+        } else {
+          record("glasses back after \(Int(downFor)) s: too short for a power cycle; refusals kept")
+        }
       }
       resetBackoff()
     }
@@ -1120,6 +1157,12 @@ final class WearableConnectionCoordinator: ObservableObject {
     guard fact != snapshot.session else { return }
     snapshot.session = fact
     record("session \(fact.rawValue)")
+    if fact == .paused {
+      // The wearer paused the camera (a temple tap): nothing restarts it.
+      startWatchdog?.cancel()
+    } else if fact == .started, GlassesConnectionReducer.startWatchdogApplies(stream: snapshot.stream, session: fact) {
+      armStartWatchdog()
+    }
     evaluate(reason: "session \(fact.rawValue)")
   }
 
@@ -1215,7 +1258,7 @@ final class WearableConnectionCoordinator: ObservableObject {
       snapshot.cameraFailure = nil
       snapshot.permission = .granted
     case .waiting:
-      armStartWatchdog()
+      if GlassesConnectionReducer.startWatchdogApplies(stream: fact, session: snapshot.session) { armStartWatchdog() }
     case .stopped:
       if snapshot.cameraWanted, phase.isLinked, stream?.isSwitchingTransport != true {
         // Stopped while it should run: restarts back off.
@@ -1227,10 +1270,13 @@ final class WearableConnectionCoordinator: ObservableObject {
   }
 
   private func armStartWatchdog() {
+    // One watchdog at a time: a second one would restart the camera twice.
+    startWatchdog?.cancel()
     startWatchdog = Task { @MainActor [weak self] in
       try? await Task.sleep(nanoseconds: UInt64(GlassesConnectionReducer.cameraStartTimeout * 1_000_000_000))
-      guard let self, !Task.isCancelled, self.snapshot.stream == .waiting, self.snapshot.cameraWanted,
-            self.phase.isLinked, let stream = self.stream, !stream.isSwitchingTransport else { return }
+      guard let self, !Task.isCancelled,
+            GlassesConnectionReducer.startWatchdogApplies(stream: self.snapshot.stream, session: self.snapshot.session),
+            self.snapshot.cameraWanted, self.phase.isLinked, let stream = self.stream, !stream.isSwitchingTransport else { return }
       self.record("camera did not start within \(Int(GlassesConnectionReducer.cameraStartTimeout)) s; restarting it")
       self.failures += 1
       self.nextAttemptAt = Date().addingTimeInterval(GlassesConnectionReducer.retryDelay(afterFailures: self.failures))
@@ -1285,7 +1331,7 @@ final class WearableConnectionCoordinator: ObservableObject {
     // A denied permission waits for Try Again instead of reopening Meta AI.
     if snapshot.permission == .denied, !permissionRequestAllowed { return }
     guard attemptTask == nil else { return }
-    let delay = max(0, nextAttemptAt.timeIntervalSinceNow)
+    let delay = GlassesConnectionReducer.attemptDelay(nextAttemptAt: nextAttemptAt, lastAttemptAt: lastAttemptAt, now: Date())
     attemptTask = Task { @MainActor [weak self] in
       if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
       guard let self, !Task.isCancelled else { return }
@@ -1298,6 +1344,7 @@ final class WearableConnectionCoordinator: ObservableObject {
     guard snapshot.cameraWanted, phase.isLinked, snapshot.stream == .stopped, !startInFlight,
           let wearables, let stream else { return }
     startInFlight = true
+    lastAttemptAt = Date()
     defer {
       startInFlight = false
       evaluate(reason: "attempt finished")

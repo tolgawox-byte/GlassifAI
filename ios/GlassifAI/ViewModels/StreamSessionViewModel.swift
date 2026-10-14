@@ -302,6 +302,12 @@ class StreamSessionViewModel: ObservableObject {
   private var stoppingByApp = false
   /// A start is in progress; a second caller returns at once.
   private var isStartingSession = false
+  /// Bumped by every stop: a start that began before it gives up after its
+  /// next wait instead of opening a session nobody wants any more.
+  private var startGeneration = 0
+  /// The Ray-Ban camera is the chosen source. With the iPhone camera or the
+  /// camera off nothing starts it, not even the wearer's resume.
+  var wantsCamera = true
   /// Set by the media coordinator: a video recording is running (the stall
   /// monitor never restarts its stream).
   var isRecordingVideo: @MainActor () -> Bool = { false }
@@ -456,13 +462,27 @@ class StreamSessionViewModel: ObservableObject {
   /// Starts the session (or reuses a started one), attaches the camera and
   /// starts the stream, once at a time.
   func startSession() async {
-    guard !isStartingSession, let wearables, let deviceSelector else { return }
+    guard wantsCamera, !isStartingSession, let wearables, let deviceSelector else { return }
     if let camera, camera.stream.state != .stopped { return }
     isStartingSession = true
     defer { isStartingSession = false }
+    let generation = startGeneration
+    // A camera whose stream stopped is not started again: on DAT 1.0 that
+    // restart can deliver nothing (Meta #260), and a fresh session recovers
+    // (#287). A stream set aside for a photo or the microphone is resumed
+    // where it was set aside.
+    if camera != nil, !isStreamSetAside {
+      if deviceSession != nil {
+        NSLog("[Stream] stream stopped on a live session; starting a fresh session")
+        await endSession()
+        guard startGeneration == generation else { return }
+      } else {
+        clearCamera()
+      }
+    }
     armStartWatchdog()
     streamingStatus = .waiting
-    guard let session = await startedSession(wearables: wearables, selector: deviceSelector) else {
+    guard let session = await startedSession(wearables: wearables, selector: deviceSelector, generation: generation) else {
       if camera == nil {
         startWatchdogTask?.cancel()
         streamingStatus = .stopped
@@ -480,27 +500,36 @@ class StreamSessionViewModel: ObservableObject {
     if let waitForAudio = waitForAudioRouteBeforeStream {
       await waitForAudio()
     }
-    guard self.camera === camera, session.state == .started else { return }
+    guard self.camera === camera, session.state == .started, startGeneration == generation else { return }
     camera.stream.start()
   }
 
   /// A started session: the current one, or a new one. nil when the glasses
   /// refuse, are paused by the wearer, or do not answer in time.
-  private func startedSession(wearables: WearablesInterface, selector: AutoDeviceSelector) async -> DeviceSession? {
+  private func startedSession(
+    wearables: WearablesInterface, selector: AutoDeviceSelector, generation: Int
+  ) async -> DeviceSession? {
     if let existing = deviceSession {
       if existing.state == .started { return existing }
       if existing.state == .paused { return nil }
       if existing.state == .stopping || existing.state == .stopped {
-        // The SDK refuses a new session until the old one has ended.
+        // The SDK refuses a new session until the old one has ended. Its
+        // camera goes with it: a camera kept from it would stream nothing.
         _ = await waitUntil(timeout: 3) { self.deviceSession == nil || existing.state == .stopped }
-        cleanupSession()
+        if deviceSession === existing {
+          clearCamera()
+          cleanupSession()
+        }
       } else {
         _ = await waitUntil(timeout: 20) { existing.state == .started || existing.state == .stopped }
+        guard startGeneration == generation else { return nil }
         return existing.state == .started ? existing : nil
       }
     }
     var session: DeviceSession?
     for attempt in 0..<3 {
+      // Stopped meanwhile (a source switch, the app going away): no session.
+      guard startGeneration == generation else { return nil }
       do {
         let created = try wearables.createSession(deviceSelector: selector)
         deviceSession = created
@@ -530,6 +559,10 @@ class StreamSessionViewModel: ObservableObject {
     // `addCamera` returns nil until the session is started. A session that
     // stops meanwhile (glasses folded, refused) ends the wait.
     _ = await waitUntil(timeout: 20) { session.state == .started || session.state == .stopped || session.state == .paused }
+    guard startGeneration == generation else {
+      if session.state != .stopped, session.state != .stopping { stopOwnSession(session) }
+      return nil
+    }
     guard session.state == .started else {
       NSLog("[Stream] device session did not start (state %@)", String(describing: session.state))
       if session.state != .stopped, session.state != .paused {
@@ -543,6 +576,13 @@ class StreamSessionViewModel: ObservableObject {
   /// Ends the camera and the device session (a source switch, a recovery or
   /// the app going away). The next start creates a fresh session.
   func stopSession() async {
+    startGeneration += 1
+    await endSession()
+  }
+
+  /// Ends the session without cancelling the start that asked for it (a
+  /// start that replaces a stopped stream with a fresh session).
+  private func endSession() async {
     startWatchdogTask?.cancel()
     guard let session = deviceSession else {
       clearCamera()
@@ -591,8 +631,9 @@ class StreamSessionViewModel: ObservableObject {
       // A session that starts is the proof the glasses accept the app.
       refusals.removeAll()
       if let problem = sessionProblem, problem.clearsWhenASessionStarts { sessionProblem = nil }
-      // Resumed by the wearer (a temple tap): the stream goes on.
-      if let camera, camera.stream.state == .stopped, !isStartingSession, !isStreamSetAside {
+      // Resumed by the wearer (a temple tap): the stream goes on, if the
+      // Ray-Ban camera is still the chosen source.
+      if wantsCamera, let camera, camera.stream.state == .stopped, !isStartingSession, !isStreamSetAside {
         camera.stream.start()
       }
     case .stopped:

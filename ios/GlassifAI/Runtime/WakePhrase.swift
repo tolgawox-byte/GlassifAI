@@ -162,6 +162,8 @@ final class WakePhraseListener: ObservableObject {
   /// A start is in progress (permission prompts are async), so overlapping
   /// refreshes never install a second microphone tap.
   private var isStarting = false
+  /// The running listener let the glasses' hands-free microphone in.
+  private var listensThroughHandsFree = false
   private var recognizer: SFSpeechRecognizer?
   private let feed = RecognitionFeed()
   private var task: SFSpeechRecognitionTask?
@@ -284,6 +286,7 @@ final class WakePhraseListener: ObservableObject {
       if !GlassesCameraAudio.blocksHandsFree(source: GlassesCameraAudio.currentSource) {
         options.insert(.allowBluetoothHFP)
       }
+      listensThroughHandsFree = options.contains(.allowBluetoothHFP)
       try session.setCategory(.playAndRecord, mode: .measurement, options: options)
       try session.setActive(true)
       let engine = AVAudioEngine()
@@ -393,6 +396,17 @@ final class WakePhraseListener: ObservableObject {
       guard !Task.isCancelled, let self, self.recognitionGeneration == generation else { return }
       self.recycleRecognition()
     }
+  }
+
+  /// The camera source or camera-safe audio changed. A listener started
+  /// under the other microphone rule starts again, before the Ray-Ban
+  /// camera does: the glasses end and refuse camera sessions while their
+  /// own microphone is connected (Meta #206, #332).
+  func audioRulesChanged() async {
+    let wantsHandsFree = !GlassesCameraAudio.blocksHandsFree(source: GlassesCameraAudio.currentSource)
+    guard isListening, listensThroughHandsFree != wantsHandsFree else { return }
+    stopListening(reason: nil, releaseAudioSession: true)
+    await refresh()
   }
 
   func stopListening(reason: String?, releaseAudioSession: Bool = false) {

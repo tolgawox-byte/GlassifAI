@@ -170,6 +170,9 @@ struct StreamSessionView: View {
     AssistantOrchestrator.shared.cancelAll(reason: "camera source changed", voiceOnly: false)
     viewModel.stillPhotos.cancel()
     FrameStore.shared.reset()
+    // The wake listener drops the glasses' microphone before the Ray-Ban
+    // camera starts (or takes it back when the camera is left).
+    await WakePhraseListener.shared.audioRulesChanged()
     if audioChanges && voice.isActive {
       await gestureSession?.stop()
       await voice.stop()
@@ -194,6 +197,7 @@ struct StreamSessionView: View {
 
     await gestureSession.start(
       deviceId: deviceId,
+      current: viewModel.deviceSessionState,
       onTap: {
         voice.toggleMicrophoneMuted()
         NSLog(
@@ -202,7 +206,10 @@ struct StreamSessionView: View {
       },
       onStop: {
         Task { @MainActor in
-          if voice.isActive {
+          // The camera session also ends for the glasses' own reasons (heat,
+          // a refusal, another app). A call on the iPhone's microphone
+          // (camera-safe audio) goes on; one on the glasses ends.
+          if voice.isActive, voice.usesGlassesMicrophone {
             await voice.stop()
           }
         }
@@ -214,15 +221,20 @@ struct StreamSessionView: View {
     switch captureSource {
     case .iPhoneCamera:
       // Not wanted first, so the stop is not counted as a camera failure.
+      // The session ends even when its stream had already stopped, and a
+      // start still in progress gives up.
       connection.setCameraWanted(false)
-      if viewModel.isStreaming { await viewModel.stopSession() }
+      viewModel.wantsCamera = false
+      await viewModel.stopSession()
       await camera.start()
     case .off:
       connection.setCameraWanted(false)
+      viewModel.wantsCamera = false
       await camera.stop()
-      if viewModel.isStreaming { await viewModel.stopSession() }
+      await viewModel.stopSession()
       FrameStore.shared.reset()
     case .glasses:
+      viewModel.wantsCamera = true
       await camera.stop()
       // Started by the coordinator as soon as the glasses are registered
       // and linked, and again whenever they come back.

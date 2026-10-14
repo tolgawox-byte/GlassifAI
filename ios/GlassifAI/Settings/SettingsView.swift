@@ -413,6 +413,7 @@ struct AudioSettingsView: View {
         "Meta's current glasses software stops the Ray-Ban camera while the glasses' microphone is connected (it counts as a call); Meta has confirmed this and is preparing a fix. On (recommended): with the Ray-Ban camera the conversation uses the iPhone's microphone and speaker, so the camera keeps running. Turn off only after Meta's update.",
         "Meta'nın güncel gözlük yazılımı, gözlüğün mikrofonu bağlıyken Ray-Ban kamerasını durduruyor (bunu görüşme sayıyor); Meta bunu doğruladı ve bir düzeltme hazırlıyor. Açık (önerilen): Ray-Ban kamerasıyla konuşma iPhone'un mikrofonu ve hoparlörüyle yapılır, böylece kamera çalışmaya devam eder. Yalnızca Meta'nın güncellemesinden sonra kapatın."))) {
         Toggle(L.t("iPhone microphone with the Ray-Ban camera", "Ray-Ban kamerasıyla iPhone mikrofonu"), isOn: $cameraSafeAudio)
+          .onChange(of: cameraSafeAudio) { _, _ in Task { await WakePhraseListener.shared.audioRulesChanged() } }
       }
       Section(L.t("Now", "Şu an")) {
         LabeledContent(L.t("Microphone", "Mikrofon"), value: audioRoute.inputSummary)

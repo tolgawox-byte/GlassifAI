@@ -4,6 +4,15 @@ How AutoLoom connects to Ray-Ban Meta glasses, what was found when the owner's s
 
 **Status: PHYSICAL TEST REQUIRED.** Everything below is built and unit-tested in CI. A green build only means the code compiles and the state machine behaves in tests. The connection is not called fixed until the tests at the end pass on the iPhone and the glasses.
 
+**Hızlı cihaz testi (Türkçe, yaklaşık 20 dakika):**
+1. `TEST_REPORT.md`'de yeşil görünen son koşunun Release IPA'sını indir. Dosya adındaki 7 karakter, uygulamada Ayarlar → Geliştirici → Commit ile aynı olmalı (satır T).
+2. IPA'yı imzala ve yükle; bundle id'yi değiştirme (içinde `-` olmasın).
+3. Hazırlık: Meta AI 290 veya üstü, gözlük yazılımı 128 veya üstü; Meta AI'da Geliştirici Modu açık; AirPods gibi başka bir Bluetooth kulaklık bağlı değil; gözlüğü güç anahtarından bir kez kapatıp aç.
+4. Satır A ve B: bağlan, sonra uygulamayı kapatıp yeniden aç.
+5. Satır N ve N2: Ray-Ban kamerası açıkken konuş. Önce kameraya güvenli ses açıkken (varsayılan), sonra Ayarlar → Ses çıkışı → "Ray-Ban kamerasıyla iPhone mikrofonu" kapalıyken.
+6. Satır S ve U: akıcılık ve fotoğraf boyutu (Ayarlar → Geliştirici → Kamera tanılaması).
+7. Bir şey başarısız olursa: Ayarlar → Geliştirici → Ray-Ban bağlantısı → raporu kopyala (Meta SDK günlüğü dahil, kimlikler maskeli) ve gönder (satır V).
+
 Rollback tags:
 - `rollback-43ca5f2-before-dat1-port`: the last DAT 0.5.0 build (plan 2.4, run 38492438643).
 - `rollback-dd1b756-before-connection-fix`: before the first connection rework.
@@ -241,12 +250,12 @@ After any failure, copy the report from Settings → Developer → Ray-Ban conne
 | I | Settings → Camera → transport HEVC; if the camera does not start, wait 15 s | Pill stays "Ray-Ban Connected" while the camera line says "Starting camera…"; a fallback shows "Switched to raw" | NOT RUN |
 | J | Tap Connect twice quickly | Meta AI opens once | NOT RUN |
 | K | Close Meta AI without approving, return | Within about 12 s: "Meta AI didn't confirm" with one Try Again | NOT RUN |
-| L | Hey AutoLoom with the glasses on | "Bağlandım, dinliyorum." only when the voice is ready, through the glasses' audio | NOT RUN |
+| L | Hey AutoLoom with the glasses on | "Bağlandım, dinliyorum." only when the voice is ready. Camera off or the iPhone camera: through the glasses' audio. Ray-Ban camera with camera-safe audio on (the default): through the iPhone, and the camera keeps streaming | NOT RUN |
 | M | Turn Bluetooth off in Control Center, then on | "Bluetooth kapalı", not "Wake your glasses"; returns by itself | NOT RUN |
 | N | Start a conversation with the Ray-Ban camera running (camera-safe audio on) | The camera keeps streaming; you are heard through the iPhone microphone and the answer plays from the iPhone; the layer table shows "iPhone mic" and the camera's fps does not drop | NOT RUN |
 | N2 | Same with camera-safe audio off (Settings → Audio) | On current glasses software the camera stops within seconds and "Kamera görüşme yüzünden kapalı" appears; after the conversation the camera comes back by itself. This confirms the call rule on the owner's glasses | NOT RUN |
 | O | Five conversations in a row (start, ask about the view, end) | No "Device unavailable"; if the glasses start refusing, "Gözlük bağlantıyı reddediyor" appears after three refusals and the app stops retrying; power-switch cycle + Try Again recovers | NOT RUN |
-| P | Tap the glasses' temple during a conversation | "Duraklatıldı" (paused) and the microphone mutes; tap again resumes; the app's own camera switch never hangs up | NOT RUN |
+| P | Tap the glasses' temple during a conversation, then wait 40 s before tapping again | The first tap: "Duraklatıldı" (paused) and the microphone mutes; the camera stays paused for the whole 40 s (the app never restarts it); the second tap resumes both. The app's own camera switch never hangs up. A long press, fold or doff ends the conversation only when it runs on the glasses' microphone (camera-safe audio off) | NOT RUN |
 | Q | Start the registration from Meta AI (App connections) instead of AutoLoom | AutoLoom opens and the registration completes | NOT RUN |
 | R | Settings → Camera → Vision image → Full-resolution photo; ask "bunu oku" at a label | The view pauses for several seconds (a fresh session follows); the answer reads the label; Camera diagnostics → last photo shows a size larger than 1080×1440 | NOT RUN |
 | S | Look around for 60 s with the Ray-Ban camera, first with "Live" (504p 24 fps), then "Detail" (720p 15 fps) | Camera diagnostics: actual resolution, fps, frame interval p95 and stutters for each; Live should be smoother at the same delivered resolution | NOT RUN |
