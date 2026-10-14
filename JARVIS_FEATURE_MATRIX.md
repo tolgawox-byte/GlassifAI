@@ -76,8 +76,8 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Snooze, priority, recurrence | Partial | Automated | Snooze from the alert (phase 1f); recurrence in CI (`AutoLoomRecurrenceTests`); `priority` still a dead field | Device tests TK1, TK2 | P1 |
 | Apple Reminders create | Working in code | Pending device | `DeviceActions.createReminder` | Device test RM4 | P1 |
 | Reminder verified after creation | Working in code | Automated (build) | `calendarItem(withIdentifier:)` after saving | Device test | P1 |
-| Reminder list choice (Settings, by name, Tasks sheet) | In CI | Automated (parser) | `ReminderLists`, `ReminderListMention` | Device test RM4 | P1 |
-| Complete / delete a reminder by voice | In CI | Automated (parser, matching) | `AutoLoomReminderVoiceTests`; completion undone by "geri al"; deletion after a yes; both read back | Device tests RM1–RM3 | P1 |
+| Reminder list choice (Settings, by name, Tasks sheet) | Working in code | Automated (parser; run 38485233267) | `ReminderLists`, `ReminderListMention` | Device test RM4 | P1 |
+| Complete / delete a reminder by voice | Working in code | Automated (parser, matching; run 38485233267) | `AutoLoomReminderVoiceTests`; completion undone by "geri al"; deletion after a yes; both read back | Device tests RM1–RM3 | P1 |
 | Personal memory (explicit, search, delete, edit) | Working in code | Automated | `MemoryStore` | — | P1 |
 | Memory export | Missing | — | — | Plan 3.2 | P2 |
 | Consent: nothing saved without an explicit command | Partial | Automated (parser path) | Model-delegated saves trusted | Plan 1.14 | P0 |
@@ -102,7 +102,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Messages (compose sheet, user sends) | Working in code | Pending device | `MFMessageComposeViewController` | — | P1 |
 | Photos (add-only) | Working in code | Pending device | `PhotoLibrarySaver` | — | P2 |
 | Files | Missing | — | — | `fileImporter` | P2 |
-| Calendar / Reminders | Partial | Pending device | EventKit | Reminders: plan 2.2 (in CI); calendar edits by voice: not planned | P1 |
+| Calendar / Reminders | Partial | Pending device | EventKit | Reminders: plan 2.2 (CI passed) and 2.3 (repeats, in CI); calendar edits by voice: not planned | P1 |
 | Share sheet (outgoing) | Working in code | Pending device | `UIActivityViewController` | — | P2 |
 | Share extension / widgets / Live Activities | **Blocked** | — | Extension signing in the sideloaded IPA | Paid developer team | P3 |
 | Notifications with actions | Working in code | Automated | `TaskNotifications` (Complete, Snooze 1 hour; banner while the app is open) | Device test TK1 | P1 |

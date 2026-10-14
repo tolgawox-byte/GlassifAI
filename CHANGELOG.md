@@ -24,7 +24,7 @@ Plan item 2.3. CI results: `TEST_REPORT.md`. Not tried on an iPhone yet (device 
 
 ## [JARVIS Ultimate — plan 2.2: Apple Reminders by voice, list choice] — branch `autoloom-glasses-jarvis-v1`
 
-Plan item 2.2. CI results: `TEST_REPORT.md`. Nothing here has been tried on an iPhone yet (device tests RM1–RM4).
+Plan item 2.2. CI: run 38485233267 passed (iOS 362/364 with the 10 new tests, Rust 13/13); details in `TEST_REPORT.md`. Nothing here has been tried on an iPhone yet (device tests RM1–RM4).
 
 ### Added
 - **Complete an Apple reminder by voice:** "Süt alma hatırlatıcısını tamamla", "Ahmet'i arama anımsatıcısını tamamlandı olarak işaretle", "mark the milk reminder as done".
