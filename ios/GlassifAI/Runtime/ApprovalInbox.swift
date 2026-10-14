@@ -11,19 +11,21 @@ struct ApprovalInboxView: View {
   var body: some View {
     List {
       Section {
-        if let pending = orchestrator.pendingAction {
-          PendingActionCard(pending: pending)
-            .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
-        } else {
+        let waiting = orchestrator.waitingActions
+        if waiting.isEmpty {
           Text(L.t("Nothing is waiting on this iPhone.", "Bu iPhone'da bekleyen bir şey yok."))
             .foregroundStyle(.secondary)
+        }
+        ForEach(waiting) { pending in
+          PendingActionCard(pending: pending)
+            .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
         }
       } header: {
         Text(L.t("On this iPhone", "Bu iPhone'da"))
       } footer: {
         Text(L.t(
-          "One action waits here at a time; a new request replaces it. It expires if left alone.",
-          "Burada aynı anda bir işlem bekler; yeni bir istek onun yerini alır. Bekletilirse süresi dolar."))
+          "Up to five actions wait here, newest first, each until it is answered or two minutes pass. A spoken yes or no answers the newest; each card answers only itself. They are not kept after the app closes.",
+          "Burada en fazla beş işlem bekler, en yenisi üstte; her biri yanıtlanana ya da iki dakika geçene kadar. Sesli evet ya da hayır en yenisini yanıtlar; her kart yalnızca kendisini. Uygulama kapanınca saklanmazlar."))
       }
       if pc.link != nil {
         Section {

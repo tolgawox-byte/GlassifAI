@@ -151,7 +151,7 @@ final class AutoLoomActionTests: XCTestCase {
 
   func testNotesAreSavedDirectly() async {
     let orchestrator = AssistantOrchestrator.shared
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     let store = MemoryStore.shared
     var plan = DeviceActionPlan(kind: .saveNote)
     plan.title = "Test note \(UUID().uuidString.prefix(6))"
@@ -168,7 +168,7 @@ final class AutoLoomActionTests: XCTestCase {
 
   func testForgettingAMemoryWaitsForAYes() async {
     let orchestrator = AssistantOrchestrator.shared
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     let store = MemoryStore.shared
     let wasEnabled = store.isEnabled
     store.isEnabled = true
@@ -189,6 +189,7 @@ final class AutoLoomActionTests: XCTestCase {
 
   func testCallsAndMessagesAreNeverConfirmedByVoice() async {
     let orchestrator = AssistantOrchestrator.shared
+    orchestrator.clearPendingActions()
     var plan = DeviceActionPlan(kind: .call)
     plan.phone = "+16135550100"
     let staged = await orchestrator.stage(plan)
@@ -202,7 +203,7 @@ final class AutoLoomActionTests: XCTestCase {
 
   func testVoiceConfirmationWithNothingPending() async {
     let orchestrator = AssistantOrchestrator.shared
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     _ = orchestrator.beginVoiceSession()
     let delivered = expectation(description: "delivered")
     var reply = ""
@@ -220,7 +221,7 @@ final class AutoLoomActionTests: XCTestCase {
   /// a confirm_action delegation from the voice model is never a yes.
   func testTheVoiceModelCannotConfirmAnActionItself() async {
     let orchestrator = AssistantOrchestrator.shared
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     var plan = DeviceActionPlan(kind: .agentTask)
     plan.text = "list the files on my desktop"
     let staged = await orchestrator.stage(plan)

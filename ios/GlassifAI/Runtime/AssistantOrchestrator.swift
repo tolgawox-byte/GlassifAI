@@ -71,8 +71,18 @@ final class AssistantOrchestrator: ObservableObject {
   @Published private(set) var lastWebStatus = "Not used yet"
   @Published private(set) var lastError: String?
   @Published private(set) var activity: AssistantActivity?
-  /// An iPhone action waiting for the user's yes or tap.
-  @Published private(set) var pendingAction: PendingDeviceAction?
+  /// iPhone actions waiting for the user's yes or tap (plan 2.4), oldest
+  /// first, at most `pendingLimit`. A spoken yes, no or time choice answers
+  /// the newest; each card answers its own; nothing is approved in bulk.
+  @Published private(set) var pendingActions: [PendingDeviceAction] = []
+  static let pendingLimit = 5
+
+  /// The newest waiting action: the card on the Assistant screen and the one
+  /// a spoken answer is about.
+  var pendingAction: PendingDeviceAction? { pendingActions.last { !$0.isExpired } }
+
+  /// Every waiting action that has not expired, newest first (the inbox).
+  var waitingActions: [PendingDeviceAction] { pendingActions.filter { !$0.isExpired }.reversed() }
   @Published private(set) var lastActionResult: String?
   /// A short message for the assistant screen (for example a command that
   /// finished after a permission was granted outside a conversation).
@@ -990,7 +1000,7 @@ final class AssistantOrchestrator: ObservableObject {
   /// someone) wait for a tap. An ambiguous time is always asked first.
   func stage(_ plan: DeviceActionPlan) async -> ActionStageResult {
     if let ambiguity = plan.ambiguityNote {
-      pendingAction = PendingDeviceAction(plan: plan)
+      enqueuePending(PendingDeviceAction(plan: plan))
       return ActionStageResult(
         speakable: "\(ambiguity) Proposed: \(plan.summary). If the user means the other time, delegate the action again with those words. If they confirm this one, the app hears their yes itself. Nothing is saved yet.",
         display: plan.summary, failed: nil)
@@ -1017,7 +1027,7 @@ final class AssistantOrchestrator: ObservableObject {
       }
     case .confirm:
       ActivityLog.shared.record(.approval, plan.kind.label + L.t(" — waiting for a yes", " — onay bekliyor"))
-      pendingAction = PendingDeviceAction(plan: plan)
+      enqueuePending(PendingDeviceAction(plan: plan))
       let reason = !plan.afterUntrustedContent ? ""
         : plan.kind.readsPersonalData
         ? "Content from the camera, the web or an agent is in this conversation, so reading the user's contacts, calendar or reminders needs their yes. "
@@ -1027,7 +1037,7 @@ final class AssistantOrchestrator: ObservableObject {
         display: plan.summary, failed: nil)
     case .strongConfirm:
       ActivityLog.shared.record(.approval, plan.kind.label + L.t(" — waiting for a tap", " — dokunma bekliyor"))
-      pendingAction = PendingDeviceAction(plan: plan)
+      enqueuePending(PendingDeviceAction(plan: plan))
       return ActionStageResult(
         speakable: "\(plan.summary) is ready on the phone screen. For safety the user must tap to confirm it there; a spoken yes is not enough. Tell the user briefly. Nothing has happened yet.",
         display: plan.summary, failed: nil)
@@ -1038,7 +1048,7 @@ final class AssistantOrchestrator: ObservableObject {
   /// (a new day keeps the time of day) and is staged again; nothing else
   /// about it changes. Nil when nothing is waiting.
   func correctPendingAction(to time: ParsedTime) async -> ActionStageResult? {
-    guard let pending = pendingAction, !pending.isExpired else { return nil }
+    guard let pending = pendingAction else { return nil }
     var plan = pending.plan
     let merged = CorrectionMerge.merge(original: plan.date, originalHasTime: plan.hasTime, correction: time)
     if let start = plan.date, let end = plan.endDate {
@@ -1047,8 +1057,40 @@ final class AssistantOrchestrator: ObservableObject {
     plan.date = merged.date
     plan.hasTime = merged.hasTime
     plan.alternativeDate = nil
-    pendingAction = nil
+    removePending(pending.id)
     return await stage(plan)
+  }
+
+  // MARK: Waiting actions (plan 2.4)
+
+  /// Adds a waiting action. The same plan again replaces the earlier one;
+  /// past the limit, the oldest is dropped (it would expire soon anyway).
+  /// Nothing here runs anything.
+  func enqueuePending(_ action: PendingDeviceAction) {
+    pendingActions.removeAll { $0.isExpired || $0.plan == action.plan }
+    pendingActions.append(action)
+    if pendingActions.count > Self.pendingLimit {
+      pendingActions.removeFirst(pendingActions.count - Self.pendingLimit)
+    }
+  }
+
+  /// The waiting action a card or a spoken answer is about: `id`'s, or the
+  /// newest when there is no id. Never another one in its place.
+  private func waitingAction(_ id: UUID?) -> PendingDeviceAction? {
+    guard let id else { return pendingAction }
+    return pendingActions.first { $0.id == id && !$0.isExpired }
+  }
+
+  private func removePending(_ id: UUID) {
+    pendingActions.removeAll { $0.id == id || $0.isExpired }
+  }
+
+  /// Cancels every waiting action (Privacy center, tests). Each is logged.
+  func clearPendingActions() {
+    for action in pendingActions where !action.isExpired {
+      ActivityLog.shared.record(.approval, action.plan.kind.label + L.t(" — cancelled", " — iptal edildi"))
+    }
+    pendingActions.removeAll()
   }
 
   /// After a tap on an agent, skill or PC card, the service's answer appears
@@ -1093,15 +1135,15 @@ final class AssistantOrchestrator: ObservableObject {
   /// recognised by the voice action bridge; a yes requested by the voice
   /// model never reaches here. Actions that leave the app are never
   /// confirmed by voice.
-  func confirmPendingAction(byVoice: Bool) async -> String {
-    guard let pending = pendingAction, !pending.isExpired else {
-      pendingAction = nil
+  func confirmPendingAction(byVoice: Bool, id: UUID? = nil) async -> String {
+    guard let pending = waitingAction(id) else {
+      pendingActions.removeAll { $0.isExpired }
       return "There is no action waiting for confirmation."
     }
     if byVoice && pending.plan.risk == .strongConfirm {
       return "For safety, this must be confirmed with a tap on the phone; a spoken yes is not enough."
     }
-    pendingAction = nil
+    removePending(pending.id)
     let label = pending.plan.kind.label
     ActivityLog.shared.record(
       .approval, label + (byVoice ? L.t(" — approved by voice", " — sesle onaylandı") : L.t(" — approved by tap", " — dokunarak onaylandı")))
@@ -1129,8 +1171,8 @@ final class AssistantOrchestrator: ObservableObject {
   /// "Sabah" / "akşam": the chosen reading of an ambiguous time replaces
   /// the pending action's time; the action then runs like any other.
   func choosePendingTime(_ date: Date) async -> ActionStageResult? {
-    guard let pending = pendingAction, !pending.isExpired else {
-      pendingAction = nil
+    guard let pending = pendingAction else {
+      pendingActions.removeAll { $0.isExpired }
       return nil
     }
     var plan = pending.plan
@@ -1139,7 +1181,7 @@ final class AssistantOrchestrator: ObservableObject {
     }
     plan.date = date
     plan.alternativeDate = nil
-    pendingAction = nil
+    removePending(pending.id)
     return await stage(plan)
   }
 
@@ -1170,19 +1212,23 @@ final class AssistantOrchestrator: ObservableObject {
     return (outcome.speakable, outcome.display, outcome.failed)
   }
 
+  /// "Hayır" cancels the newest waiting action; a card's Cancel its own.
   @discardableResult
-  func cancelPendingAction() -> String {
-    guard let pending = pendingAction else { return "There was no action waiting." }
+  func cancelPendingAction(id: UUID? = nil) -> String {
+    guard let pending = waitingAction(id) else {
+      pendingActions.removeAll { $0.isExpired }
+      return "There was no action waiting."
+    }
     ActivityLog.shared.record(.approval, pending.plan.kind.label + L.t(" — cancelled", " — iptal edildi"))
-    pendingAction = nil
+    removePending(pending.id)
     lastActionResult = "Cancelled"
     return "Cancelled. Nothing was saved or sent."
   }
 
   /// Called by the confirmation card after the user tapped an action that
   /// opens another app (Maps, Safari, Phone, Messages, share sheet).
-  func completeTapAction(_ result: String, feedback: ActionFeedback? = nil) {
-    pendingAction = nil
+  func completeTapAction(_ result: String, feedback: ActionFeedback? = nil, id: UUID? = nil) {
+    if let done = waitingAction(id) { removePending(done.id) }
     lastActionResult = result
     if let feedback { postFeedback(feedback) }
   }

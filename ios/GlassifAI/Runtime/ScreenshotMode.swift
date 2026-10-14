@@ -61,6 +61,18 @@ enum ScreenshotDemo {
     memory.addTask(title: "Civic'in teslim evraklarını hazırla", dueAt: Date().addingTimeInterval(3 * 3_600), source: "demo")
     memory.addTask(title: "Lastik siparişini onayla", dueAt: tomorrowTen, source: "demo")
     memory.addTask(title: "Corolla fotoğraflarını tamamla", source: "demo")
+    if ScreenshotMode.screen == "approvals" {
+      // Two actions waiting on this iPhone (plan 2.4); nothing runs without a tap.
+      var deletion = DeviceActionPlan(kind: .deleteReminder)
+      deletion.reminderID = "demo"
+      deletion.title = "Süt al"
+      deletion.reminderListName = "Market"
+      var message = DeviceActionPlan(kind: .message)
+      message.recipient = "Ahmet"
+      message.text = "10 dakika gecikeceğim."
+      AssistantOrchestrator.shared.enqueuePending(PendingDeviceAction(plan: deletion))
+      AssistantOrchestrator.shared.enqueuePending(PendingDeviceAction(plan: message))
+    }
 
     let dealer = DealerStore.shared
     let vehicle = dealer.start()

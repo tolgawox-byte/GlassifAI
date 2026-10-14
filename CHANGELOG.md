@@ -2,6 +2,23 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS Ultimate — plan 2.4: several actions waiting on the phone] — branch `autoloom-glasses-jarvis-v1`
+
+Plan item 2.4. CI results: `TEST_REPORT.md`. Not tried on an iPhone yet (device test AP1).
+
+### Changed
+- **Up to five iPhone actions can wait for the user at once.**
+  - Until now a new request replaced the action that was waiting, so a message prepared a moment earlier silently disappeared. The same request again is still kept once.
+- **Who answers what:**
+  - "evet", "hayır", "akşam" and "hayır, cumartesi" answer the newest action, the one the assistant just read back;
+  - each card (on Home and in the approvals inbox) answers only its own action;
+  - nothing is approved in bulk, and an expired action cannot be approved.
+- The approvals inbox lists every waiting phone action, newest first, next to the PC's. Home shows the newest card and "N more waiting", which opens the inbox.
+- Diagnostics count the waiting actions.
+
+### Not done (owner's decision)
+- Waiting phone actions are not kept across an app restart. Keeping them would store their content (a message's text, a phone number, a note's text) on disk. An old approval is also easy to tap by mistake. The PC's approvals already survive a restart, because they wait on the PC.
+
 ## [JARVIS Ultimate — plan 2.3: repeating reminders, events and tasks; undo a spoken completion] — branch `autoloom-glasses-jarvis-v1`
 
 Plan item 2.3. CI results: `TEST_REPORT.md`. Not tried on an iPhone yet (device tests TK2, RM5).

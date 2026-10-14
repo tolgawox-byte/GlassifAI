@@ -475,7 +475,11 @@ struct DiagnosticsView: View {
       }
       Section("Actions and agent") {
         row("iPhone actions", AssistantPreferences.actionsEnabled ? "on" : "off")
-        row("Waiting for confirmation", orchestrator.pendingAction?.plan.summary ?? "none")
+        row(
+          "Waiting for confirmation",
+          orchestrator.pendingAction.map { newest in
+            newest.plan.summary + (orchestrator.waitingActions.count > 1 ? " (+\(orchestrator.waitingActions.count - 1) more)" : "")
+          } ?? "none")
         row("Last action result", orchestrator.lastActionResult.map { LogSanitizer.sanitize($0, limit: 160) } ?? "—")
         row("Agent gateway", agentGatewayStatus)
       }
@@ -656,7 +660,7 @@ struct DiagnosticsView: View {
       "latency: processing \(ms(metrics.processingMedianMs))/\(ms(metrics.processingP95Ms)) capture→phone \(ms(metrics.transportMedianMs))/\(ms(metrics.transportP95Ms)) frame age \(metrics.lastFrameAgeMs.map(String.init) ?? "—") ms; preview \(metrics.previewMode)",
       "audio: mic \(audioRoute.inputSummary); speaker \(audioRoute.outputSummary); interrupted \(audioRoute.isInterrupted); last \(audioRoute.lastEvent)",
       "web: enabled \(AssistantPreferences.webSearchEnabled); \(orchestrator.lastWebStatus)",
-      "actions: \(AssistantPreferences.actionsEnabled ? "on" : "off"); pending \(orchestrator.pendingAction?.plan.kind.rawValue ?? "none"); agent gateway \(agentGatewayStatus)",
+      "actions: \(AssistantPreferences.actionsEnabled ? "on" : "off"); pending \(orchestrator.waitingActions.map { $0.plan.kind.rawValue }.joined(separator: ",").ifEmpty("none")); agent gateway \(agentGatewayStatus)",
       "power: thermal \(thermalLabel); battery \(batteryLabel)",
       "live vision: \(liveVision.status.label); notes \(liveVision.updateCount); stable skips \(liveVision.skippedStable); error \(liveVision.lastError ?? "none"); last stop \(liveVision.lastStopReason ?? "—"); thermal \(thermalLabel)",
     ]

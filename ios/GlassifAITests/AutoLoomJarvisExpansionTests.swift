@@ -79,6 +79,7 @@ final class AutoLoomJarvisExpansionTests: XCTestCase {
 
   func testCorrectingAWaitingActionChangesOnlyItsTime() async throws {
     let orchestrator = AssistantOrchestrator.shared
+    orchestrator.clearPendingActions()
     let calendar = Calendar.current
     var plan = DeviceActionPlan(kind: .message)
     plan.recipient = "Ahmet"

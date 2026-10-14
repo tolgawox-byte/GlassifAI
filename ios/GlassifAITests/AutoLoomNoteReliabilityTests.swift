@@ -177,7 +177,7 @@ final class AutoLoomNoteReliabilityTests: XCTestCase {
 
   func testDeletingANoteWaitsForAYes() async throws {
     let orchestrator = AssistantOrchestrator.shared
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     let store = MemoryStore.shared
     let marker = "sil\(UUID().uuidString.prefix(6))"
     let note = try XCTUnwrap(store.addNote(title: nil, content: "Silinecek \(marker)", source: "test"))

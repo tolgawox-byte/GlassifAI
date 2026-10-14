@@ -41,7 +41,7 @@ struct PendingActionCard: View {
       }
       HStack(spacing: 10) {
         primaryButton
-        Button(L.t("Cancel", "Vazgeç"), role: .cancel) { orchestrator.cancelPendingAction() }
+        Button(L.t("Cancel", "Vazgeç"), role: .cancel) { orchestrator.cancelPendingAction(id: pending.id) }
           .buttonStyle(.bordered)
       }
       .controlSize(.regular)
@@ -73,7 +73,7 @@ struct PendingActionCard: View {
         working = true
         let staged = plan
         Task {
-          let result = await orchestrator.confirmPendingAction(byVoice: false)
+          let result = await orchestrator.confirmPendingAction(byVoice: false, id: pending.id)
           // Agent, skill and PC answers are shown, not discarded.
           orchestrator.showTapResult(for: staged, result: result)
           working = false
@@ -86,7 +86,7 @@ struct PendingActionCard: View {
         guard let destination = plan.location,
               let url = plan.url ?? DeviceActionExecutor.mapsURL(for: destination) else { return }
         openURL(url) { accepted in
-          orchestrator.completeTapAction(
+          done(
             accepted ? "Opened directions to \(destination)" : "Maps could not be opened",
             feedback: accepted
               ? ActionFeedback(kind: .directions, title: L.t("Directions opened", "Yol tarifi açıldı"))
@@ -100,7 +100,7 @@ struct PendingActionCard: View {
         guard let url = plan.url,
               URLSafety.isPublicWebURL(url) || (ShortcutLink.isRunShortcut(url) && !plan.afterUntrustedContent) else { return }
         openURL(url) { accepted in
-          orchestrator.completeTapAction(accepted ? "Opened \(url.host ?? "link")" : "The link could not be opened")
+          done(accepted ? "Opened \(url.host ?? "link")" : "The link could not be opened")
         }
       }
       .buttonStyle(.borderedProminent)
@@ -110,7 +110,7 @@ struct PendingActionCard: View {
         // iOS asks once more before dialling; the app never says a call
         // was made.
         openURL(url) { accepted in
-          orchestrator.completeTapAction(
+          done(
             accepted ? "The call screen opened for \(plan.recipient ?? phone)" : "The call screen could not be opened",
             feedback: accepted
               ? ActionFeedback(kind: .call, title: L.t("Call screen opened", "Arama ekranı açıldı"))
@@ -128,12 +128,18 @@ struct PendingActionCard: View {
         let opened = SystemSheets.presentShare(text: text) { completed in
           orchestrator.shareSheetFinished(completed)
         }
-        if opened { orchestrator.completeTapAction("Share sheet opened") }
+        if opened { done("Share sheet opened") }
       } label: {
         Label(L.t("Share", "Paylaş"), systemImage: "square.and.arrow.up")
       }
       .buttonStyle(.borderedProminent)
     }
+  }
+
+  /// The result of a tap that opened another app, for this card's action
+  /// only (others may be waiting too).
+  private func done(_ result: String, feedback: ActionFeedback? = nil) {
+    orchestrator.completeTapAction(result, feedback: feedback, id: pending.id)
   }
 
   /// Messages' own compose sheet (the user sends), or the Messages app
@@ -143,12 +149,12 @@ struct PendingActionCard: View {
     if SystemSheets.presentMessage(phone: plan.phone, body: body, finished: { result in
       orchestrator.messageSheetFinished(result)
     }) {
-      orchestrator.completeTapAction("Messages opened; sending is up to the user")
+      done("Messages opened; sending is up to the user")
       return
     }
     guard let url = DeviceActionExecutor.messageURL(phone: plan.phone, body: body) else { return }
     openURL(url) { accepted in
-      orchestrator.completeTapAction(
+      done(
         accepted ? "Message opened in Messages; sending is up to the user" : "Messages could not be opened",
         feedback: accepted ? nil : ActionFeedback.failed(L.t("Messages could not be opened", "Mesajlar açılamadı")))
     }

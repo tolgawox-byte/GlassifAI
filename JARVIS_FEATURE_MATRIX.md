@@ -159,7 +159,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Feature | Status | Verification | Evidence | Completion criterion | Pri |
 |---|---|---|---|---|---|
 | Lifecycle states, approvals, retries, timeouts, cancellation, verification (PC) | Done | Automated | `tasks.ts` | — | P0 |
-| Same on the phone (single pending slot) | Partial | Automated | `PendingDeviceAction` | Approval inbox (plan 2.4) | P1 |
+| Same on the phone (up to five waiting actions; not kept across a restart) | In CI | Automated | `AutoLoomApprovalQueueTests` | Device test AP1; restart: owner decision (plan 2.4) | P1 |
 | Model cannot approve its own actions | Done | Automated | Phone + PC tests | SEC1 | P0 |
 | Untrusted content wrapped; prompt-injection defence | Built | Automated · Pending device (SEC2, SEC3) | `UntrustedContent` (any tag spelling defused), PC `<untrusted_pc_content>`, conversation-wide `ConversationTaint`, memory saves only from the user's words, personal reads need a yes, memories as quoted data | Model-started Live Vision not gated yet (plan 1.14) | P0 |
 | Secrets never in code or logs | Verified | Automated (secrets scan of all history) | `JARVIS_AUDIT.md` §8 | gitleaks in CI | P0 |

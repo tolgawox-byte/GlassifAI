@@ -510,7 +510,17 @@ struct AssistantHomeView: View {
     VStack(spacing: 10) {
       if let pending = orchestrator.pendingAction {
         PendingActionCard(pending: pending)
+          .id(pending.id)
           .transition(.move(edge: .bottom).combined(with: .opacity))
+        let more = orchestrator.waitingActions.count - 1
+        if more > 0 {
+          // Plan 2.4: the others wait in the inbox, each with its own card.
+          Button { AppNavigator.shared.show(.approvals) } label: {
+            Label(L.t("\(more) more waiting", "\(more) işlem daha bekliyor"), systemImage: "tray.full")
+              .font(.footnote.weight(.semibold))
+          }
+          .buttonStyle(.bordered)
+        }
       }
       if case .failed(let message) = voice.state {
         errorCard(message)

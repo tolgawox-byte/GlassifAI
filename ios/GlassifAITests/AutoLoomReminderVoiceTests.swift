@@ -158,7 +158,7 @@ final class AutoLoomReminderVoiceTests: XCTestCase {
       defaults.set(previousActions, forKey: AssistantPreferences.actionsKey)
     }
     let orchestrator = AssistantOrchestrator.shared
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     for intent: VoiceIntent in [.completeReminder(.words("süt")), .deleteReminder(.words("süt"))] {
       let outcome = await orchestrator.runVoiceIntent(VoiceBridgeDecision(intent, "test"), transcript: "süt hatırlatıcısı")
       XCTAssertEqual(outcome.failed, "tool off")
@@ -171,7 +171,7 @@ final class AutoLoomReminderVoiceTests: XCTestCase {
 
   func testAStepWaitingForAYesIsNotReportedAsDone() async throws {
     let orchestrator = AssistantOrchestrator.shared
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     let store = MemoryStore.shared
     let marker = "graf\(UUID().uuidString.prefix(6).lowercased())"
     let note = try XCTUnwrap(store.addNote(title: nil, content: "Silinecek \(marker)", source: "test"))
@@ -186,7 +186,7 @@ final class AutoLoomReminderVoiceTests: XCTestCase {
     XCTAssertTrue(outcome.reply.contains("Step 2") && outcome.reply.contains(": done —"), outcome.reply)
     XCTAssertNil(outcome.failed)
     XCTAssertTrue(store.notes.contains { $0.id == note.id }, "nothing deleted without the yes")
-    orchestrator.cancelPendingAction()
+    orchestrator.clearPendingActions()
     store.deleteNote(note)
   }
 }

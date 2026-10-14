@@ -1150,9 +1150,11 @@ extension AssistantOrchestrator {
       return blocked
     }
     trace.update(traceID) { $0.executor = kind == .scheduleNotification ? "UserNotifications" : "EventKit" }
+    let pendingBefore = pendingAction?.id
     let staged = await stage(validated)
     await refreshBoards()
-    let waiting = pendingAction != nil
+    // Waiting only if this action was staged (others may be waiting too).
+    let waiting = pendingAction.map { $0.id != pendingBefore } ?? false
     trace.update(traceID) { entry in
       entry.result = staged.failed.map { "failed: " + LogSanitizer.sanitize($0, limit: 120) }
         ?? (waiting ? "waiting for the user's choice" : "success (iOS confirmed)")

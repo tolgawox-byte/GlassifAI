@@ -509,9 +509,15 @@ enum ActionPlanError: Error, Equatable {
 
 /// A plan waiting for the user's confirmation.
 struct PendingDeviceAction: Identifiable, Equatable {
-  let id = UUID()
+  let id: UUID
   let plan: DeviceActionPlan
-  let createdAt = Date()
+  let createdAt: Date
+
+  init(plan: DeviceActionPlan, createdAt: Date = Date()) {
+    id = UUID()
+    self.plan = plan
+    self.createdAt = createdAt
+  }
 
   /// Unconfirmed actions expire.
   static let lifetime: TimeInterval = 120
