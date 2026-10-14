@@ -35,6 +35,24 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 3. Every change keeps existing behaviour unless the item says otherwise, and every phase ends with the full CI suite (iOS + Rust + PC companion).
 4. Security rules: model output never approves anything, never becomes a shell command, and never widens a permission.
 
+## Phase R — Ray-Ban connection and camera (owner's brief of 2026-10-13)
+
+The owner's sideloaded IPA did not connect to the glasses, and the camera looked choppy and possibly like the iPhone's. The brief asks for real root causes before new features. Evidence, causes and device tests are in `docs/RAYBAN_CONNECTION.md`. The research reports are in `GlassifAI-research/2026-10-14/` (D1: 24 DAT apps and Meta's issues; D2: skills).
+
+| # | Item | Status | What was done | Tests |
+|---|---|---|---|---|
+| R.1 | Root cause of "does not connect" | ANALYSED / DEVICE TEST | 1. The glasses' call rule: the glasses microphone (HFP) ends and refuses camera sessions on current firmware (Meta #206/#332, 2026-10-13). 2. DAT 0.5.0 seven months behind the glasses (on-glasses DAT 1.0.0.0.0, #308). 3. Developer Mode broken in Meta AI 290 for days (#310/#325). 4. Refusing glasses (#292). 5. One developer app at a time. 6. Bluetooth off or denied shown as sleeping glasses. 7. The iPhone camera stayed the source after connecting. 8. Bundle id with "-" after re-signing. Which one hit the owner needs the device report | `RAYBAN_CONNECTION.md` rows A–V |
+| R.2 | DAT 1.0.1 port | IN CI | DeviceSession + Camera.stream/photo; typed session errors; gestures from the session; Meta-AI-started registration; Mock Device Kit 1.0 | `AutoLoomRayBanDAT1Tests`, `GlassifAITests` |
+| R.3 | Connection state machine with separate layers | IN CI | New phases: Bluetooth, app/glasses update, session starting/paused, DAT app unreachable, refusing, in a call. Retries never within 2 s and none while the user must act. "Connected" only when usable | `AutoLoomConnectionTests`, `AutoLoomRayBanDAT1Tests` |
+| R.4 | Diagnostics | IN CI | Layer table (Bluetooth, SDK, registration, link with worn/folded/battery, session, camera, image source, microphone, output, AI session); signing; bundle-id check; Meta SDK log lines (IDs masked) in the report | Same; device V |
+| R.5 | IPA vs build | IN CI | IPA names carry the commit; `scripts/ci-ipa-check.sh` publishes and checks commit, callback scheme, accessory protocol, background mode and Meta frameworks | CI annotation "IPA Release" |
+| R.6 | Camera source honesty | IN CI | Connecting switches iPhone → Ray-Ban; Home offers the switch when the glasses are linked; the existing source pill and stale veil stay | Device A, T |
+| R.7 | Smoothness | IN CI / DEVICE TEST | Measured: frame interval median/p95, stutters ≥ 250 ms, longest gap. Default "Live" 504×896 @ 24 fps (720p settles at 504×896 over Bluetooth anyway); warm-up 20 s before the raw fallback; a starved stream gets a fresh session | `AutoLoomRayBanDAT1Tests`, `AutoLoomCameraTests`; device S |
+| R.8 | Detail for the AI | IN CI / DEVICE TEST | Reading requests take an in-stream photo (about 1080×1440 on DAT 1.x); the standalone full photo is opt-in, followed by a fresh session | `AutoLoomVisionPipelineTests`; device R, U |
+| R.9 | Audio with the Ray-Ban camera | IN CI / OWNER DECISION | Camera-safe audio (default on): the conversation and the wake phrase use the iPhone microphone while the Ray-Ban camera is the source. The documented microphone-first order stays for after Meta's fix. **Owner decision:** DAT in-stream audio as the glasses microphone during camera use (experimental, not beamformed, needs a custom WebRTC audio source) | `AutoLoomRayBanDAT1Tests`; device N, N2 |
+| R.10 | Error details kept | DONE-CI (phase 1b) | Swift and Rust keep status, error code, param and request id (`http_errors_keep_status_code_param_and_request_id`); session errors keep their DAT names | Rust tests |
+| R.11 | Open-source research and skills | DONE (report) / NEXT (implementation) | D2: 44 sources, licences checked, 26 new ideas scored; top 5 in `JARVIS_FEATURE_RESEARCH.md` §7 | — |
+
 ## Phase 1 — Infrastructure (P0)
 
 | # | Item | Status | Acceptance criteria | Tests |
@@ -63,7 +81,7 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 | 2.1 | Real connection and system state on Home | PARTLY DONE-CI / NEXT | One status strip: glasses link, voice session (real phases), camera source, PC reachability (answered < 30 s), pending approvals count; nothing green without a fresh fact — Done so far: Home already showed the glasses link, the waiting phone action and Live Vision; a PC chip now shows approvals waiting or tasks running on the paired PC (refreshed every 20 s while Home is shown, "not answering" after 30 s of silence) and opens the PC screen. Still NEXT: real voice phases in one strip |
 | 2.2 | Reminders verified by fetch-back; list choice; complete/delete by voice | DONE-CI (fetch-back) / DONE-CI (list choice, voice complete/delete; run 38485233267) / DEVICE TEST RM1–RM4 | After saving, `calendarItem(withIdentifier:)` returns the item or the reply says it failed — Now also: "… hatırlatıcısını tamamla" completes one open reminder and "geri al" reopens it; "… hatırlatıcısını sil" waits for a yes; both are reported only after a fresh fetch from Reminders no longer lists the reminder as open. A reminder is found by its words (Turkish verb nouns match: "süt alma" finds "Süt al"), the one just saved ("bu hatırlatıcıyı …"), or the user's answer to "Hangisi?" (order, list name or words); nothing is guessed, and several at once are never changed. New reminders go to the list named in the words ("İş listeme …"; only real list names count), else the list chosen in Settings → iPhone tools, else iOS's default; a list that is gone falls back to the default and the assistant says so. The Tasks tab's new-reminder sheet has a list picker. The planner model can choose neither action. Tests: `AutoLoomReminderVoiceTests`; physical RM1–RM4 |
 | 2.3 | Tasks: priority, snooze, recurrence; notification delegate with Complete/Snooze actions | DONE-CI (alert actions, foreground banners; priority existed) / DONE-CI (recurrence, undo of a spoken completion; run 38489746020) / DEVICE TEST TK1, TK2, RM5 | Foreground banners; actions work from the lock screen; undo for completion — Now also: "her gün", "hafta içi her gün", "her pazartesi" / "cumaları", "her ayın 15'inde", "her yıl", "every day" repeat a reminder or event (EventKit's own rule) or an AutoLoom task (completing it adds the next one, never in the past and counted from the first date, with an alert when the completed one had one; undoing the completion takes it back). Words such as "haftalık" and "bu hafta içi" are not read as repeats; a repeat the app cannot set ("her saat", "iki günde bir") is said, and the item is saved once; notifications cannot repeat and say so. A spoken task completion is undone by "geri al". The task and new-reminder sheets have a Repeat picker. Task repeats are kept beside the SwiftData store, so the store already on the iPhone needs no schema migration. Tests: `AutoLoomRecurrenceTests`; physical TK2, RM5 |
-| 2.4 | Approval inbox (F10) | DONE-CI (one screen, PC approvals) / IN CI (several phone actions) / OWNER DECISION (phone actions across an app restart) / DEVICE TEST AP1 | Every waiting phone action and PC task in one list; more than one slot; survives app restart — Done: one screen with the phone's waiting actions and the PC's approvals (those survive a restart, they wait on the PC), opened from the Home chip. Now also: up to five phone actions wait at once (a new request no longer replaces the one before; the same request again is kept once); a spoken yes, no, time choice or correction answers the newest, the one just read back; each card (Home, inbox) answers only its own action, so nothing is approved in bulk; an expired one cannot be approved; Home says "N more waiting" and opens the inbox. **Not done, for the owner to decide:** keeping phone actions across an app restart. They can carry a message's text, a phone number or a note's content, which would then be stored on disk, and an old approval is easy to tap by mistake; each still expires after two minutes. Tests: `AutoLoomApprovalQueueTests`; physical AP1 |
+| 2.4 | Approval inbox (F10) | DONE-CI (one screen, PC approvals; several phone actions, run 38492438643) / OWNER DECISION (phone actions across an app restart) / DEVICE TEST AP1 | Every waiting phone action and PC task in one list; more than one slot; survives app restart — Done: one screen with the phone's waiting actions and the PC's approvals (those survive a restart, they wait on the PC), opened from the Home chip. Now also: up to five phone actions wait at once (a new request no longer replaces the one before; the same request again is kept once); a spoken yes, no, time choice or correction answers the newest, the one just read back; each card (Home, inbox) answers only its own action, so nothing is approved in bulk; an expired one cannot be approved; Home says "N more waiting" and opens the inbox. **Not done, for the owner to decide:** keeping phone actions across an app restart. They can carry a message's text, a phone number or a note's content, which would then be stored on disk, and an old approval is easy to tap by mistake; each still expires after two minutes. Tests: `AutoLoomApprovalQueueTests`; physical AP1 |
 | 2.5 | Persisted activity log on the phone | DONE-CI | Actions, approvals, PC tasks, failures kept 30 days (no content), viewable and exportable |
 | 2.6 | Notes: attachments and visible links; bulk export | LATER | Photo/document attachments; links to tasks and conversations shown both ways; JSON/Markdown export |
 | 2.7 | UI polish of inert rows and misleading copy | DONE-CI (search, Memory-search task and timeline rows open their item; contacts copy) | Search, timeline and task rows open their item; privacy copy matches behaviour |
@@ -75,7 +93,7 @@ Hiçbir özellik gerçek cihaz testi olmadan "çalışıyor" sayılmaz.
 | 3.1 | Diagnostics: "what the AI saw" | PARTLY DONE-CI (capture age, metadata status) / NEXT | Live Vision images recorded; destination provider/model; capture age; opt-in local thumbnail of the exact bytes; metadata status; glasses-only "Actual" |
 | 3.2 | Memory supersession (F06) and memory inbox (F07) | NEXT | Outdated facts superseded with history; model proposals need approval |
 | 3.3 | Semantic visual memory (F21) | LATER | On-device embeddings with a commercially licensed model; Turkish queries work; never indexes the photo library without consent |
-| 3.4 | DAT 1.x port behind a camera-backend seam | NEXT (big) | Two builds share all code above the seam; full-resolution stills as an opt-in HIGH_DETAIL path; recording not cut by photos; D1–D11 pass on V128 |
+| 3.4 | DAT 1.x port | IN CI (phase R.2: one build on DAT 1.0.1, no seam; the 0.5.0 build is tagged `rollback-43ca5f2-before-dat1-port`) | Full-resolution stills as an opt-in path; recording not cut by photos; rows A–V pass on V128 |
 
 ## Phase 4 — Tools and device integrations
 
@@ -110,14 +128,23 @@ All of these wait on the owner supplying keys and approving costs.
 | ADR-2 | TLS with the PC's own key, pinned by the phone (SPKI-style pin of the EC point) | Encryption and server identity without a CA or a domain; renewals keep the pin | Plain HTTP + app-layer crypto (custom protocol risk); a public CA (needs a domain); Tailscale certs (optional later) |
 | ADR-3 | Two channels: MCP for the model, REST for the human UI | The model can start and read tasks but cannot reach approvals, config or pairing | One combined API (the model could reach approvals); MCP-only (no human channel) |
 | ADR-4 | Approvals bound to a digest of tool + arguments; destructive/execute always ask; policy changes void approvals | "What you see is what you approve" | Model-judged risk; pre-approval by a model flag |
-| ADR-5 | DAT 0.5.0 stays the default; DAT 1.x is ported behind a camera-backend seam; 1.x becomes the default after device tests | 0.5.0 is not deprecated and is the tested base; 1.x has full-resolution stills | Blind SDK swap; maintaining dat1 as a permanent fork |
+| ADR-5 | (Superseded by ADR-8) DAT 0.5.0 stays the default; DAT 1.x behind a seam | — | — |
+| ADR-8 | DAT 1.0.1 is the only SDK of the main branch; the 0.5.0 build stays reachable as a tag and an IPA | The glasses moved to on-glasses DAT 1.0 and Meta answers old-SDK failures with "update to 1.0.1"; a seam for two SDKs doubles code that cannot be tested without glasses | Keeping 0.5.0 (no fix path for the owner's glasses); a two-SDK seam (untestable from Windows) |
+| ADR-9 | Camera-safe audio: no glasses HFP microphone while the Ray-Ban camera is the source | Meta confirmed the glasses end camera sessions when HFP connects, in every order, until a glasses update (#206, #332) | The documented microphone-first order alone (fails on this firmware); keeping HFP up all the time (still a "call") |
 | ADR-6 | Keep the private ChatGPT transport for personal use; add an official-API provider for any commercial path | Works today on the owner's plan; commercial use needs supported APIs | Removing it (loses the plan-backed voice) |
 | ADR-7 | PC actions reach voice through the existing MCP skill machinery (pinned), not a new voice protocol | Reuses tool choice, confirmation cards and untrusted wrapping that already have tests | A separate PC planner (duplicated logic) |
 
 ## Next session, in order
 
 1. Read the CI results of the last push and fix anything red (`TEST_REPORT.md`).
-2. Owner's physical tests, most valuable first:
+2. **The Ray-Ban device test first (phase R).** `docs/RAYBAN_CONNECTION.md` rows:
+   - **T0 / setup:** power-switch the glasses, re-push Developer Mode, disconnect AirPods;
+   - **A, B** (connect, reopen);
+   - **N, N2** (conversation with the camera: iPhone microphone, then the call rule);
+   - **S, U** (smoothness, photo size);
+   - **V** (SDK log).
+   - Send the copied connection report after any failure.
+3. Owner's other physical tests, most valuable first:
    - AU1, VC1–VC4, AU2, AU3 (voice start, audio route, watchdog);
    - CAM1, CAM2, DAT1 (camera honesty and freshness, DAT version);
    - SEC1–SEC3 (approvals and injection);
@@ -126,12 +153,13 @@ All of these wait on the owner supplying keys and approving costs.
    - RM1–RM4 (Apple Reminders by voice: complete and undo, delete after a yes, "hangisi?", list choice);
    - TK2 and RM5 (repeating tasks, reminders and events);
    - AP1 (several actions waiting on the phone).
-3. Owner decisions:
-   - HFP before the camera stream (1.7), after AU2/AU3;
+4. Owner decisions:
+   - DAT in-stream audio as the glasses microphone while the camera runs (R.9);
+   - HFP before the camera stream (1.7): superseded by R.9; on current firmware no order works (Meta);
    - Remote Assist TLS (1.15);
    - App Store privacy answers from `PrivacyInfo.xcprivacy` (1.16).
    - Turn on GitHub private vulnerability reporting (Settings → Code security), which `SECURITY.md` now waits for.
    - Whether waiting phone actions should survive an app restart (2.4): it means storing their content (message text, numbers, note text) on disk.
-4. Remaining NEXT items:
+5. Remaining NEXT items:
    - 3.1 Live Vision images and an opt-in thumbnail; 3.2 memory supersession and inbox;
-5. DAT 1.x port (3.4) once DAT1 shows the glasses need it.
+   - the top research ideas (`JARVIS_FEATURE_RESEARCH.md` §7): incognito conversation, several PC addresses per pairing, structured test reports, business card → contact draft, links back to the source.

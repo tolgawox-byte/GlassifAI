@@ -188,9 +188,12 @@ enum VisionQueryClassifier {
 
 /// Where Ray-Ban vision requests get their image.
 enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
-  /// The sharpest recent video frame; an in-stream photo only when video
-  /// stalls. Meta documents in-stream photos as frames lifted out of the
-  /// video stream, so a photo adds latency without adding detail.
+  /// Reading requests take an in-stream photo first; everything else the
+  /// sharpest recent video frame, with a photo when video stalls. On DAT 1.x
+  /// an in-stream photo arrives as about 1080×1440 in 1–2 s (SDK discussion
+  /// #297, issue #260), larger than the 504×896 Bluetooth sustains, and Meta
+  /// calls it "the supported way to get a still while you need live video".
+  /// Camera diagnostics show the size that really arrives.
   case automatic
   case videoOnly = "video"
   case photoFirst = "photo"
@@ -205,7 +208,7 @@ enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
 
   var label: String {
     switch self {
-    case .automatic: "Automatic (sharpest recent frame; photo if video stalls)"
+    case .automatic: "Automatic (photo for reading, otherwise the sharpest recent frame)"
     case .videoOnly: "Video frames only"
     case .photoFirst: "Still photo first (experiment)"
     case .fullPhoto: "Full-resolution photo for reading (beta; pauses the view a few seconds)"
@@ -219,11 +222,11 @@ enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
   func prefersPhoto(for detail: VisionDetail) -> Bool {
     switch self {
     case .photoFirst: true
-    // Opt-in: a standalone photo is far larger than a video frame but
-    // interrupts the live view and is a Meta beta, so Automatic stays on
-    // video frames.
+    // Opt-in: a standalone photo is far larger again, but it interrupts
+    // the live view for seconds and is a Meta beta.
     case .fullPhoto: detail == .high && GlassesSDKInfo.supportsFullResolutionPhoto
-    case .automatic, .videoOnly: false
+    case .automatic: detail == .high
+    case .videoOnly: false
     }
   }
 

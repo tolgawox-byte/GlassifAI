@@ -278,7 +278,13 @@ final class WakePhraseListener: ObservableObject {
 
     do {
       let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playAndRecord, mode: .measurement, options: [.allowBluetoothHFP, .mixWithOthers])
+      // With the Ray-Ban camera the glasses' hands-free microphone stays
+      // closed: the glasses would end the camera session (Meta #206, #332).
+      var options: AVAudioSession.CategoryOptions = [.mixWithOthers]
+      if !GlassesCameraAudio.blocksHandsFree(source: GlassesCameraAudio.currentSource) {
+        options.insert(.allowBluetoothHFP)
+      }
+      try session.setCategory(.playAndRecord, mode: .measurement, options: options)
       try session.setActive(true)
       let engine = AVAudioEngine()
       self.engine = engine

@@ -318,7 +318,81 @@ final class AutoLoomRayBanDAT1Tests: XCTestCase {
   func testTheBuildLinksTheCurrentToolkit() {
     XCTAssertEqual(GlassesSDKInfo.datVersion, "1.0.1")
     XCTAssertTrue(GlassesSDKInfo.supportsFullResolutionPhoto)
-    XCTAssertFalse(GlassesVisionCaptureMode.automatic.prefersPhoto(for: .high),
-                   "the beta photo never interrupts the live view unless chosen")
+    // Automatic reads with an in-stream photo (the stream keeps running);
+    // the standalone beta photo, which stops the live view, is opt-in.
+    XCTAssertEqual(GlassesVisionCaptureMode.automatic.photoTimeout, 4)
+    XCTAssertTrue(GlassesVisionCaptureMode.fullPhoto.prefersPhoto(for: .high))
+  }
+
+  // MARK: The glasses' call rule (Meta, SDK issues #206 and #332)
+
+  func testTheRayBanCameraKeepsTheGlassesMicrophoneClosed() {
+    // Camera-safe audio (the default): the iPhone's microphone and speaker.
+    let safe = AudioRoutePreference.automatic.conversationAudio(for: .glasses, cameraSafe: true)
+    XCTAssertEqual(safe, ConversationAudio(prefersGlassesHandsFree: false, forcesBuiltIn: true))
+    XCTAssertEqual(AudioRoutePreference.glasses.conversationAudio(for: .glasses, cameraSafe: true), safe,
+                   "even an explicit glasses choice cannot reopen it while the camera runs")
+    XCTAssertTrue(GlassesCameraAudio.blocksHandsFree(source: .glasses, cameraSafe: true))
+    // Without the Ray-Ban camera nothing changes.
+    XCTAssertEqual(AudioRoutePreference.automatic.conversationAudio(for: .off, cameraSafe: true),
+                   ConversationAudio(prefersGlassesHandsFree: true, forcesBuiltIn: false))
+    XCTAssertEqual(AudioRoutePreference.automatic.conversationAudio(for: .iPhoneCamera, cameraSafe: true),
+                   ConversationAudio(prefersGlassesHandsFree: false, forcesBuiltIn: false))
+    XCTAssertEqual(AudioRoutePreference.iPhone.conversationAudio(for: .iPhoneCamera, cameraSafe: true),
+                   ConversationAudio(prefersGlassesHandsFree: false, forcesBuiltIn: true))
+    XCTAssertFalse(GlassesCameraAudio.blocksHandsFree(source: .off, cameraSafe: true))
+    // After Meta's glasses fix the owner can turn it off: the old behaviour.
+    XCTAssertEqual(AudioRoutePreference.automatic.conversationAudio(for: .glasses, cameraSafe: false),
+                   ConversationAudio(prefersGlassesHandsFree: true, forcesBuiltIn: false))
+  }
+
+  func testTheCameraSafeSettingIsOnByDefault() {
+    let defaults = UserDefaults.standard
+    let saved = defaults.object(forKey: GlassesCameraAudio.defaultsKey)
+    defer { defaults.set(saved, forKey: GlassesCameraAudio.defaultsKey) }
+    defaults.removeObject(forKey: GlassesCameraAudio.defaultsKey)
+    XCTAssertTrue(GlassesCameraAudio.keepsHandsFreeClosed)
+  }
+
+  func testARefusalWithTheGlassesMicrophoneOpenIsTheCallRule() {
+    let refusal = GlassesSessionFailure.unexpected("Session ended by device")
+    // One refusal is enough when the glasses' microphone link is open.
+    XCTAssertEqual(GlassesSessionProblemPolicy.problem(after: refusal, refusalsInWindow: 1, handsFreeActive: true),
+                   .callActive)
+    XCTAssertNil(GlassesSessionProblemPolicy.problem(after: refusal, refusalsInWindow: 1, handsFreeActive: false))
+    XCTAssertNil(GlassesSessionProblemPolicy.problem(after: .noEligibleDevice, refusalsInWindow: 0, handsFreeActive: true))
+    XCTAssertTrue(GlassesSessionProblem.callActive.blocksAutomaticRetry, "the glasses decline until the call ends")
+    XCTAssertTrue(GlassesSessionProblem.callActive.clearsWhenASessionStarts)
+
+    let inCall = linked(problem: .callActive)
+    XCTAssertEqual(phase(inCall), .glassesInCall)
+    XCTAssertTrue(GlassesConnectionPhase.glassesInCall.isLinked)
+    XCTAssertTrue(GlassesConnectionPhase.glassesInCall.needsUserAction)
+    XCTAssertEqual(GlassesLinkVisual.from(.glassesInCall), .attention)
+    XCTAssertEqual(GlassesConnectionReducer.connectDecision(for: .glassesInCall), .refresh)
+    let status = GlassesConnectionReducer.status(for: .glassesInCall)
+    XCTAssertFalse(status.title.isEmpty)
+    XCTAssertTrue(status.showsTryAgain)
+  }
+
+  // MARK: The Meta SDK's own log
+
+  func testTheSDKLogKeepsCausesAndMasksIdentifiers() {
+    let log = """
+    2026-10-13 10:00:00 [Info] Stream frame 1234
+    2026-10-13 10:00:01 [Error] SecuredLinkCoordinator: authentication failed: This app is no longer registered.
+    2026-10-13 10:00:02 [Info] battery 80
+    2026-10-13 10:00:03 [Error] EAConnection failed, connectedAccessory: 0123456789ABCDEF0123 device 3F2504E0-4F89-11D3-9A0C-0305E82C3301
+    2026-10-13 10:00:04 [Warn] DWA unavailable for serial 123456789012
+    """
+    let lines = DATLogReader.filter(log, limit: 10)
+    XCTAssertEqual(lines.count, 3, lines.joined(separator: "\n"))
+    XCTAssertTrue(lines[0].contains("no longer registered"))
+    XCTAssertFalse(lines.joined().contains("0123456789ABCDEF0123"), "accessory ids are masked")
+    XCTAssertFalse(lines.joined().contains("3F2504E0"), "UUIDs are masked")
+    XCTAssertFalse(lines.joined().contains("123456789012"), "serials are masked")
+    XCTAssertTrue(lines[1].contains("[id]"))
+    XCTAssertEqual(DATLogReader.filter(log, limit: 1).count, 1, "only the newest lines")
+    XCTAssertTrue(DATLogReader.recentLines(files: []).isEmpty, "no log yet is not an error")
   }
 }

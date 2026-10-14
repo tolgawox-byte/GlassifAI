@@ -92,8 +92,9 @@ enum RayBanStallPolicy {
     var now: Date
   }
 
-  /// The transport watchdog judges the first seconds of a stream.
-  static let startupGrace: TimeInterval = 10
+  /// The transport watchdog judges the first seconds of a stream; a cold
+  /// start can take 15–18 s over Bluetooth.
+  static let startupGrace: TimeInterval = 20
   static let noSamplesMs = 10_000
   static let noImageMs = 3_000
   static let keyframeWaitLimitMs = 8_000

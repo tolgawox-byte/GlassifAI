@@ -314,3 +314,35 @@ See `CHANGELOG.md` ("JARVIS Ultimate — phase 1") and `JARVIS_IMPLEMENTATION_PL
 
 - The R1–R7 reports, the clones and experiment scripts were written to the session scratchpad and copied, outside this public repository, to `C:\Users\tolga\Projects\GlassifAI-research\2026-10-12\`. They contain exploit-level detail for open findings and are deliberately not committed.
 - Public sources cited above: `openai/codex` (commits and issues #35094, #41668), `facebook/meta-wearables-dat-ios` (tags 0.5.0/1.0.0/1.0.1, CHANGELOG, swiftinterfaces), Meta Wearables developer docs (version dependencies, known issues, terms), LiveKit `webrtc-xcframework` LICENSE at `46f2af8`.
+
+## 12. Ray-Ban connection and camera audit (2026-10-14, owner's brief of 2026-10-13)
+
+**Türkçe özet:**
+- Sahibin yüklediği IPA gözlüğe bağlanmıyordu ve görüntü takılıyordu.
+- Gözlükten bir rapor yoktu. Neden; kod, Meta'nın belgeleri, Meta'nın SDK hata kayıtları ve 24 DAT uygulamasının kodu incelenerek arandı.
+- En olası ortak neden: güncel gözlük yazılımı, gözlüğün kendi mikrofonu Bluetooth eller serbest (HFP) ile bağlıyken kamera oturumunu kapatıyor. Meta bunu 13 Ekim'de doğruladı. AutoLoom, Ray-Ban kamerasıyla tam olarak bu düzeni kullanıyordu.
+- İkinci neden: uygulamanın Meta araç seti (DAT 0.5.0) gözlüğün yeni DAT uygulamasından yedi ay geride kalmıştı.
+- Düzeltmeler CI'da. Gözlükte test edilmedi.
+
+| # | Finding | Evidence | Status |
+|---|---|---|---|
+| C1 | The glasses' microphone over HFP ends and refuses DAT camera sessions on current glasses software, whatever the order; AutoLoom used it with the Ray-Ban camera, and the wake listener held it in Hands-Free Ready | Meta: Android #206, iOS #332 (2026-10-13); `GlassifAIRealtimeSession.configureAudioSession`, `WakePhrase.startListening` @`43ca5f2` | **FIXED (IN CI)**: camera-safe audio; the call-rule phase. Device test N, N2 |
+| C2 | DAT 0.5.0 (2026-03) against glasses running the on-glasses DAT app 1.0.0.0.0; Meta's answer to older SDKs failing is "update to 1.0.1"; 0.x cannot take part in registrations started from Meta AI | Meta #308, runtime guide, DAT docs; `Package.resolved` @`43ca5f2` | **FIXED (IN CI)**: DAT 1.0.1. Device A, B |
+| C3 | Session errors (insufficient SDK, DAT app update, DAT app unavailable, refusals) were not distinguished; refusals were retried every 30 s forever | DAT 1.0 runtime guide; #292; reducer @`43ca5f2` | **FIXED (IN CI)**: typed failures, phases, no retry while the user must act |
+| C4 | Session attempts could follow each other within 1 s; the raw fallback judged a cold start after 8 s | `retryDelay` steps 1 s; `GlassesTransportWatchdog` 8 s; Meta #231 (wait 2 s), reports of 15–18 s cold starts | **FIXED (IN CI)**: 2 s minimum, 20 s warm-up |
+| C5 | Bluetooth off or not allowed showed "Wake your glasses" | Reducer @`43ca5f2` | **FIXED (IN CI)**: `BLUETOOTH_UNAVAILABLE` |
+| C6 | After connecting the glasses the iPhone camera stayed the source | `StreamSessionView` default `.iPhoneCamera` | **FIXED (IN CI)**: switch after a user-started registration; Home offers it |
+| C7 | 720p @ 15 requested over Bluetooth; it settles at 504×896 and costs frames | Meta camera guide; discussion #297; profile `sharp` default | **CHANGED (IN CI)**: default "Live" 504×896 @ 24; measured in Camera diagnostics. Device S |
+| C8 | Reading used video frames although DAT 1.x in-stream photos are ~1080×1440 | #260, #297; `GlassesVisionCaptureMode.automatic` | **CHANGED (IN CI)**: in-stream photo for reading. Device U |
+| C9 | No view of the SDK's own log, which names causes the API hides | #292, #301; OpenVision (MIT) idea | **FIXED (IN CI)**: `DATLogReader`, IDs masked |
+| C10 | A downloaded IPA could not be tied to its commit from its file name | `main.yml` @`43ca5f2` | **FIXED (IN CI)**: commit in the name; `ci-ipa-check.sh` |
+| C11 | The `MWDAT` values (MetaAppID 0, empty TeamID) | Meta docs: in Developer Mode empty, 0 or a placeholder all mean "no app ID" | **NOT A CAUSE** |
+| C12 | Original media in the glasses' gallery | No public DAT API (`AirshipSession` exists but is undocumented) | **NOT AVAILABLE** (unchanged) |
+
+What only the device can settle:
+- whether 0.5.0 still worked on the owner's firmware;
+- whether Gen 1 glasses deliver the same in-stream photo size;
+- how smooth "Live" really is;
+- whether the owner's glasses show the call rule.
+
+`docs/RAYBAN_CONNECTION.md` rows A–V cover each of these.

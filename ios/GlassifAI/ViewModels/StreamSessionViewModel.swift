@@ -51,7 +51,15 @@ enum GlassesSDKInfo {
 /// can yield higher visual quality with less compression loss". The glasses
 /// may still step the resolution down on a weak link (never below 15 fps);
 /// Diagnostics shows what actually arrives next to what was requested.
+///
+/// Field reports on DAT 1.0 (SDK discussion #297): over Bluetooth a 720p
+/// request is delivered as 504×896 after 15–25 s anyway, at about 60 kB/s
+/// whatever the resolution, so 720p mostly costs frames. Meta's own sample
+/// asks for less; an app measured 24 fps with no gaps at 24 fps.
 enum GlassesStreamProfile: String, CaseIterable, Identifiable {
+  /// 504p at 24 fps: the resolution Bluetooth sustains, at a smooth rate.
+  /// Reading requests take an in-stream photo (about 1080×1440) instead.
+  case live
   /// 720p at 15 fps: full resolution with less compression per frame.
   case sharp
   /// 720p at 7 fps: the least compression, for reading small text.
@@ -62,7 +70,7 @@ enum GlassesStreamProfile: String, CaseIterable, Identifiable {
   case smooth
 
   static let defaultsKey = "autoloom.glasses.profile"
-  static let recommended: GlassesStreamProfile = .sharp
+  static let recommended: GlassesStreamProfile = .live
 
   static var current: GlassesStreamProfile {
     GlassesStreamProfile(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? recommended
@@ -72,7 +80,8 @@ enum GlassesStreamProfile: String, CaseIterable, Identifiable {
 
   var label: String {
     switch self {
-    case .sharp: "Detail — 720p, 15 fps (recommended)"
+    case .live: "Live — 504p, 24 fps (recommended over Bluetooth)"
+    case .sharp: "Detail — 720p, 15 fps"
     case .maxDetail: "Max detail — 720p, 7 fps (text; choppier preview)"
     case .balanced: "Balanced — 720p, 24 fps (original)"
     case .smooth: "Smooth — 504p, 30 fps"
@@ -80,11 +89,12 @@ enum GlassesStreamProfile: String, CaseIterable, Identifiable {
   }
 
   var resolution: StreamingResolution {
-    self == .smooth ? .medium : .high
+    self == .smooth || self == .live ? .medium : .high
   }
 
   var frameRate: UInt {
     switch self {
+    case .live: 24
     case .sharp: 15
     case .maxDetail: 7
     case .balanced: 24
@@ -93,7 +103,7 @@ enum GlassesStreamProfile: String, CaseIterable, Identifiable {
   }
 
   var requestedSize: (width: Int, height: Int) {
-    self == .smooth ? (504, 896) : (720, 1280)
+    self == .smooth || self == .live ? (504, 896) : (720, 1280)
   }
 
   var requestedSummary: String {
@@ -140,7 +150,9 @@ enum GlassesVideoTransport: String, CaseIterable, Identifiable {
 /// frames should fall back to the SDK-decoded raw transport. Counts are the
 /// samples seen since the stream reached `.streaming`.
 enum GlassesTransportWatchdog {
-  static let gracePeriodNanoseconds: UInt64 = 8_000_000_000
+  /// A healthy cold start can take 15–18 s over Bluetooth (SDK reports;
+  /// another app allows 20 s), so the fallback waits that long.
+  static let gracePeriodNanoseconds: UInt64 = 20_000_000_000
 
   static func fallbackReason(
     compressedSamples: UInt64,
@@ -149,7 +161,7 @@ enum GlassesTransportWatchdog {
     rawSamples: UInt64
   ) -> String? {
     if decodedFrames > 0 || rawSamples > 0 { return nil }
-    if compressedSamples == 0 { return "no HEVC samples arrived within 8 s of streaming" }
+    if compressedSamples == 0 { return "no HEVC samples arrived within 20 s of streaming" }
     return "\(compressedSamples) HEVC samples arrived but none decoded (\(decodeFailures) failures)"
   }
 
@@ -595,12 +607,16 @@ class StreamSessionViewModel: ObservableObject {
   /// One session error: kept for Diagnostics and turned into what the user
   /// must do, if anything (`GlassesSessionProblemPolicy`).
   private func recordSessionFailure(_ failure: GlassesSessionFailure) {
-    lastSessionError = failure.summary
-    NSLog("[Stream] device session error: %@", failure.summary)
+    // The glasses' microphone open over hands-free when the session ends or
+    // is refused: the glasses' call rule (Meta #206, #332).
+    let handsFree = AVAudioSession.sharedInstance().currentRoute.inputs.contains { $0.portType == .bluetoothHFP }
+    lastSessionError = failure.summary + (handsFree && failure.isRefusal ? " (glasses microphone link open)" : "")
+    NSLog("[Stream] device session error: %@", lastSessionError ?? "")
     let now = Date()
     if failure.isRefusal { refusals.append(now) }
     refusals.removeAll { now.timeIntervalSince($0) > GlassesSessionProblemPolicy.refusalWindow }
-    if let problem = GlassesSessionProblemPolicy.problem(after: failure, refusalsInWindow: refusals.count) {
+    if let problem = GlassesSessionProblemPolicy.problem(
+      after: failure, refusalsInWindow: refusals.count, handsFreeActive: handsFree) {
       sessionProblem = problem
     }
   }
@@ -867,16 +883,18 @@ class StreamSessionViewModel: ObservableObject {
     }
     FrameStore.shared.recordPhoto(
       width: photo?.width, height: photo?.height, latencyMs: photo?.latencyMs, success: photo != nil)
-    if let current = self.camera {
-      if current === photoCamera, photoStateValue != .stopped {
-        current.photo.stop()
-        _ = await waitUntil(timeout: 3) { self.photoStateValue == .stopped }
-      }
-      await resumeSetAsideStream(current)
-    } else {
-      // The camera could not be replaced: the coordinator starts afresh.
-      clearCamera()
+    // Meta (SDK issue #260): restarting a stream after stopping it can fail
+    // on DAT 1.0, while a fresh session recovers every time, so the live view
+    // comes back through a new session.
+    if let current = self.camera, current === photoCamera, photoStateValue != .stopped {
+      current.photo.stop()
+      _ = await waitUntil(timeout: 3) { self.photoStateValue == .stopped }
     }
+    isSwitchingTransport = true
+    await stopSession()
+    isSwitchingTransport = false
+    isStreamSetAside = false
+    await startSession()
     return photo
   }
 

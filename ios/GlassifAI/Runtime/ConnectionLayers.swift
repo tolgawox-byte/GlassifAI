@@ -55,6 +55,11 @@ enum GlassesSessionProblem: Equatable {
   case glassesAppUnavailable
   /// The glasses refused this many sessions in a short time.
   case refusing(count: Int)
+  /// The glasses ended or refused the session while their microphone was
+  /// connected over Bluetooth hands-free: current glasses software treats
+  /// that as a call and stops the camera until it ends (Meta, SDK issues
+  /// #206 and #332, 2026-10-13).
+  case callActive
   case deviceHealth(String)
   case versionWarning
 
@@ -66,7 +71,7 @@ enum GlassesSessionProblem: Equatable {
   /// power cycle of the glasses comes first.
   var blocksAutomaticRetry: Bool {
     switch self {
-    case .sdkTooOld, .glassesAppUpdateRequired, .refusing: true
+    case .sdkTooOld, .glassesAppUpdateRequired, .refusing, .callActive: true
     case .glassesAppUnavailable, .deviceHealth, .versionWarning: false
     }
   }
@@ -78,7 +83,12 @@ enum GlassesSessionProblemPolicy {
   /// …this many of them mean the glasses need a power cycle.
   static let refusalLimit = 3
 
-  static func problem(after failure: GlassesSessionFailure, refusalsInWindow: Int) -> GlassesSessionProblem? {
+  /// `handsFreeActive`: the glasses' microphone was the audio input when it
+  /// happened. Then even one refusal is the call rule, not bad luck.
+  static func problem(
+    after failure: GlassesSessionFailure, refusalsInWindow: Int, handsFreeActive: Bool = false
+  ) -> GlassesSessionProblem? {
+    if failure.isRefusal, handsFreeActive { return .callActive }
     switch failure {
     case .sdkTooOld: return .sdkTooOld
     case .glassesAppUpdateRequired: return .glassesAppUpdateRequired
@@ -93,13 +103,65 @@ enum GlassesSessionProblemPolicy {
   }
 }
 
-// MARK: - The glasses microphone before the camera stream
+// MARK: - The glasses microphone and the Ray-Ban camera
 
-/// Meta's ordering constraint for HFP with a DAT camera stream: add the
+/// Meta, 2026-10-13 (SDK issues #206 and #332): on current glasses software
+/// the glasses end a DAT camera session as soon as their microphone connects
+/// over Bluetooth hands-free (HFP), in every order, including the documented
+/// one, and decline new sessions while that "call" lasts. "Nothing on the app
+/// or SDK side keeps HFP and a camera session running together on this
+/// firmware"; a glasses-side fix is coming, with no date. HFP also takes
+/// 40–70 % of the camera's Bluetooth frames (#260).
+///
+/// So while the Ray-Ban camera is the chosen source, conversations and the
+/// wake phrase keep the glasses' HFP route closed and use the iPhone's
+/// microphone and speaker. On by default; turn it off once Meta's fix has
+/// reached the glasses.
+enum GlassesCameraAudio {
+  static let defaultsKey = "autoloom.glasses.cameraSafeAudio"
+
+  static var keepsHandsFreeClosed: Bool {
+    UserDefaults.standard.object(forKey: defaultsKey) as? Bool ?? true
+  }
+
+  /// The camera source chosen now (what the wake phrase listener checks).
+  static var currentSource: CaptureSource {
+    CaptureSource(rawValue: UserDefaults.standard.string(forKey: CaptureSource.defaultsKey) ?? "") ?? .iPhoneCamera
+  }
+
+  /// Bluetooth hands-free must stay out of the audio session.
+  static func blocksHandsFree(source: CaptureSource, cameraSafe: Bool = GlassesCameraAudio.keepsHandsFreeClosed) -> Bool {
+    source == .glasses && cameraSafe
+  }
+}
+
+/// The audio of one conversation: the glasses' hands-free microphone and
+/// speakers, or the iPhone's (Bluetooth hands-free then stays closed).
+struct ConversationAudio: Equatable {
+  let prefersGlassesHandsFree: Bool
+  let forcesBuiltIn: Bool
+}
+
+extension AudioRoutePreference {
+  /// What a conversation uses with this camera source. The Ray-Ban camera
+  /// with camera-safe audio (the default) always gets the iPhone's
+  /// microphone and speaker; otherwise the preference decides as before.
+  func conversationAudio(
+    for captureSource: CaptureSource, cameraSafe: Bool = GlassesCameraAudio.keepsHandsFreeClosed
+  ) -> ConversationAudio {
+    if GlassesCameraAudio.blocksHandsFree(source: captureSource, cameraSafe: cameraSafe) {
+      return ConversationAudio(prefersGlassesHandsFree: false, forcesBuiltIn: true)
+    }
+    return ConversationAudio(prefersGlassesHandsFree: prefersGlassesAudio(for: captureSource), forcesBuiltIn: self == .iPhone)
+  }
+}
+
+/// Meta's documented ordering for HFP with a DAT camera stream: add the
 /// camera, set up the HFP microphone and let the route settle, then start the
 /// stream ("starting the DAT stream before HFP is ready can cause the audio
-/// route to fail silently"). On by default; Settings → Developer → Ray-Ban
-/// connection can turn it off for comparison on the device.
+/// route to fail silently"). Only used when camera-safe audio is off (on
+/// current glasses software every order ends the session, see above). On by
+/// default; Settings → Developer → Ray-Ban connection can turn it off.
 enum GlassesAudioOrder {
   static let defaultsKey = "autoloom.glasses.microphoneFirst"
 
@@ -234,6 +296,76 @@ struct ProvisioningSummary: Equatable {
   }
 }
 
+// MARK: - The Meta SDK's own log
+
+/// The DAT SDK writes its own log in the app's caches
+/// (`MetaWearablesDAT.log`). Its lines name causes the API does not report,
+/// such as "This app is no longer registered", the glasses' DAT app (DWA),
+/// link switching or authentication (SDK issues #292 and #301). Only lines
+/// with such words are shown, sanitized, with long identifiers masked.
+enum DATLogReader {
+  static let keywords = [
+    "error", "fail", "registered", "registration", "dwa", "l2cap", "link", "session", "trust", "manifest",
+    "unavailable", "ended by device", "compatib", "version", "permission", "timeout", "disconnect", "refus",
+  ]
+
+  /// Where the SDK keeps its log: any `.log` file under a `MetaWearablesDAT`
+  /// folder in the app's caches.
+  static func logFiles(in caches: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first) -> [URL] {
+    guard let caches else { return [] }
+    let root = caches.appendingPathComponent("MetaWearablesDAT", isDirectory: true)
+    guard let enumerator = FileManager.default.enumerator(
+      at: root, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]) else { return [] }
+    var files: [URL] = []
+    for case let url as URL in enumerator where url.pathExtension == "log" {
+      files.append(url)
+    }
+    return files.sorted { $0.lastPathComponent < $1.lastPathComponent }
+  }
+
+  /// The last `limit` interesting lines of the newest log, sanitized.
+  static func recentLines(limit: Int = 30, files: [URL] = DATLogReader.logFiles()) -> [String] {
+    guard let newest = files.max(by: { modified($0) < modified($1) }),
+          let handle = try? FileHandle(forReadingFrom: newest) else { return [] }
+    defer { try? handle.close() }
+    let size = (try? handle.seekToEnd()) ?? 0
+    let tail: UInt64 = 128 * 1_024
+    try? handle.seek(toOffset: size > tail ? size - tail : 0)
+    guard let data = try? handle.readToEnd(), let text = String(data: data, encoding: .utf8)
+      ?? String(data: data, encoding: .isoLatin1) else { return [] }
+    return filter(text, limit: limit)
+  }
+
+  /// Keeps the lines that name a cause; masks identifiers and sanitizes.
+  static func filter(_ text: String, limit: Int) -> [String] {
+    let lines = text.split(whereSeparator: \.isNewline).map(String.init)
+    let picked = lines.filter { line in
+      let lower = line.lowercased()
+      return keywords.contains { lower.contains($0) }
+    }
+    return picked.suffix(limit).map { LogSanitizer.sanitize(maskIdentifiers($0), limit: 300) }
+  }
+
+  /// Serials, UUIDs and long hex or digit runs become "[id]"; a device id
+  /// never leaves the phone in a copied report.
+  static func maskIdentifiers(_ line: String) -> String {
+    let patterns = [
+      #"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"#,
+      #"\b[0-9A-Fa-f]{12,}\b"#,
+      #"\b\d{9,}\b"#,
+    ]
+    var output = line
+    for pattern in patterns {
+      output = output.replacingOccurrences(of: pattern, with: "[id]", options: .regularExpression)
+    }
+    return output
+  }
+
+  private static func modified(_ url: URL) -> Date {
+    (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+  }
+}
+
 // MARK: - The layers, one row each
 
 /// One layer of the Ray-Ban connection and what was really measured for it.
@@ -357,6 +489,7 @@ enum ConnectionLayerReport {
     case .glassesAppUpdateRequired: L.t("DAT app on the glasses needs an update", "gözlükteki DAT uygulaması güncellenmeli")
     case .glassesAppUnavailable: L.t("DAT app on the glasses not reachable", "gözlükteki DAT uygulamasına ulaşılamıyor")
     case .refusing(let count): L.t("the glasses refused \(count) sessions", "gözlük \(count) oturumu reddetti")
+    case .callActive: L.t("the glasses treat the microphone link as a call", "gözlük mikrofon bağlantısını görüşme sayıyor")
     case .deviceHealth(let what): L.t("glasses limit: \(what)", "gözlük sınırı: \(what)")
     case .versionWarning: L.t("versions outside the recommended range", "sürümler önerilen aralığın dışında")
     }

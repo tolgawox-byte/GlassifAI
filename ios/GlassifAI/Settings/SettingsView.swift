@@ -397,16 +397,22 @@ struct AssistantSettingsView: View {
 struct AudioSettingsView: View {
   @ObservedObject private var audioRoute = AudioRouteMonitor.shared
   @AppStorage(AudioRoutePreference.defaultsKey) private var audioRouteRaw = AudioRoutePreference.automatic.rawValue
+  @AppStorage(GlassesCameraAudio.defaultsKey) private var cameraSafeAudio = true
 
   var body: some View {
     Form {
       Section(footer: Text(L.t(
-        "Automatic uses the glasses' microphone and speakers with the Ray-Ban camera or with the camera off, and the iPhone in iPhone-camera mode. Takes effect on the next conversation.",
-        "Otomatik: Ray-Ban kamerasında veya kamera kapalıyken gözlüğün mikrofon ve hoparlörü, iPhone kamerasında iPhone kullanılır. Sonraki konuşmada geçerli olur."))) {
+        "Automatic uses the glasses' microphone and speakers with the camera off, and the iPhone in iPhone-camera mode. With the Ray-Ban camera, see below. Takes effect on the next conversation.",
+        "Otomatik: kamera kapalıyken gözlüğün mikrofon ve hoparlörü, iPhone kamerasında iPhone kullanılır. Ray-Ban kamerası için aşağıya bakın. Sonraki konuşmada geçerli olur."))) {
         Picker(L.t("Audio", "Ses"), selection: $audioRouteRaw) {
           ForEach(AudioRoutePreference.allCases) { Text($0.label).tag($0.rawValue) }
         }
         .pickerStyle(.segmented)
+      }
+      Section(footer: Text(L.t(
+        "Meta's current glasses software stops the Ray-Ban camera while the glasses' microphone is connected (it counts as a call); Meta has confirmed this and is preparing a fix. On (recommended): with the Ray-Ban camera the conversation uses the iPhone's microphone and speaker, so the camera keeps running. Turn off only after Meta's update.",
+        "Meta'nın güncel gözlük yazılımı, gözlüğün mikrofonu bağlıyken Ray-Ban kamerasını durduruyor (bunu görüşme sayıyor); Meta bunu doğruladı ve bir düzeltme hazırlıyor. Açık (önerilen): Ray-Ban kamerasıyla konuşma iPhone'un mikrofonu ve hoparlörüyle yapılır, böylece kamera çalışmaya devam eder. Yalnızca Meta'nın güncellemesinden sonra kapatın."))) {
+        Toggle(L.t("iPhone microphone with the Ray-Ban camera", "Ray-Ban kamerasıyla iPhone mikrofonu"), isOn: $cameraSafeAudio)
       }
       Section(L.t("Now", "Şu an")) {
         LabeledContent(L.t("Microphone", "Mikrofon"), value: audioRoute.inputSummary)

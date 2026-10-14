@@ -44,6 +44,9 @@ enum GlassesConnectionPhase: String, Equatable, CaseIterable {
   case glassesAppUnavailable = "GLASSES_APP_UNAVAILABLE"
   /// The glasses keep refusing sessions: a power cycle is needed.
   case glassesRefusing = "GLASSES_REFUSING"
+  /// The glasses treat their microphone link (HFP) as a call and keep the
+  /// camera off until it ends (current glasses software, Meta #206/#332).
+  case glassesInCall = "GLASSES_IN_CALL"
   case startingCamera = "STARTING_CAMERA"
   case cameraStreaming = "CAMERA_STREAMING"
   case cameraFailed = "CAMERA_FAILED"
@@ -54,7 +57,7 @@ enum GlassesConnectionPhase: String, Equatable, CaseIterable {
     switch self {
     case .deviceConnected, .appUpdateRequired, .glassesUpdateRequired, .requestingCameraPermission,
          .cameraPermissionNeeded, .startingSession, .sessionPaused, .glassesAppUnavailable, .glassesRefusing,
-         .startingCamera, .cameraStreaming, .cameraFailed, .ready:
+         .glassesInCall, .startingCamera, .cameraStreaming, .cameraFailed, .ready:
       true
     default:
       false
@@ -73,7 +76,8 @@ enum GlassesConnectionPhase: String, Equatable, CaseIterable {
   /// power cycle, Developer Mode in Meta AI).
   var needsUserAction: Bool {
     switch self {
-    case .appUpdateRequired, .glassesUpdateRequired, .glassesAppUnavailable, .glassesRefusing, .bluetoothUnavailable: true
+    case .appUpdateRequired, .glassesUpdateRequired, .glassesAppUnavailable, .glassesRefusing, .glassesInCall,
+         .bluetoothUnavailable: true
     default: false
     }
   }
@@ -155,6 +159,7 @@ enum GlassesConnectionReducer {
     case .stopped: break
     }
     if case .refusing = s.sessionProblem { return .glassesRefusing }
+    if s.sessionProblem == .callActive { return .glassesInCall }
     if s.sessionProblem == .glassesAppUnavailable { return .glassesAppUnavailable }
     if s.session == .paused { return .sessionPaused }
     switch s.permission {
@@ -238,6 +243,12 @@ enum GlassesConnectionReducer {
         detail: L.t("In Meta AI check Developer Mode and that the DAT app is installed on the glasses, then try again.",
                     "Meta AI'da Geliştirici Modu'nu ve gözlükte DAT uygulamasının kurulu olduğunu kontrol et, sonra tekrar dene."),
         tone: .attention, showsTryAgain: true)
+    case .glassesInCall:
+      return GlassesUserStatus(
+        title: L.t("Camera paused by a call", "Kamera görüşme yüzünden kapalı"),
+        detail: L.t("The glasses treat their microphone link as a call and keep the camera off until it ends (current Meta glasses software). AutoLoom uses the iPhone microphone with the Ray-Ban camera; a phone call also does this.",
+                    "Gözlük, mikrofon bağlantısını görüşme sayıyor ve görüşme bitene kadar kamerayı kapalı tutuyor (Meta'nın güncel gözlük yazılımı). AutoLoom, Ray-Ban kamerasıyla iPhone mikrofonunu kullanır; bir telefon görüşmesi de bunu yapar."),
+        tone: .attention, showsTryAgain: true)
     case .glassesRefusing:
       return GlassesUserStatus(
         title: L.t("The glasses refuse the connection", "Gözlük bağlantıyı reddediyor"),
@@ -275,16 +286,18 @@ enum GlassesConnectionReducer {
       .startRegistration
     case .registeredNoDevice, .bluetoothUnavailable, .deviceDisconnected, .deviceConnecting, .deviceConnected,
          .appUpdateRequired, .glassesUpdateRequired, .requestingCameraPermission, .cameraPermissionNeeded,
-         .startingSession, .sessionPaused, .glassesAppUnavailable, .glassesRefusing,
+         .startingSession, .sessionPaused, .glassesAppUnavailable, .glassesRefusing, .glassesInCall,
          .startingCamera, .cameraStreaming, .cameraFailed, .ready:
       .refresh
     }
   }
 
   /// Bounded backoff between camera start attempts while the glasses are
-  /// linked: 1, 2, 4, 8, 15, then every 30 s. Never a busy loop.
+  /// linked: 2, 4, 8, 15, then every 30 s. Never a busy loop, and never two
+  /// session attempts within 2 s: Meta says rapid cycling wedges the glasses
+  /// until a power cycle (SDK issues #231 and #332).
   static func retryDelay(afterFailures failures: Int) -> TimeInterval {
-    let steps: [TimeInterval] = [1, 2, 4, 8, 15, 30]
+    let steps: [TimeInterval] = [2, 4, 8, 15, 30]
     return steps[min(max(failures, 0), steps.count - 1)]
   }
 
@@ -475,6 +488,7 @@ final class WearableConnectionCoordinator: ObservableObject {
   private var compatibilityTokens: [DeviceIdentifier: AnyListenerToken] = [:]
   private var deviceStateTokens: [DeviceIdentifier: AnyListenerToken] = [:]
   private let bluetoothMonitor = BluetoothAccessMonitor()
+  private var audioRouteCancellable: AnyCancellable?
   private var listenerRetryTask: Task<Void, Never>?
   private var restoreTask: Task<Void, Never>?
   private var registrationWatch: Task<Void, Never>?
@@ -597,7 +611,27 @@ final class WearableConnectionCoordinator: ObservableObject {
     stream.$sessionProblem.removeDuplicates().sink { [weak self] problem in
       self?.sessionProblemChanged(problem)
     }.store(in: &streamCancellables)
+    // The call rule ends with the call: once the glasses' microphone link is
+    // gone, the camera may start again (after the usual 2 s).
+    audioRouteCancellable = AudioRouteMonitor.shared.$inputs
+      .map { inputs in inputs.contains { $0.type == "Bluetooth HFP" } }
+      .removeDuplicates()
+      .sink { [weak self] handsFree in
+        self?.handsFreeChanged(handsFree)
+      }
     evaluate(reason: "stream bound")
+  }
+
+  private func handsFreeChanged(_ handsFree: Bool) {
+    guard !handsFree, snapshot.sessionProblem == .callActive else { return }
+    record("glasses microphone link closed: the camera may start again")
+    stream?.clearSessionProblem()
+    snapshot.sessionProblem = nil
+    failures = max(failures, 1)
+    nextAttemptAt = Date().addingTimeInterval(GlassesConnectionReducer.retryDelay(afterFailures: 0))
+    attemptTask?.cancel()
+    attemptTask = nil
+    evaluate(reason: "call ended")
   }
 
   // MARK: User actions
@@ -1396,6 +1430,7 @@ final class WearableConnectionCoordinator: ObservableObject {
       "Session: \(snapshot.session.rawValue) · problem: \(problemText) · last session error: \(stream?.lastSessionError ?? "none")",
       "Camera chosen: \(snapshot.cameraWanted ? "yes" : "no") · permission: \(snapshot.permission.rawValue) · stream: \(snapshot.stream.rawValue) · frames: \(snapshot.hasFrames ? "yes" : "no") · last ready: \(readyAt)",
       "Transport: \(stream?.activeTransport.shortLabel ?? "—") · last stream state: \(stream?.lastStreamState ?? "—")",
+      "Camera-safe audio (no glasses microphone with the Ray-Ban camera): \(GlassesCameraAudio.keepsHandsFreeClosed ? "on" : "off")",
       "Microphone and camera order: \(stream?.audioOrderNote ?? "—")",
       "Start attempts since last stream: \(reconnectAttempts) · failures: \(failures)",
       "Last error: \(lastError ?? "none")",
@@ -1404,6 +1439,9 @@ final class WearableConnectionCoordinator: ObservableObject {
     for transition in transitions.suffix(40) {
       lines.append("  \(formatter.string(from: transition.at)) \(transition.text)")
     }
+    let sdkLog = DATLogReader.recentLines(limit: 25)
+    lines.append("Meta SDK log (matching lines, identifiers masked): \(sdkLog.isEmpty ? "none found" : "")")
+    for line in sdkLog { lines.append("  \(line)") }
     return lines.map { LogSanitizer.sanitize($0, limit: 400) }.joined(separator: "\n")
   }
 }

@@ -9,8 +9,8 @@ There is no Xcode on Windows. GitHub Actions builds everything: the Rust bridge,
 2. Wait for the green check. The first run on a new branch takes about 25–30 minutes, because the Rust cache is per branch. Later runs take about 12–18 minutes.
 3. Open the run and download the **AutoLoomMediaGlasses-unsigned-IPAs** artifact (a zip file).
 4. Unzip it. It contains:
-   - `AutoLoomMediaGlasses-Release-unsigned.ipa`: **install this one**. It is optimized, so the camera pipeline, OCR, and UI run faster.
-   - `AutoLoomMediaGlasses-Debug-unsigned.ipa`: the same code, unoptimized. Use it only if the Release build misbehaves.
+   - `AutoLoomMediaGlasses-Release-<commit>-unsigned.ipa` (for example `…-Release-9954e60-unsigned.ipa`): **install this one**. It is optimized, so the camera pipeline, OCR, and UI run faster. The 7 characters are the commit it was built from; the run's "IPA Release" note lists what the IPA contains.
+   - `AutoLoomMediaGlasses-Debug-<commit>-unsigned.ipa`: the same code, unoptimized. Use it only if the Release build misbehaves.
 
 If a build fails, the run page lists compiler errors and failed tests as annotations. You don't need to open the raw log.
 
@@ -25,16 +25,29 @@ Use the same tool and Apple ID as before.
 
 ## 3. Before the first test of this build
 
-This build uses **Meta Wearables DAT 0.5.0**. The previous one used 0.4.0. Meta's official requirement for 0.5.0 is **Meta AI app V254 or later** and **Ray-Ban Meta firmware V22 or later**. Check both in the Meta AI app (Devices → your glasses → settings → firmware version, and the app's About page). A current installation normally has much newer versions.
+This build uses **Meta Wearables DAT 1.0.1** (builds up to `43ca5f2` used 0.5.0). Meta's requirement for 1.0 is:
+- **Meta AI app V290 or later**;
+- **Ray-Ban Meta firmware V128 or later**;
+- **iOS 17.2 or later**.
+
+Check them in the Meta AI app: Devices → your glasses → Settings → General → About, and the app's own App info.
+
+Then:
+1. Switch the glasses off and on once with the power switch; Meta lists camera capture failing after the V128 update until a reboot.
+2. Turn Developer Mode off and on again in Meta AI (Settings → App info → tap the version 5 times), and install DAT on the glasses if Meta AI offers it.
+3. Disconnect other Bluetooth headsets (AirPods) for the first test.
+
+With the Ray-Ban camera, the conversation uses the iPhone's microphone and speaker (Settings → Audio → "Ray-Ban kamerasıyla iPhone mikrofonu"). Meta's current glasses software stops the camera while the glasses' own microphone is connected. See `RAYBAN_CONNECTION.md`.
 
 ## 4. First launch checklist
 
 1. Jarvis v1 shows a short onboarding once. Then the Assistant tab opens if you were already signed in; otherwise use **Continue with ChatGPT** and enter the device code.
 2. Tap the camera indicator at the top right and choose **Ray-Ban**. The glasses view should appear within a few seconds.
 3. Open **Settings → Developer → Diagnostics** and check:
-   - **Commit**: must match the Actions run
-   - **DAT SDK**: 0.5.0
-   - **Ray-Ban**: *Requested* (for example 720×1280 @ 15 fps, HEVC) and *Actual* (what really arrives)
+   - **Commit**: must match the Actions run (and the 7 characters in the IPA's file name)
+   - **DAT SDK**: 1.0.1
+   - **Ray-Ban**: *Requested* (for example 504×896 @ 24 fps, HEVC) and *Actual* (what really arrives)
+   - **Settings → Developer → Ray-Ban connection**: the layer table shows which layer is not ready; copy the report if something fails
    - **Transport**: HEVC (hvc1). If it shows raw with a transport note, HEVC failed and the app fell back automatically. Report the note.
 4. Open **Settings → Models** and note the list. It shows whether GPT-6 Astra is exposed to this connection.
 5. Open **Settings → Voice**: if an earlier build had a voice this protocol cannot use, a note says it was replaced by Juniper. Try ▶ Preview on a few voices.

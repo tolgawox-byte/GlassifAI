@@ -122,7 +122,7 @@ enum GlassesLinkVisual: Equatable {
     case .ready:
       .connected
     case .registrationStalled, .cameraPermissionNeeded, .cameraFailed, .sdkUnavailable, .bluetoothUnavailable,
-         .appUpdateRequired, .glassesUpdateRequired, .glassesAppUnavailable, .glassesRefusing:
+         .appUpdateRequired, .glassesUpdateRequired, .glassesAppUnavailable, .glassesRefusing, .glassesInCall:
       .attention
     case .notRegistered, .registeredNoDevice, .deviceDisconnected:
       .idle

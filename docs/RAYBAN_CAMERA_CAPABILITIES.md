@@ -1,5 +1,13 @@
 # Ray-Ban camera: capabilities, root causes, and the quality pipeline
 
+> **Update 2026-10-14:**
+> - The app now links **DAT 1.0.1**; see `RAYBAN_CONNECTION.md` and `DAT_1_MIGRATION.md`.
+> - Field reports changed two conclusions below:
+>   - Over Bluetooth a 720p request settles at 504×896 after 15–25 s, at about 60 kB/s. So the default is now "Live", 504×896 at 24 fps.
+>   - On DAT 1.x an in-stream photo is about 1080×1440 (not a video frame), so reading requests take one first.
+> - The glasses stop the camera while their microphone is connected over Bluetooth hands-free (Meta, 2026-10-13). With the Ray-Ban camera the conversation therefore uses the iPhone microphone.
+> - The text below is the 2026-09-27 research on DAT 0.4.0/0.5.0, kept for its history.
+
 Researched 2026-09-27 from Meta's official sources:
 - the **Meta Wearables docs MCP server** (`https://mcp.developer.meta.com/wearables`, tool `search_dat_docs`), queried directly
 - the SDK repository `facebook/meta-wearables-dat-ios` (tags 0.4.0 → 1.0.0, `CHANGELOG.md`)

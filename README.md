@@ -1,6 +1,6 @@
 > **AutoLoom Media Glasses** is an independent app by AutoLoom Media, built on GlassifAI (MIT). It is a general-purpose assistant for iPhone and Ray-Ban Meta:
 > - natural realtime voice through your ChatGPT account
-> - Ray-Ban vision with a detail-first pipeline: DAT 0.5.0 720p, sharpest recent frame, on-device OCR and zoomed text crops
+> - Ray-Ban vision on Meta DAT 1.0.1: a smooth 504p live view, in-stream photos for reading, sharpest recent frame, on-device OCR and zoomed text crops (connection notes: `docs/RAYBAN_CONNECTION.md`)
 > - Live Vision
 > - live web search and research reports
 > - model routing based on what your connection actually exposes

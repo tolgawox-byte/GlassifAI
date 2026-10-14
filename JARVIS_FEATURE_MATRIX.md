@@ -33,18 +33,21 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 
 | Feature | Status | Verification | Evidence | Completion criterion | Pri |
 |---|---|---|---|---|---|
-| Hands-free voice through the glasses (HFP) | Partial | Device (v1.0 era only); v1.5 pending device | `GlassifAIRealtimeSession.configureAudioSession` | HFP route active, mic and speaker on glasses, test VC/WK rows | P0 |
-| Live camera understanding | Working in code | Automated (frame tests); pending device | `FramePipeline`, `FrameSelection`, `VisionCapture` | M/LV/VM rows pass on glasses | P0 |
+| Hands-free voice through the glasses (HFP) | Partial; **not with the Ray-Ban camera on current glasses software** | Device (v1.0 era only); pending device N, N2 | `GlassifAIRealtimeSession.configureAudioSession`; `GlassesCameraAudio` (camera-safe audio) | With the camera off: HFP route active, mic and speaker on the glasses. With the Ray-Ban camera: the iPhone microphone until Meta's glasses fix (#206, #332) or DAT in-stream audio | P0 |
+| Ray-Ban connection (registration, link, session, camera) | In CI (DAT 1.0.1) | Automated (`AutoLoomConnectionTests`, `AutoLoomRayBanDAT1Tests`); pending device A–V | `WearableConnection.swift`, `ConnectionLayers.swift`, `StreamSessionViewModel.swift` | `RAYBAN_CONNECTION.md` rows A, B, N, S pass | P0 |
+| Connection diagnostics by layer + Meta SDK log | In CI | Automated; pending device V | `ConnectionDiagnosticsView`, `DATLogReader` | The copied report names the failing layer on the device | P0 |
+| Live camera understanding | Working in code (DAT 1.0.1 in CI) | Automated (frame tests); pending device | `FramePipeline`, `FrameSelection`, `VisionCapture`; default "Live" 504×896 @ 24; in-stream photo for reading | M/LV/VM rows and S, U pass on glasses | P0 |
+| Smoothness measured (frame interval, stutters, longest gap) | In CI | Automated (`testStuttersAndTheLongestGapAreMeasured`); pending device S | `FrameStore` metrics, Camera diagnostics | Live profile measured on the glasses | P1 |
 | Image source of AI frames shown and stated | Partial → improved | Automated build; pending device CAM1 | Diagnostics "Last image sent to the AI"; source line added to prompts | Live Vision images + destination + capture age in diagnostics (plan 3.1) | P1 |
 | AI never analyses UI/preview/mock images | Verified in code | Automated (code audit) | `JARVIS_AUDIT.md` §5 | — | P0 |
 | Best frame selection, measurable quality settings | Working in code | Automated | FAST/BALANCED/HIGH profiles, best-of-recent | Capture-time freshness (plan 1.12) | P1 |
 | Glasses photo capture | Working in code | Pending device M1 | `RayBanMediaCoordinator.takePhoto` | M1 pass | P1 |
 | Glasses video capture | Partial (stream video, no audio) | Pending device M2 | `RayBanVideoRecorder` | DAT 1.x mic for audio (F13/F23) | P2 |
 | Original media from the glasses' gallery | **Blocked** | — | No API in DAT 0.5.0 or 1.0.1 (VERIFIED) | Meta adds an API | — |
-| Full-resolution still (4032×3024) | Blocked on this build | — | DAT 1.x beta only | DAT 1.x port (plan 3.4) | P2 |
+| Full-resolution still (4032×3024) | In CI (opt-in, Meta beta) | Pending device R | `StreamSessionViewModel.captureStandalonePhoto`; Settings → Camera → Vision image | R passes; the stream comes back through a fresh session | P2 |
 | Originals kept separate from AI derivatives; EXIF | Done | Automated | Originals saved byte-for-byte; AI copies separate; stills sent to providers carry no GPS or camera metadata (`StillPhotoProcessor`) | — | P1 |
-| DAT version warnings | Working in code | Automated build; pending device DAT1 | `WearableConnection.alertIfIncompatible` | DAT1 pass | P0 |
-| Temple tap / gestures | Working in code | Pending device | `GlassesGestureSession` | Gesture rows | P2 |
+| DAT version warnings | In CI (session errors kept apart on 1.0.1) | Automated; pending device | `WearableConnection.alertIfIncompatible`, `GlassesSessionFailure` | Shown with the right action (update the app, update in Meta AI, power cycle) | P0 |
+| Temple tap / gestures | In CI (follow the camera's DAT 1.0 session; the app's own stops ignored) | Automated; pending device P | `GlassesGestureSession` | P passes | P2 |
 | Hey Meta invocation | Blocked on this build | — | DAT 1.0 + Meta approval | `DAT_1_MIGRATION.md` | P3 |
 
 ## B. Voice and realtime (brief §5)

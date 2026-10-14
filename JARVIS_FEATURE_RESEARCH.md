@@ -203,3 +203,94 @@ Ideas from the brief's own list (§6 of the brief) are tracked in `JARVIS_FEATUR
 - AGPL/GPL/SSPL projects are design inspiration only. Immich is called as an unmodified network service.
 - DAT experimental features (photo capture, inputs, motion, speech, in-stream audio) are allowed in sideloaded test builds only.
 - The ChatGPT subscription transport is private and unsupported (see `JARVIS_AUDIT.md` §8, H3).
+
+## 8. Research of 2026-10-14 (owner's brief of 2026-10-13, §7–8)
+
+Two research passes were run against new projects only. The full reports, with every claim labelled CODE-READ, README-ONLY, ISSUE or INFERRED, are outside the repository in `GlassifAI-research/2026-10-14/`:
+- `D1_dat_apps_connection_camera.md`: 24 iOS DAT apps and Meta's issue tracker, on connection and camera;
+- `D2_skills_research.md`: 44 sources on skills, tools and licences, and 26 scored ideas.
+
+Nothing was copied into the code. The rules taken from them are re-implemented and cite their source in comments.
+
+### 8.1 DAT apps: what was adopted (phase R)
+
+| Lesson | Source (licence) | Decision | Where |
+|---|---|---|---|
+| The glasses end camera sessions while their HFP microphone is connected (current firmware) | Meta, SDK issues #206/#332 (2026-10-13); Dashhound field notes (MIT) | Re-implemented as a rule: camera-safe audio, the call-rule phase | `ConnectionLayers.swift` (`GlassesCameraAudio`), `WearableConnection.swift` |
+| Never two session attempts within 2 s; a 20 s warm-up | Meta #231/#332; OpenGlasses `StreamRecoveryPolicy` (BSL 1.1: idea only) | Re-implemented | `GlassesConnectionReducer.retryDelay`, `GlassesTransportWatchdog`, `RayBanStallPolicy` |
+| Request less over Bluetooth (720p settles at 504×896) | Meta camera guide; discussion #297; Meta sample 1.0.1 (Meta terms); Dashhound (MIT) | Re-implemented: default "Live" 504×896 @ 24 | `GlassesStreamProfile.live` |
+| In-stream photos (~1080×1440) for detail; `Camera.photo` refused while streaming | Meta #260, #297 | Re-implemented | `GlassesVisionCaptureMode.automatic` |
+| Read the SDK's own log for the cause | OpenVision `GlassesManager` (MIT); Meta #301 | Re-implemented (keyword filter, IDs masked) | `DATLogReader` |
+| Handle the four version errors separately | Meta runtime guide; SamanthaWearable (no licence: idea only) | Re-implemented | `GlassesSessionFailure`, phases |
+| A full session rebuild recovers a starved stream | Meta #287 | Re-implemented | `StreamSessionViewModel.checkForStall` |
+
+Not used:
+- VisionClaw and its forks, memento, kitty-captions and Meta's samples ship only Meta's terms text (no open-source grant).
+- anima: PolyForm Noncommercial.
+- OpenGlasses: BSL 1.1, no commercial use until 2030.
+- junior, SamanthaWearable, meta-stream: no licence.
+
+These were read for ideas only.
+
+### 8.2 Skills: new projects and decisions
+
+| Project | Licence | Category | Decision |
+|---|---|---|---|
+| ethanpaschkes/meta-glasses-voice-bridge | MIT | 3 | Re-implement the idea: several PC addresses per pairing (D2-01) |
+| adriDiazz/metamemory | MIT | 3 | Re-implement ideas: offline buffer, retention tiers (D2-13, D2-17) |
+| DearBobby9/NoteV_Glasses | MIT | 3 | Re-implement ideas: slide capture, spoken bookmarks, Reminders links back (D2-05, D2-20, D2-02) |
+| locafra/hey-casa | MIT | 3 | Re-implement in Swift: Home Assistant skill (D2-08) |
+| NousResearch/hermes-agent | MIT | 3 | Ideas: result size budgets, scheduled jobs (D2-15, D2-10) |
+| HKUDS/nanobot | MIT | 3 | Idea: temporary chats that never reach memory (D2-03) |
+| modelcontextprotocol/swift-sdk | MIT → Apache-2.0 | 2 | Candidate dependency for third-party MCP servers; the PC keeps its own pinned transport (D2-19) |
+| FluidInference/swift-scribe | MIT | 2 | Adapt under licence for an iOS 26 offline memo (D2-14) |
+| Tailscale, LocalSend, Home Assistant | BSD-3 / Apache-2.0 / Apache-2.0 | 1 | Tools or services the owner can use as they are |
+| TEN Framework | Apache-2.0 + Agora conditions | 5 | Do not use (forbids running on mobile devices) |
+| visor, Sentient, ultralytics/yolo-ios-app | AGPL-3.0 | 5 | Do not use |
+| Whisperboard | GPL-3.0 | 5 | Do not use |
+| GUI computer-use agents (UI-TARS, Agent-S, Cua, Windows-Use, OpenAdapt) | Apache/MIT | 5 | Do not integrate: unrestricted desktop control conflicts with the companion's allowlist policy |
+
+### 8.3 Twenty-six new ideas, scored
+
+Scores are 1–5 for user benefit (B), feasibility (F), licence (L), security (S), cost (C, 5 = cheap) and testability in CI (T); the total is out of 30.
+
+| ID | Idea | B | F | L | S | C | T | Total | Priority |
+|---|---|---|---|---|---|---|---|---|---|
+| D2-03 | Incognito conversation ("gizli mod"): nothing reaches memory, summaries, Spotlight or visual memory | 4 | 5 | 5 | 5 | 5 | 5 | 29 | **P1 · top 5** |
+| D2-01 | Several PC addresses in one pairing (home network → Tailscale), same key pin | 5 | 4 | 5 | 4 | 5 | 5 | 28 | **P1 · top 5** |
+| D2-04 | Structured test reports (JUnit/TAP/TRX) + "2 new failures" since the last run | 4 | 5 | 5 | 4 | 5 | 5 | 28 | **P1 · top 5** |
+| D2-18 | Business card → contact draft (on-device OCR → system "Add to Contacts") | 4 | 5 | 5 | 5 | 5 | 4 | 28 | **P1 · top 5** |
+| D2-15 | Size budgets and paged reading for tool results | 3 | 5 | 5 | 5 | 5 | 5 | 28 | P2 |
+| D2-16 | Deadline phrases in notes/OCR → one-tap reminder suggestion | 3 | 5 | 5 | 5 | 5 | 5 | 28 | P2 |
+| D2-17 | Retention tiers for automatic captures + a storage/privacy page | 3 | 5 | 5 | 5 | 5 | 5 | 28 | P2 |
+| D2-02 | Reminders/Calendar items link back to their source (`glassifai://`) | 4 | 5 | 5 | 4 | 5 | 4 | 27 | **P1 · top 5** |
+| D2-06 | "Bunu daha önce gördüm mü?" image-to-image recall (Vision feature prints) | 4 | 4 | 5 | 5 | 5 | 4 | 27 | P1 |
+| D2-10 | Scheduled PC jobs (set on the PC only) → morning report | 3 | 5 | 5 | 4 | 5 | 5 | 27 | P2 |
+| D2-20 | Spoken bookmarks ("işaretle") in long conversations | 3 | 5 | 5 | 4 | 5 | 5 | 27 | P2 |
+| D2-21 | Clipboard bridge phone ↔ PC (set = CONFIRM, read = STRONG + PII screen) | 4 | 5 | 5 | 3 | 5 | 5 | 27 | P2 |
+| D2-22 | Location-aware PC exposure ("evden uzaktayken salt okunur") | 3 | 4 | 5 | 5 | 5 | 5 | 27 | P2 |
+| D2-11 | PC inbox: send a photo/document to the PC (Mark-of-the-Web) | 4 | 4 | 5 | 4 | 5 | 4 | 26 | P2 |
+| D2-13 | Offline question queue (frame + question answered later, with consent) | 4 | 4 | 5 | 4 | 4 | 5 | 26 | P2 |
+| D2-23 | Blur faces and number plates in frames sent to the cloud (opt-in) | 3 | 4 | 5 | 5 | 5 | 4 | 26 | P2 |
+| D2-05 | Slide / whiteboard capture mode | 4 | 4 | 5 | 4 | 4 | 4 | 25 | P2 |
+| D2-07 | Lens-smudge warning and "utility" frame routing | 3 | 4 | 5 | 5 | 5 | 3 | 25 | P2 |
+| D2-08 | Home Assistant skill | 3 | 4 | 5 | 3 | 5 | 5 | 25 | P2 |
+| D2-14 | Offline voice memo, transcribed on device later | 4 | 3 | 5 | 5 | 5 | 3 | 25 | P2 |
+| D2-26 | Turkish semantic search over notes and memories (`NLContextualEmbedding`, probed) | 4 | 3 | 5 | 5 | 5 | 3 | 25 | P2 |
+| D2-25 | Document structure (tables, lists) with `RecognizeDocumentsRequest` (iOS 26) | 3 | 3 | 5 | 5 | 5 | 3 | 24 | P2 |
+| D2-19 | MCP client on the official Swift SDK (own pinned transport for the PC) | 3 | 3 | 4 | 4 | 5 | 4 | 23 | P3 |
+| D2-24 | "Screen error → diagnosis": OCR of an error dialog + the PC's project context | 3 | 3 | 5 | 4 | 4 | 4 | 23 | P3 |
+| D2-12 | Live glasses view on the PC over WebRTC | 3 | 2 | 5 | 4 | 5 | 3 | 22 | P3 |
+| D2-09 | Coding-agent delegate on the PC (sandboxed, STRONG) | 4 | 3 | 4 | 2 | 3 | 3 | 19 | P3 |
+
+Overlap: 24 of the 26 are new against F01–F28 and the plan. D2-22 extends F24; D2-23 partly overlaps the bystander blur of R6-F19.
+
+### 8.4 Order of work
+
+1. **First, phase R**: the Ray-Ban device test. The brief puts connection and camera first.
+2. Then the top five, each small and testable in CI:
+   - D2-03 incognito (memory and Spotlight writes gated by one flag);
+   - D2-18 business card (OCR → `CNContactViewController`; JARVIS never writes contacts itself);
+   - D2-02 links back (only navigation, never an action);
+   - D2-01 several PC addresses (companion pairing payload + iOS client, same pin);
+   - D2-04 structured test reports (companion parser + comparison with the last run).

@@ -70,13 +70,16 @@ struct StreamSessionView: View {
         WakePhraseListener.shared.stopListening(reason: nil)
         let source = CaptureSource(rawValue: UserDefaults.standard.string(forKey: CaptureSource.defaultsKey) ?? "")
           ?? .iPhoneCamera
-        let route = AudioRoutePreference.current
-        let glassesMicrophone = route.prefersGlassesAudio(for: source) && route != .iPhone
+        // With the Ray-Ban camera (and camera-safe audio, the default) this
+        // is the iPhone's microphone and speaker: the glasses end the camera
+        // session when their own microphone connects (Meta #206, #332).
+        let audio = AudioRoutePreference.current.conversationAudio(for: source)
         // The chime and "Bağlandım, dinliyorum." come only when the
         // connection is really ready, never when the wake phrase is heard.
-        if source == .glasses, glassesMicrophone, GlassesAudioOrder.isEnabled {
-          // A running Ray-Ban stream steps aside while the glasses
-          // microphone comes up, then starts again (Meta's documented order).
+        if source == .glasses, audio.prefersGlassesHandsFree, !audio.forcesBuiltIn, GlassesAudioOrder.isEnabled {
+          // Camera-safe audio turned off (after Meta's glasses fix): a
+          // running Ray-Ban stream steps aside while the glasses microphone
+          // comes up, then starts again (Meta's documented order).
           await stream.withStreamSetAsideForAudio {
             await voiceSession.start(
               prefersBluetoothHFP: true,
@@ -86,8 +89,8 @@ struct StreamSessionView: View {
           }
         } else {
           await voiceSession.start(
-            prefersBluetoothHFP: route.prefersGlassesAudio(for: source),
-            forcesBuiltInAudio: route == .iPhone,
+            prefersBluetoothHFP: audio.prefersGlassesHandsFree,
+            forcesBuiltInAudio: audio.forcesBuiltIn,
             reason: reason)
         }
         // A hands-free start: bring the glasses camera back now for visual
@@ -162,7 +165,8 @@ struct StreamSessionView: View {
   private func switchCaptureSource() async {
     let previous = lastActivatedSource ?? captureSource
     let route = AudioRoutePreference.current
-    let audioChanges = route.prefersGlassesAudio(for: previous) != route.prefersGlassesAudio(for: captureSource)
+    let audio = route.conversationAudio(for: captureSource)
+    let audioChanges = route.conversationAudio(for: previous) != audio
     AssistantOrchestrator.shared.cancelAll(reason: "camera source changed", voiceOnly: false)
     viewModel.stillPhotos.cancel()
     FrameStore.shared.reset()
@@ -171,8 +175,8 @@ struct StreamSessionView: View {
       await voice.stop()
       await activateCaptureSource()
       await voice.start(
-        prefersBluetoothHFP: route.prefersGlassesAudio(for: captureSource),
-        forcesBuiltInAudio: route == .iPhone)
+        prefersBluetoothHFP: audio.prefersGlassesHandsFree,
+        forcesBuiltInAudio: audio.forcesBuiltIn)
     } else {
       await activateCaptureSource()
     }

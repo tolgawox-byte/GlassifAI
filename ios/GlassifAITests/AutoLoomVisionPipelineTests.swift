@@ -189,8 +189,11 @@ final class AutoLoomVisionPipelineTests: XCTestCase {
   }
 
   func testAutomaticCaptureUsesVideoFirst() {
-    XCTAssertFalse(GlassesVisionCaptureMode.automatic.prefersPhoto(for: .high),
-                   "in-stream photos are video frames; the sharpest recent frame is used")
+    // Reading takes an in-stream photo (about 1080×1440 on DAT 1.x, larger
+    // than the 504×896 Bluetooth sustains); everything else video first.
+    XCTAssertTrue(GlassesVisionCaptureMode.automatic.prefersPhoto(for: .high))
+    XCTAssertFalse(GlassesVisionCaptureMode.automatic.prefersPhoto(for: .standard),
+                   "the sharpest recent frame answers ordinary questions at once")
     XCTAssertTrue(GlassesVisionCaptureMode.photoFirst.prefersPhoto(for: .standard))
     XCTAssertTrue(GlassesVisionCaptureMode.automatic.allowsPhoto)
     // The standalone DAT 1.0 photo (beta) is opt-in, for reading only, and

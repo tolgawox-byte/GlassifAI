@@ -11,7 +11,10 @@ final class AutoLoomCameraTests: XCTestCase {
     for profile in GlassesStreamProfile.allCases {
       XCTAssertTrue(allowed.contains(profile.frameRate), profile.rawValue)
     }
-    XCTAssertEqual(GlassesStreamProfile.recommended, .sharp)
+    // Over Bluetooth 720p is delivered as 504×896 after 15–25 s anyway
+    // (SDK discussion #297): the default asks for what the link carries.
+    XCTAssertEqual(GlassesStreamProfile.recommended, .live)
+    XCTAssertEqual(GlassesStreamProfile.live.requestedSummary, "504×896 @ 24 fps")
     XCTAssertEqual(GlassesStreamProfile.sharp.requestedSummary, "720×1280 @ 15 fps")
     XCTAssertEqual(GlassesStreamProfile.maxDetail.requestedSummary, "720×1280 @ 7 fps")
     XCTAssertEqual(GlassesStreamProfile.balanced.requestedSummary, "720×1280 @ 24 fps", "the original configuration")
@@ -32,7 +35,7 @@ final class AutoLoomCameraTests: XCTestCase {
     }
     defaults.removeObject(forKey: GlassesStreamProfile.defaultsKey)
     defaults.removeObject(forKey: GlassesVideoTransport.defaultsKey)
-    XCTAssertEqual(GlassesStreamProfile.current, .sharp)
+    XCTAssertEqual(GlassesStreamProfile.current, .live)
     XCTAssertEqual(GlassesVideoTransport.preferred, .hevc)
     defaults.set("raw", forKey: GlassesVideoTransport.defaultsKey)
     XCTAssertEqual(GlassesVideoTransport.preferred, .raw)

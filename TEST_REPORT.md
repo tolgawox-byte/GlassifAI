@@ -13,6 +13,7 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 | Run | Commit | Result | Notes |
 |---|---|---|---|
+| [38492438643](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38492438643) | `43ca5f2` (plan 2.4 is `a13f088`) | **BUILD PASS · iOS 374/376 (2 skipped, 0 failed) · Rust 13/13 · 28/28 screenshots** | Plan 2.4: up to five actions waiting on the phone. 376 test cases ran: the 372 before plus the 4 of `AutoLoomApprovalQueueTests`. The approvals screenshot shows the two seeded actions, the message first (newest) and "Delete reminder … cannot be undone" below, each with its own buttons. License step unchanged (451 crates, 272 texts). Unit tests 1281 s. **This is the last DAT 0.5.0 build** (tag `rollback-43ca5f2-before-dat1-port`); its Release IPA is the rollback for the DAT 1.0.1 port |
 | [38489746020](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38489746020) | `88d9baf` (plan 2.3 is `d4f8400`) | **BUILD PASS · iOS 370/372 (2 skipped, 0 failed) · Rust 13/13 · 28/28 screenshots** | Plan 2.3: repeats said by voice for reminders, events and AutoLoom tasks (the next task added on completion, undo takes it back), undo of a spoken task completion. 372 test cases ran: the 364 before plus the 8 of the new `AutoLoomRecurrenceTests`, including the existing time-parser and catalog tests, which still pass with the repeat words. License step unchanged (451 crates, 272 texts). Unit tests 542 s on a faster runner. Repeats in the Reminders and Calendar apps and from the lock screen are device tests TK2 and RM5 |
 | [38485233267](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38485233267) | `8fa6eb0` | **BUILD PASS · iOS 362/364 (2 skipped, 0 failed) · Rust 13/13 · 28/28 screenshots** | Plan 2.2: Apple Reminders completed or deleted by voice, "hangisi?", list choice, graph steps waiting for a yes. 364 test cases ran: the 354 before plus the 10 of the new `AutoLoomReminderVoiceTests` (parser, answers, matching, list phrases, plans, tool switch, graph honesty); the catalog consistency tests pass with the two new entries. License step: 451 crates, 272 texts, as before. Unit tests 1325 s. EventKit is not usable in the simulator test host, so completing, deleting and reading Reminders back are device tests RM1–RM4 |
 | [38349904362](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38349904362) | `6c84c6d` | **BUILD PASS · iOS 352/354 (2 skipped, 0 failed) · Rust 13/13 · 28/28 screenshots** | Phase 1g. The license step found 451 crates and 272 distinct texts. Its output is identical, character for character, to the Rust section of the app's license file, and each of the six crates without a license file points at its text. The license test, extended for those notices, passed. The memory settings screenshot reads "Temporary (this session only)". Unit tests took 1397 s on a slower runner; the slowest was `testRegistrationDoesNotSpinForever` at 21.9 s |
@@ -29,7 +30,14 @@ Two workflows run on every push: **iOS build + tests** (`main.yml`, macOS) and *
 
 Until `544a6d6` the screenshot step reported "not running after launch" for a few screens on every run (6 on the baseline, 3 on `2e32c2a`, 7 on `6385e03`), different ones each time and never with a crash report. This was first put down to the simulator's launch. Run 38341978615 showed the real cause: the script's own liveness check missed apps that were running (see below). Run 38346329047 captured all 28 screens.
 
-Plan 2.4 (`a13f088`, pushed with this record) lets up to five phone actions wait at once, each card answering its own, and adds `AutoLoomApprovalQueueTests`. **Its run is pending**; its result is added here when it finishes. The approvals screenshot of that run should show two waiting actions.
+**Phase R (owner's brief of 2026-10-13): the Ray-Ban connection and camera on DAT 1.0.1.**
+- `9954e60`: the port, the layer diagnostics, the IPA content check and `AutoLoomRayBanDAT1Tests`. Run [38501997387](https://github.com/tolgawox-byte/GlassifAI/actions/runs/38501997387).
+- The follow-up commit adds:
+  - camera-safe audio and the glasses' call rule;
+  - the "Live" profile, in-stream photos for reading, the Meta SDK log;
+  - 2 s retry pacing and the 20 s warm-up.
+- The results are added here when the runs finish.
+- **Nothing in phase R has been tried on the glasses**: `docs/RAYBAN_CONNECTION.md` rows A–V are the device tests.
 
 ### Simulator infrastructure (investigated, not ignored)
 

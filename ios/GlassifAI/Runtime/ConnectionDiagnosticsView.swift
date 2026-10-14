@@ -14,6 +14,8 @@ struct ConnectionDiagnosticsView: View {
   /// Read once: the embedded profile does not change while the app runs.
   @State private var signing = ProvisioningSummary.read().summary()
   @AppStorage(GlassesAudioOrder.defaultsKey) private var microphoneFirst = true
+  @AppStorage(GlassesCameraAudio.defaultsKey) private var cameraSafeAudio = true
+  @State private var sdkLog: [String] = []
 
   private let timeFormatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -119,13 +121,33 @@ struct ConnectionDiagnosticsView: View {
       }
 
       Section {
+        Toggle(L.t("iPhone microphone with the Ray-Ban camera", "Ray-Ban kamerasıyla iPhone mikrofonu"), isOn: $cameraSafeAudio)
         Toggle(L.t("Glasses microphone before the camera stream", "Kamera akışından önce gözlük mikrofonu"), isOn: $microphoneFirst)
+          .disabled(cameraSafeAudio)
       } header: {
-        Text(L.t("Audio and camera order", "Ses ve kamera sırası"))
+        Text(L.t("Audio and camera", "Ses ve kamera"))
       } footer: {
         Text(L.t(
-          "Meta: the HFP microphone must be set up and settled before the camera stream starts, or the audio route can fail silently. When a conversation starts with the glasses microphone, the Ray-Ban stream steps aside for a moment and starts again. Turn off only to compare on the device.",
-          "Meta: HFP mikrofonu kamera akışı başlamadan önce kurulmalı ve oturmalı; yoksa ses yolu sessizce bozulabilir. Gözlük mikrofonuyla bir konuşma başlarken Ray-Ban akışı bir anlığına durur ve yeniden başlar. Yalnızca cihazda karşılaştırmak için kapatın."))
+          "Meta (SDK issues #206 and #332, 2026-10-13): on current glasses software the glasses end the camera session as soon as their microphone connects over Bluetooth hands-free, in every order, until a glasses update. With the first switch on (default), conversations with the Ray-Ban camera use the iPhone's microphone. The second switch only matters when the first is off: it applies Meta's documented order (the microphone set up before the stream).",
+          "Meta (SDK kayıtları #206 ve #332, 13.10.2026): güncel gözlük yazılımında gözlük, mikrofonu Bluetooth eller serbest ile bağlanır bağlanmaz kamera oturumunu kapatıyor; sıra fark etmiyor, gözlük güncellemesine kadar. İlk anahtar açıkken (varsayılan) Ray-Ban kamerasıyla konuşmalar iPhone mikrofonunu kullanır. İkinci anahtar yalnızca ilki kapalıyken önemlidir: Meta'nın belgelediği sırayı uygular (mikrofon akıştan önce kurulur)."))
+      }
+
+      Section {
+        if sdkLog.isEmpty {
+          Text(L.t("No matching lines in the Meta SDK log yet.", "Meta SDK günlüğünde henüz eşleşen satır yok."))
+            .foregroundStyle(.secondary)
+        }
+        ForEach(Array(sdkLog.enumerated()), id: \.offset) { _, line in
+          Text(line)
+            .font(.caption2.monospaced())
+            .textSelection(.enabled)
+        }
+      } header: {
+        Text(L.t("Meta SDK log", "Meta SDK günlüğü"))
+      } footer: {
+        Text(L.t(
+          "The toolkit's own log names causes the API does not report (an app no longer registered, the glasses' DAT app, link switching). Only matching lines, sanitized, identifiers masked; also in the copied report.",
+          "Araç setinin kendi günlüğü, API'nin bildirmediği nedenleri adlandırır (uygulama artık kayıtlı değil, gözlükteki DAT uygulaması, bağlantı geçişi). Yalnızca eşleşen satırlar; temizlenmiş, kimlikler maskeli; kopyalanan raporda da var."))
       }
 
       Section {
@@ -162,9 +184,15 @@ struct ConnectionDiagnosticsView: View {
     }
     .navigationTitle("Ray-Ban connection")
     .task {
-      // The layers are measured again every second while this page is open.
+      // The layers are measured again every second while this page is open;
+      // the SDK log every five.
+      var tick = 0
       while !Task.isCancelled {
         facts = connection.layerFacts(voice: voice)
+        if tick % 5 == 0 {
+          sdkLog = await Task.detached(priority: .utility) { DATLogReader.recentLines(limit: 30) }.value
+        }
+        tick += 1
         try? await Task.sleep(nanoseconds: 1_000_000_000)
       }
     }

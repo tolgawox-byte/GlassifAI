@@ -152,11 +152,12 @@ final class AutoLoomConnectionTests: XCTestCase {
 
   func testRetriesBackOffAndStayBounded() {
     let delays = (0...12).map { GlassesConnectionReducer.retryDelay(afterFailures: $0) }
-    XCTAssertEqual(delays.first, 1)
+    XCTAssertEqual(delays.first, 2, "never two session attempts within 2 s (Meta, SDK issues #231 and #332)")
+    XCTAssertGreaterThanOrEqual(delays.min() ?? 0, 2)
     XCTAssertEqual(delays.last, 30)
     XCTAssertEqual(delays, delays.sorted(), "never shorter after more failures")
     XCTAssertEqual(delays.max(), 30, "no busy loop, no unbounded wait")
-    XCTAssertEqual(GlassesConnectionReducer.retryDelay(afterFailures: -3), 1)
+    XCTAssertEqual(GlassesConnectionReducer.retryDelay(afterFailures: -3), 2)
   }
 
   // MARK: What the user sees

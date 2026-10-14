@@ -566,14 +566,14 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
   func previewVoice(_ voice: String) async {
     guard !isActive else { return }
     let source = orchestrator.captureSource()
-    let route = AudioRoutePreference.current
+    let audio = AudioRoutePreference.current.conversationAudio(for: source)
     voiceOverride = voice
     isPreviewSession = true
     previewingVoice = voice
     let line = VoicePreview.greeting(name: AssistantIdentity.name, voice: voice, turkish: L.isTurkish)
     await start(
-      prefersBluetoothHFP: route.prefersGlassesAudio(for: source),
-      forcesBuiltInAudio: route == .iPhone,
+      prefersBluetoothHFP: audio.prefersGlassesHandsFree,
+      forcesBuiltInAudio: audio.forcesBuiltIn,
       greeting: line)
     guard isActive, isPreviewSession else { return }
     scheduleAutoStop(afterSeconds: 12)
@@ -968,7 +968,13 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
 
   private func configureAudioSession(prefersBluetoothHFP: Bool) throws {
     let session = AVAudioSession.sharedInstance()
-    var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .mixWithOthers]
+    var options: AVAudioSession.CategoryOptions = [.mixWithOthers]
+    // iPhone audio keeps the glasses' hands-free link closed: on current
+    // glasses software an open HFP microphone ends the Ray-Ban camera
+    // session (Meta, SDK issues #206 and #332).
+    if !forcesBuiltInAudio {
+      options.insert(.allowBluetoothHFP)
+    }
     if !prefersBluetoothHFP {
       options.insert(.defaultToSpeaker)
     }

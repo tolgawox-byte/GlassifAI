@@ -2,9 +2,56 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS — phase R: Ray-Ban connection and camera on Meta DAT 1.0.1] — branch `autoloom-glasses-jarvis-v1`
+
+From the owner's brief of 2026-10-13: the sideloaded build did not connect to the glasses, and the camera looked choppy and possibly like the iPhone's. Commits `9954e60` and the follow-up; CI results in `TEST_REPORT.md`. **Not tried on the glasses yet** (`docs/RAYBAN_CONNECTION.md` rows A–V). Rollback: tag `rollback-43ca5f2-before-dat1-port` and the Release IPA of run 38492438643 (DAT 0.5.0).
+
+### Found
+- **The glasses stop the camera while their own microphone is connected.** Meta, 2026-10-13, issues #206 and #332: on current glasses software, a Bluetooth hands-free (HFP) microphone ends the DAT camera session and refuses new ones, whatever the order, until a glasses update. AutoLoom used exactly that setup with the Ray-Ban camera. This is the most likely shared cause of "no connection" and the choppy image; HFP also takes 40–70 % of the camera's Bluetooth frames.
+- **The app's Meta toolkit (DAT 0.5.0, March 2026) was seven months behind the glasses.** The glasses now run the on-glasses DAT app 1.0.0.0.0, and Meta's answer to older SDKs failing on it is "update to 1.0.1".
+- Developer Mode could not be switched on in Meta AI 290 for some days (Meta-side, fixed around 2026-10-06).
+- Glasses can refuse every new session until a power-switch cycle (#292).
+- Bluetooth off or not allowed looked like sleeping glasses.
+- After connecting the glasses, the image still came from the iPhone camera.
+
+### Changed
+- **Meta DAT 1.0.1** (iOS 17.2):
+  - one device session per glasses, with a camera (live stream + photo);
+  - session errors kept apart: insufficient SDK, DAT app update, DAT app unreachable, version warning, health, refusals;
+  - temple gestures follow that session;
+  - registrations started in Meta AI are continued.
+- **Camera-safe audio (default):** with the Ray-Ban camera, the conversation and the wake phrase use the iPhone's microphone and speaker. If the glasses still stop the camera during a call, the app says so and starts it again when the call ends. Settings → Audio turns it off after Meta's fix.
+- **New connection phases with plain words:**
+  - Bluetooth off;
+  - app or glasses update needed (Open in Meta AI);
+  - session starting or paused;
+  - DAT app unreachable;
+  - the glasses refusing ("power-switch off and on");
+  - camera paused by a call.
+
+  Retries never within 2 s and none while the user must act. "Ray-Ban Connected" only when the glasses are usable.
+- **Connecting the glasses switches the camera to the Ray-Ban.** Home offers the switch when the glasses are linked but not used.
+- **A smoother default stream, "Live" (504×896 at 24 fps).** Over Bluetooth a 720p request settles at 504×896 anyway. The 720p profiles stay in Settings.
+- **Reading requests take an in-stream photo** (about 1080×1440 on DAT 1.x) instead of a video frame.
+- A starved stream gets a fresh session; the raw fallback waits 20 s for a cold start.
+- The full-resolution photo (Meta beta) is opt-in, and a fresh session follows it.
+- **Diagnostics:**
+  - a layer table (Bluetooth, SDK, registration, link with worn/folded/battery, session, camera, image source, microphone, output, AI session);
+  - the signing of a sideloaded IPA;
+  - a bundle-id check;
+  - the Meta SDK's own log lines (IDs masked) in the copied report;
+  - smoothness metrics (frame interval, stutters, longest gap).
+- **CI:**
+  - IPA names carry the commit (`AutoLoomMediaGlasses-Release-<commit>-unsigned.ipa`);
+  - each IPA is checked for its commit, callback scheme, accessory protocol, background mode and Meta frameworks.
+- **Research:** two passes over 68 new sources with licences checked; 26 new ideas scored, top five chosen (`JARVIS_FEATURE_RESEARCH.md` §8).
+
+### Not done (owner's decision)
+- DAT 1.0's in-stream audio as the glasses' microphone while the camera runs. Meta suggests it for now, but it is experimental, not beamformed, and needs a custom audio source for the WebRTC voice pipeline.
+
 ## [JARVIS Ultimate — plan 2.4: several actions waiting on the phone] — branch `autoloom-glasses-jarvis-v1`
 
-Plan item 2.4. CI results: `TEST_REPORT.md`. Not tried on an iPhone yet (device test AP1).
+Plan item 2.4. CI: run 38492438643 passed (iOS 374/376 with the 4 new tests, Rust 13/13); details in `TEST_REPORT.md`. Not tried on an iPhone yet (device test AP1).
 
 ### Changed
 - **Up to five iPhone actions can wait for the user at once.**

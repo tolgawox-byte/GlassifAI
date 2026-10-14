@@ -1,45 +1,70 @@
-# Meta Wearables DAT 1.0 — migration plan
+# Meta Wearables DAT 1.0 — migration
 
-**Status on this branch: not migrated.** This build stays on DAT **0.5.0**, the version the vNext camera work was built and CI-tested against. The migration below is now built as a separate variant on branch **`autoloom-glasses-dat1`** (IPA `AutoLoomMediaGlasses-DAT1-Release-unsigned.ipa`); that branch's copy of this document describes what it does and lists its device tests. Nothing in it has been tested on glasses.
+**Status: migrated on branch `autoloom-glasses-jarvis-v1` (`9954e60` and the follow-up commit), DAT 1.0.1. CI only; PHYSICAL TEST REQUIRED.**
 
-## Why not in this build
+- The previous DAT 0.5.0 build is tagged `rollback-43ca5f2-before-dat1-port`. Its run 38492438643 was green.
+- The older separate variant on branch `autoloom-glasses-dat1` (v1.1.1 on DAT 1.0.0) is superseded and no longer updated.
 
-- DAT 1.0 needs **Meta AI app V290 and glasses firmware V128**, rolling out from **2026-09-30**. The owner's glasses cannot run it yet, so nothing could be tested.
-- The owner must keep a working IPA (brief: "without breaking Gen 1"). A blind SDK swap would put the working Ray-Ban preview and vision at risk.
-- Standalone photo capture is marked **beta** by Meta: "available to every developer, but apps that use it cannot be published yet". That is fine for a sideloaded build, but it is not a production-stable API.
+## Why now
 
-## What DAT 1.0 adds that AutoLoom wants
+- The owner's sideloaded 0.5.0 build did not connect to the glasses (2026-10-13).
+- Meta's glasses now run firmware 128/129 with the on-glasses DAT app 1.0.0.0.0, and Meta's answer to older SDKs failing on it is "update your app to 1.0.1" (SDK issue #308).
+- Meta's runtime guide makes `insufficientSDKVersion` terminal ("release a newer version of your app built with the current SDK").
+- Only 1.0 apps can take part in registrations started from Meta AI.
+- See `RAYBAN_CONNECTION.md` for the full evidence.
 
-| Feature | DAT 1.0 API (Meta docs) | AutoLoom use |
-|---|---|---|
-| Full-resolution still photo | `DeviceSession.addCamera()` → `camera.photo`; register `statePublisher`, `photoDataPublisher`, `transferProgressPublisher`, `errorPublisher`, **then** `photo.start()` (iOS only); on the first `.started` call `photo.capturePhoto(resolution: .full, quality: .high)` | HIGH_DETAIL reading (VINs, labels, documents) from the native sensor instead of a compressed video frame |
-| Video stream | `session.addCamera(config: StreamConfiguration(videoCodec:resolution:frameRate:))` → `camera.stream`; `statePublisher`, `videoFramePublisher`, `errorPublisher`; `stream.start()` | Replaces the 0.5.0 `StreamSession` |
-| Voice invocation | `VoiceInvocationsStream(wearables:)`, `start(deviceIdentifier:)`, `invocationsPublisher`; answer `LaunchApp` with `responseHandle.sendSuccess(actionOutput: nil)` | "Hey Meta, start AutoLoom" (state E) |
-| Device state | `Device.addDeviceStateListener`: `donState`, `hingeState`, `linkState`, battery, thermal | Arm hands-free when the glasses are worn (state D becomes "worn" instead of "connected") |
+**Requirements:**
+- Meta AI V290 or newer.
+- Glasses firmware V128 or newer.
+- iOS 17.2 or newer.
+- Reboot the glasses once after the V128 update; Meta lists camera capture failing until then.
 
-Constraints from Meta's documentation:
-- **Stream and Photo compete for the camera and cannot capture at the same time.** The app must stop the stream, take the photo, then restart the stream; the toolkit does not arbitrate.
-- **One capture in flight.** Results carry no request id, and photos the wearer takes with the shutter button arrive on the same publisher, so captures must be serialized.
-- `.started` can be published more than once; capture on the first only.
-- iOS exposes no public camera-removal call and no session-state publisher; readiness comes from `start(deviceIdentifier:)` throwing plus the error publisher.
-- Stream resolutions stay `high` 720×1280, `medium` 504×896, `low` 360×640 at 2/7/15/24/30 fps; the Bluetooth ladder still lowers them and compression still limits detail.
+## What changed in the code
 
-## Voice invocation prerequisites (owner actions)
+| 0.5.0 | 1.0.1 (this build) |
+|---|---|
+| `StreamSession(streamSessionConfig:deviceSelector:)` | `Wearables.createSession(deviceSelector:)` → `start()` → wait for `.started` → `addCamera(config:)` → `camera.stream.start()` |
+| `StreamSessionState`, `StreamSessionError` | `StreamState`, `StreamError` (`.thermalHot`, `.batteryLow`, `.peakPowerLimit`, `.audioStreamingError`, `.photoCaptureFailed`; `deviceNotFound/Connected` carry the device id) |
+| No session errors | `DeviceSessionError` kept apart: `insufficientSDKVersion`, `datAppOnTheGlassesUpdateRequired`, `dwaUnavailable`, `dwaOutOfStuRange`, health, `unexpectedError("Device unavailable" / "Session ended by device")` |
+| `DeviceStateSession` + `addDeviceSessionStateListener` for temple gestures | One session per glasses, so gestures follow the camera's `DeviceSessionState`; the app's own stops are marked and never end the call |
+| `handleUrl(_:)` | `handleUrl(_:onRegistrationRequest:)`: registrations started in Meta AI are continued |
+| No device state | `Device.addDeviceStateListener`: worn, hinges, battery, charging, thermal (diagnostics) |
+| In-stream `capturePhoto` only | In-stream `stream.capturePhoto(format:)` (default for reading) and the standalone `camera.photo` (beta, opt-in) |
+| Mock Device Kit `pairRaybanMeta()` | `enable()`, `pairGlasses(model: .rayBanMeta)`, `services.camera`, async `unpairDevice` / `disable` |
+| iOS 17.0 | iOS 17.2 |
 
-1. Wearables Developer Center: register the bundle id `com.marcoiannello.GlassifAI` and fill in the `MWDAT` MetaAppID (currently empty, Developer Mode).
-2. Request the **Voice Invocation** permission and wait for Meta's approval.
-3. The phrase is "Hey Meta, start {APP NAME}", where the app name registered with Meta is the keyword. The exact phrase must be verified on the glasses and recorded here.
+## Lessons from Meta's issue tracker, built in
 
-## Migration steps (separate branch `autoloom-glasses-dat1`)
+- **One start at a time:**
+  - wait for `.stopped` before a new session;
+  - never two session attempts within 2 s (#231);
+  - a cold start may take 15–18 s, so the raw fallback and the stall monitor wait 20 s.
+- **Refusals:** "Device unavailable" or "Session ended by device" three times in three minutes, with the glasses linked, asks for a power-switch cycle instead of retrying (#292, #332).
+- **The call rule:** while the glasses' microphone is connected over hands-free, the glasses end and refuse sessions (#206, #332). With the Ray-Ban camera, conversations use the iPhone microphone by default ("camera-safe audio").
+- **A starved stream** gets a fresh session: re-adding a camera to a live session delivered nothing (#287).
+- **Standalone photo:**
+  - refused while the stream runs;
+  - restarting a stopped stream can fail on 1.0 (#260);
+  - so the opt-in full photo stops the stream, takes the photo, stops the photo child and starts a fresh session.
+  - The startup failure is retried once on a new camera (Meta's "Capture reliability").
+- **Smoother default:** "Live" 504×896 at 24 fps. Over Bluetooth 720p is delivered as 504×896 after 15–25 s at about 60 kB/s (#297).
 
-1. Bump the Swift package to the 1.0 tag and diff the `.swiftinterface` files, as was done for 0.4.0 → 0.5.0.
-2. Wrap both APIs behind `GlassesCameraBackend` with `stream(profile:)`, `photo()`, `stop()`, so the rest of the app (FrameStore, FrameSelector, vision) is unchanged.
-3. HIGH_DETAIL requests: pause stream → `photo.start()` → capture `.full/.high` (8 s timeout) → resume stream; fall back to the best video frame on any error. Record the source vs encoded resolution in diagnostics (never present an upscale as detail).
-4. Add `VoiceInvocationsStream` behind the `HandsFreeCapabilities.metaInvocationAvailable` flag, routed through `VoiceStartCoordinator.request(.metaInvocation)`.
-5. Map `donState` to "worn" arming.
-6. CI: build both IPAs; unit-test the backend state machine with the Mock Device Kit.
-7. Device tests on firmware V128: preview, vision, photo latency, photo resolution, "Hey Meta, start AutoLoom", worn/unworn arming, and a fallback check on older firmware (Gen 1 must keep working or fail with a clear message).
+## Not done (and why)
 
-## Rollback
+| Feature (DAT 1.0) | Why not in this build |
+|---|---|
+| In-stream audio (`StreamConfiguration.audioCodec`, `audioFramePublisher`) as the glasses microphone during camera use | Meta's suggested path while HFP and the camera cannot run together, but experimental, not beamformed, and it needs a custom audio source for the WebRTC voice pipeline. Owner decision; next step after the device tests |
+| "Hey Meta, start AutoLoom" (`VoiceInvocationsStream`) | Needs Voice Invocation approval in the Wearables Developer Center (a registered app, not Developer Mode) |
+| Inputs, Motion, Speech | Beta; nothing in AutoLoom needs them yet |
+| Wi-Fi streaming | Needs the Hotspot Configuration and Wi-Fi Information entitlements (a paid team), takes the iPhone's Wi-Fi internet while streaming, and adds Bonjour keys. This build streams over Bluetooth Classic |
+| Airship file transfer (`AirshipSession` in the interface) | Undocumented; not used |
 
-Keep the 0.5.0 build (`autoloom-glasses-jarvis-v1`) installed until the DAT 1.0 build passes the device tests above.
+## Known SDK issues to watch on the device
+
+- `#324`: the 1.0.0 stream grows a heap buffer about 4 MB per minute. Whether 1.0.1 fixes it is unknown; the iOS camera binary is the same as 1.0.0.
+- `#301`, `#332`: "Session ended by device" a few seconds into streaming. On firmware 129 this is the call rule.
+- `#260`: in-stream photo during HFP; the stream dips to about 3.5–5 fps during an in-stream capture ("expected today").
+
+## Device tests
+
+`RAYBAN_CONNECTION.md` rows A–V. Keep the 0.5.0 IPA until A, B, N and S pass.
