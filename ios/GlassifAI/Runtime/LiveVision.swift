@@ -246,8 +246,9 @@ final class LiveVisionController: ObservableObject {
       updateCount += 1
       recentNotes.append((Date(), summary))
       if recentNotes.count > 6 { recentNotes.removeFirst(recentNotes.count - 6) }
-      // Opt-in Scene Timeline (off by default): one line of text, no image.
-      SceneTimeline.shared.note(summary)
+      // Opt-in Scene Timeline (off by default): one line of text, no image;
+      // never while incognito.
+      if !IncognitoSession.shared.isOn { SceneTimeline.shared.note(summary) }
       lastError = nil
       // The note describes the camera view, which can contain text written
       // by anyone: the conversation counts as holding outside content, and

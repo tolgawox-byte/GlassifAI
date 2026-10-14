@@ -154,6 +154,7 @@ extension VoiceIntent {
     case .dealer(let command): "DEALER_" + command.name.uppercased()
     case .timer: "TIMER"
     case .undoLast: "UNDO"
+    case .incognito(let on): on ? "INCOGNITO_ON" : "INCOGNITO_OFF"
     case .shopping: "SHOPPING_LIST"
     case .parking: "PARKING"
     case .capabilities: "CAPABILITIES"
@@ -529,6 +530,7 @@ extension AssistantOrchestrator {
 
     case .saveMemory(let text, let kind):
       guard store.isEnabled else { return memoryOff() }
+      guard !IncognitoSession.shared.isOn else { return incognitoRefusal(traceID) }
       trace.update(traceID) { $0.executor = "SwiftData (memory)" }
       guard let record = store.remember(text, kind: kind, source: "voice") else {
         return IntentOutcome(
@@ -553,6 +555,7 @@ extension AssistantOrchestrator {
 
     case .setName(let name):
       guard store.isEnabled else { return memoryOff() }
+      guard !IncognitoSession.shared.isOn else { return incognitoRefusal(traceID) }
       trace.update(traceID) { $0.executor = "profile (on this iPhone)" }
       guard let saved = store.setPreferredName(name) else {
         return IntentOutcome(
@@ -647,6 +650,8 @@ extension AssistantOrchestrator {
       return IntentOutcome(spoken: staged.speakable, reply: staged.display ?? record.text, failed: staged.failed)
 
     case .visualMemory(let query):
+      // Nothing is captured or described when it could not be kept.
+      guard !IncognitoSession.shared.isOn else { return incognitoRefusal(traceID) }
       trace.update(traceID) { $0.executor = "camera + vision model + memory" }
       let result = await runBridgeTask(.visualMemory, query: query)
       return IntentOutcome(spoken: result.speakable, reply: result.display ?? result.speakable, failed: result.failed)
@@ -835,6 +840,36 @@ extension AssistantOrchestrator {
 
     case .timer(let command):
       return await runTimer(command, traceID: traceID)
+
+    case .incognito(let on):
+      trace.update(traceID) { $0.executor = "incognito (this iPhone)" }
+      let incognito = IncognitoSession.shared
+      if on {
+        incognito.begin()
+        trace.update(traceID) { $0.persistence = "incognito on: no summary, memory or Scene Timeline" }
+        return IntentOutcome(
+          spoken: BridgeSpeech.done(
+            "Incognito mode is now on: until the user turns it off, nothing from conversations is saved to memory, conversation summaries, visual memory or the Scene Timeline. Notes, reminders and messages the user asks for by name are still done. Do not offer to remember anything while it is on.",
+            tr: "Gizli mod açık; kapatana kadar konuşmalar hafızaya geçmez.",
+            en: "Incognito is on; nothing goes to memory until you turn it off."),
+          reply: L.t(
+            "Incognito on: nothing from conversations is saved to memory until you turn it off.",
+            "Gizli mod açık: kapatana kadar konuşmalardan hafızaya bir şey kaydedilmez."),
+          feedback: ActionFeedback(kind: .memory, title: L.t("Incognito on", "Gizli mod açık")),
+          said: L.t("Incognito is on.", "Gizli mod açık."))
+      }
+      let wasOn = incognito.isOn
+      incognito.end()
+      trace.update(traceID) { $0.persistence = wasOn ? "incognito off" : "incognito was already off" }
+      return IntentOutcome(
+        spoken: BridgeSpeech.done(
+          wasOn
+            ? "Incognito mode is now off; memory works as before. This conversation still gets no summary."
+            : "Incognito mode was not on; nothing changed.",
+          tr: wasOn ? "Gizli mod kapandı." : "Gizli mod zaten kapalıydı.",
+          en: wasOn ? "Incognito is off." : "Incognito wasn't on."),
+        reply: wasOn ? L.t("Incognito off.", "Gizli mod kapandı.") : L.t("Incognito was not on.", "Gizli mod zaten kapalıydı."),
+        said: wasOn ? L.t("Incognito is off.", "Gizli mod kapandı.") : L.t("Incognito wasn't on.", "Gizli mod zaten kapalıydı."))
 
     case .undoLast:
       trace.update(traceID) { $0.executor = "LocalUndo (local actions only)" }
@@ -1838,6 +1873,14 @@ extension AssistantOrchestrator {
 
   private func temporaryStorageNote(_ store: MemoryStore) -> String {
     store.isPersistent ? "" : " (Storage on this iPhone is temporary right now; mention that it may not survive a restart.)"
+  }
+
+  /// A save the user asked for while incognito: refused, and said so.
+  private func incognitoRefusal(_ traceID: UUID) -> IntentOutcome {
+    ActionTraceLog.shared.update(traceID) { $0.persistence = "not saved: incognito" }
+    return IntentOutcome(
+      spoken: IncognitoSession.refusalSpoken, reply: IncognitoSession.refusalReply, failed: "incognito on",
+      feedback: .failed(L.t("Incognito: not saved", "Gizli mod: kaydedilmedi")))
   }
 
   private func memoryOff() -> IntentOutcome {

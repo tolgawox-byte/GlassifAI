@@ -704,6 +704,7 @@ struct NoteEditorView: View {
 struct MemorySettingsView: View {
   @AppStorage(SceneTimeline.enabledKey) private var sceneTimeline = false
   @ObservedObject private var store = MemoryStore.shared
+  @ObservedObject private var incognito = IncognitoSession.shared
   @State private var confirmDeleteAll = false
 
   /// "See error" only when there is one: screenshot mode keeps a throwaway
@@ -724,6 +725,14 @@ struct MemorySettingsView: View {
         LabeledContent(L.t("Notes", "Notlar"), value: "\(store.notes.count)")
         LabeledContent(L.t("AutoLoom tasks", "AutoLoom görevleri"), value: "\(store.tasks.count)")
         LabeledContent(L.t("Storage", "Depolama"), value: storageLabel)
+      }
+      SwiftUI.Section(
+        footer: Text(L.t(
+          "While incognito is on, conversations leave nothing behind on their own: no summary, memory, visual memory, name or Scene Timeline line. Notes, reminders and messages you ask for by name are still done. It stays on until you turn it off here, on Home, or by saying “gizli modu kapat”.",
+          "Gizli mod açıkken konuşmalar kendiliğinden iz bırakmaz: özet, anı, görsel anı, ad ya da sahne satırı kaydedilmez. Adıyla istediğiniz not, hatırlatıcı ve mesajlar yine yapılır. Buradan, Ana ekrandan ya da “gizli modu kapat” diyerek kapatana kadar açık kalır."))) {
+        Toggle(L.t("Incognito", "Gizli mod"), isOn: Binding(
+          get: { incognito.isOn },
+          set: { on in if on { incognito.begin() } else { incognito.end() } }))
       }
       SwiftUI.Section(
         header: Text(L.t("Conversation memory", "Konuşma hafızası")),

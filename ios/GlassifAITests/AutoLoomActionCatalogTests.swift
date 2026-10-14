@@ -176,7 +176,7 @@ final class AutoLoomActionCatalogTests: XCTestCase {
       .findVisual("x"), .findVisual(""), .whatChanged, .document(.summarize), .document(.saveReceipt), .document(.spending),
       .music(.play(nil)), .music(.play("x")), .music(.pause), .music(.next), .music(.previous), .music(.nowPlaying),
       .userRoutine("x"), .remoteAssist(start: true), .remoteAssist(start: false), .skill(server: "x", request: "y"),
-      .runShortcut("x"),
+      .runShortcut("x"), .incognito(true), .incognito(false),
     ]
     let dealer: [DealerCommand] = [
       .startVehicle, .nextVehicle, .finishVehicle, .readVIN, .readOdometer, .setOdometer(1, .km), .addDamage("x"),

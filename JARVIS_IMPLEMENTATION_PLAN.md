@@ -51,7 +51,7 @@ The owner's sideloaded IPA did not connect to the glasses, and the camera looked
 | R.8 | Detail for the AI | IN CI / DEVICE TEST | Reading requests take an in-stream photo (about 1080×1440 on DAT 1.x); the standalone full photo is opt-in, followed by a fresh session | `AutoLoomVisionPipelineTests`; device R, U |
 | R.9 | Audio with the Ray-Ban camera | IN CI / OWNER DECISION | Camera-safe audio (default on): the conversation and the wake phrase use the iPhone microphone while the Ray-Ban camera is the source. The documented microphone-first order stays for after Meta's fix. **Owner decision:** DAT in-stream audio as the glasses microphone during camera use (experimental, not beamformed, needs a custom WebRTC audio source) | `AutoLoomRayBanDAT1Tests`; device N, N2 |
 | R.10 | Error details kept | DONE-CI (phase 1b) | Swift and Rust keep status, error code, param and request id (`http_errors_keep_status_code_param_and_request_id`); session errors keep their DAT names | Rust tests |
-| R.11 | Open-source research and skills | DONE (report) / NEXT (implementation) | D2: 44 sources, licences checked, 26 new ideas scored; top 5 in `JARVIS_FEATURE_RESEARCH.md` §7 | — |
+| R.11 | Open-source research and skills | DONE (report) / IN CI (D2-03 incognito) / NEXT (D2-18, D2-02, D2-01, D2-04) | D2: 44 sources, licences checked, 26 new ideas scored; top 5 in `JARVIS_FEATURE_RESEARCH.md` §8. D2-03: while incognito is on, no summary, memory, visual memory, name or Scene Timeline line is written | `AutoLoomIncognitoTests`; device IN1 |
 
 ## Phase 1 — Infrastructure (P0)
 
@@ -162,4 +162,4 @@ All of these wait on the owner supplying keys and approving costs.
    - Whether waiting phone actions should survive an app restart (2.4): it means storing their content (message text, numbers, note text) on disk.
 5. Remaining NEXT items:
    - 3.1 Live Vision images and an opt-in thumbnail; 3.2 memory supersession and inbox;
-   - the top research ideas (`JARVIS_FEATURE_RESEARCH.md` §7): incognito conversation, several PC addresses per pairing, structured test reports, business card → contact draft, links back to the source.
+   - the top research ideas (`JARVIS_FEATURE_RESEARCH.md` §8): several PC addresses per pairing, structured test reports, business card → contact draft, links back to the source (incognito is in CI).

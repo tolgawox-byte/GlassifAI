@@ -605,7 +605,8 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
       memory: isPreviewSession ? [] : store.promptItems,
       profileName: isPreviewSession || !store.isEnabled ? nil : store.profile.preferredName,
       recentConversation: recent,
-      smartMemory: store.isEnabled && store.smartMemoryEnabled,
+      smartMemory: store.isEnabled && store.smartMemoryEnabled && !IncognitoSession.shared.isOn,
+      incognito: !isPreviewSession && IncognitoSession.shared.isOn,
       mode: isPreviewSession ? .general : AssistantMode.effective)
     var report = RealtimeStartReport(requestedVoice: requestedVoice, requestedModel: ModelSelector.realtimeModel)
     report.isPreview = isPreviewSession

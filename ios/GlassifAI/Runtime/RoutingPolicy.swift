@@ -217,6 +217,7 @@ enum AssistantInstructions {
   /// - Parameters:
   ///   - profileName: the name the user told the app, if any.
   ///   - recentConversation: the summary of the last conversation (dated).
+  ///   - incognito: nothing is saved; the model never offers to remember.
   static func realtime(
     memory: [String],
     assistantName: String = AssistantIdentity.name,
@@ -224,6 +225,7 @@ enum AssistantInstructions {
     recentConversation: String? = nil,
     jarvisStyle: Bool = JarvisStyle.isEnabled,
     smartMemory: Bool = false,
+    incognito: Bool = false,
     mode: AssistantMode = .general
   ) -> String {
     let detail = AssistantPreferences.prefersDetailedAnswers
@@ -292,6 +294,9 @@ enum AssistantInstructions {
     }
     if smartMemory {
       text += "\n\nSmart Memory is on: when the user mentions a stable, useful fact about themselves (a preference, a vehicle, a frequent place, a project), you may briefly offer once to remember it (\"Bunu hafızama kaydedeyim mi?\"); save it only after a yes, with TASK: memory | QUERY: save: …. Never offer to save sensitive details (health, money, passwords, codes, ID numbers, exact addresses)."
+    }
+    if incognito {
+      text += "\n\nIncognito mode is on: nothing from this conversation is saved to memory or summarized. Never offer to remember anything; if the user asks you to, the app answers them."
     }
     if let profileName, !profileName.isEmpty {
       text += "\n\nThe user's name is \(profileName) (they told you). Use it naturally now and then, not in every sentence."

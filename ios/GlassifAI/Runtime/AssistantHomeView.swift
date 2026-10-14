@@ -23,6 +23,7 @@ struct AssistantHomeView: View {
   @ObservedObject private var dealer = DealerStore.shared
   @ObservedObject private var sharing = RemoteAssistServer.shared
   @ObservedObject private var pc = PCCompanionStore.shared
+  @ObservedObject private var incognito = IncognitoSession.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
@@ -315,6 +316,14 @@ struct AssistantHomeView: View {
   /// Only what is happening now: at most a few chips, never a dashboard.
   private var chipRow: some View {
     HStack(spacing: 8) {
+      if incognito.isOn {
+        // Visible for as long as it is on; one tap ends it.
+        Button { incognito.end() } label: {
+          chip(L.t("Incognito · tap to end", "Gizli mod · kapatmak için dokun"), systemImage: "eye.slash", tint: .purple)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(L.t("Turns incognito off; memory works again", "Gizli modu kapatır; hafıza yeniden çalışır"))
+      }
       if captureSource == .iPhoneCamera, connection.phase.isLinked {
         // The glasses are connected, but the image comes from the iPhone:
         // said plainly, one tap away from the Ray-Ban camera.

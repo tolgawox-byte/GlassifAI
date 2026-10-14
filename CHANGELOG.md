@@ -2,6 +2,21 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS — research idea D2-03: incognito ("gizli mod")] — branch `autoloom-glasses-jarvis-v1`
+
+The first of the five research ideas chosen on 2026-10-14 (`JARVIS_FEATURE_RESEARCH.md` §8), after the phase R fixes. CI results in `TEST_REPORT.md`. Not tried on an iPhone yet (device test IN1).
+
+### Added
+- **Incognito.** "Gizli modu aç", "bu konuşmayı kaydetme" or "go incognito" turn it on. "Gizli modu kapat", the Home chip or Settings → Memory turn it off. While it is on:
+  - no conversation summary is saved, also for a conversation in which it was turned off before the end;
+  - nothing is saved to memory, visual memory or the profile name, and the user hears why;
+  - Live Vision adds no Scene Timeline line;
+  - the voice model is told not to offer remembering things (Smart Memory is left out).
+- Notes, reminders, messages and photos asked for by name still run. The activity log already keeps only the kind of each action, never its words.
+- It stays on until the user turns it off, also across a restart. A model or a routine can only turn it on.
+- Cloud requests were already sent with `store: false`; nothing changed there.
+- Tests: `AutoLoomIncognitoTests` (7) and the catalog entry `privacy.incognito`.
+
 ## [JARVIS — phase R: Ray-Ban connection and camera on Meta DAT 1.0.1] — branch `autoloom-glasses-jarvis-v1`
 
 From the owner's brief of 2026-10-13: the sideloaded build did not connect to the glasses, and the camera looked choppy and possibly like the iPhone's. Commits `9954e60` and the follow-up; CI results in `TEST_REPORT.md`. **Not tried on the glasses yet** (`docs/RAYBAN_CONNECTION.md` rows A–V). Rollback: tag `rollback-43ca5f2-before-dat1-port` and the Release IPA of run 38492438643 (DAT 0.5.0).

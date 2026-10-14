@@ -257,8 +257,10 @@ final class AssistantOrchestrator: ObservableObject {
     conversationStartedAt = nil
     conversationActions = 0
     taint.clear()
+    // Incognito at any moment of this conversation: no summary at all.
+    let incognito = IncognitoSession.shared.conversationFinished()
     let store = MemoryStore.shared
-    guard store.isEnabled, store.conversationMemoryEnabled,
+    guard !incognito, store.isEnabled, store.conversationMemoryEnabled,
           ConversationSummarizer.isMeaningful(turns, actions: actions) else { return }
     // A little time to finish in the background (the conversation often
     // ends with the phone locked).
@@ -1345,6 +1347,10 @@ final class AssistantOrchestrator: ObservableObject {
     }
     switch request {
     case .save(let text, let title, let kind):
+      if IncognitoSession.shared.isOn {
+        ledger.update(taskID) { $0.notes.append("memory save refused: incognito") }
+        return Outcome(speakable: IncognitoSession.refusalSpoken, kind: .localMemory, failed: "incognito on", broughtContent: false)
+      }
       // A memory reaches every future conversation. Once outside content is
       // in this one, only the user's own words add a memory: their spoken
       // "hatırla …" (run by the voice action bridge) or typed input.
@@ -1405,6 +1411,10 @@ final class AssistantOrchestrator: ObservableObject {
   /// current view saved as a visual memory, with a small photo and the place
   /// only when the user allowed them.
   private func runVisualMemory(taskID: UUID, query: String) async throws -> Outcome {
+    if IncognitoSession.shared.isOn {
+      ledger.update(taskID) { $0.notes.append("visual memory refused: incognito") }
+      return Outcome(speakable: IncognitoSession.refusalSpoken, kind: .visualMemory, failed: "incognito on", broughtContent: false)
+    }
     let store = MemoryStore.shared
     ledger.update(taskID) { $0.visionProfile = .high }
     let attachment = try await prepareVisionImage(taskID: taskID, detail: .high)

@@ -82,6 +82,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Reminder list choice (Settings, by name, Tasks sheet) | Working in code | Automated (parser; run 38485233267) | `ReminderLists`, `ReminderListMention` | Device test RM4 | P1 |
 | Complete / delete a reminder by voice | Working in code | Automated (parser, matching; run 38485233267) | `AutoLoomReminderVoiceTests`; completion undone by "geri al"; deletion after a yes; both read back | Device tests RM1–RM3 | P1 |
 | Personal memory (explicit, search, delete, edit) | Working in code | Automated | `MemoryStore` | — | P1 |
+| Incognito ("gizli mod"): no summary, memory, visual memory, name or Scene Timeline line while on | In CI | Automated (`AutoLoomIncognitoTests`); pending device IN1 | `IncognitoMode.swift`; gates in `VoiceIntentRunner`, `AssistantOrchestrator`, `LiveVision` | IN1 passes | P1 |
 | Memory export | Missing | — | — | Plan 3.2 | P2 |
 | Consent: nothing saved without an explicit command | Partial | Automated (parser path) | Model-delegated saves trusted | Plan 1.14 | P0 |
 | Daily summary (opt-in) | Working in code | Pending device RT2 | `DailyBriefing` | RT2 | P2 |

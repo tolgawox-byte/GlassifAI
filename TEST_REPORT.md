@@ -36,6 +36,7 @@ Until `544a6d6` the screenshot step reported "not running after launch" for a fe
   - camera-safe audio and the glasses' call rule;
   - the "Live" profile, in-stream photos for reading, the Meta SDK log;
   - 2 s retry pacing and the 20 s warm-up.
+- Research idea D2-03 (incognito) follows in its own commit with `AutoLoomIncognitoTests` (7 tests).
 - The results are added here when the runs finish.
 - **Nothing in phase R has been tried on the glasses**: `docs/RAYBAN_CONNECTION.md` rows A–V are the device tests.
 

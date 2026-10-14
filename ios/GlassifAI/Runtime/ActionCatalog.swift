@@ -270,6 +270,13 @@ enum ActionCatalog {
       negatives: ["Parayı geri al"], localPriority: true, voiceOnly: "Each list has swipe-to-delete",
       keys: ["undoLast"]),
     ActionDefinition(
+      "privacy.incognito", .memory, name: "Incognito", tr: "Gizli mod",
+      summary: "While on, conversations leave nothing behind on their own: no summary, memory, visual memory, name or Scene Timeline line. Commands said by name still run. A model can only turn it on; the user's words or a tap turn it off.",
+      examplesTR: ["Gizli modu aç", "Bu konuşmayı kaydetme", "Gizli modu kapat"],
+      examplesEN: ["Go incognito", "Turn off incognito mode"],
+      negatives: ["Gizli mod nedir?", "Bu notu kaydetme"], localPriority: true,
+      ui: "Home → Incognito chip; Settings → Memory → Incognito", keys: ["incognito.on", "incognito.off"]),
+    ActionDefinition(
       "help.capabilities", .general, name: "What can you do?", tr: "Neler yapabilirsin?",
       summary: "A short, contextual answer and the Command Library on the phone.",
       examplesTR: ["Neler yapabilirsin?", "Ne yapabilirsin?", "Hangi komutlar var?"],
@@ -1039,6 +1046,8 @@ enum ActionCatalog {
     case "parking.clear": return .parking(.clear)
     case "parking.photo": return .parking(.saveWithPhoto)
     case "undo.last": return .undoLast
+    // Only on: turning privacy off takes the user's own words or a tap.
+    case "privacy.incognito": return .incognito(true)
     case "help.capabilities": return .capabilities(text("topic"))
     case "search.global": return text("query").map { .search($0) }
     case "routine.startWork": return .routine(.startWork)
@@ -1187,6 +1196,7 @@ extension VoiceIntent {
     case .dealer(let command): "dealer." + command.name
     case .timer(let command): "timer." + command.key
     case .undoLast: "undoLast"
+    case .incognito(let on): on ? "incognito.on" : "incognito.off"
     case .shopping(let command): "shopping." + command.key
     case .parking(let command): "parking." + command.key
     case .readCode: "readCode"

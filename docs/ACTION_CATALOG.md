@@ -1,6 +1,6 @@
 # Action Catalog
 
-`ios/GlassifAI/Runtime/ActionCatalog.swift` lists every action the assistant can do as plain data (`ActionDefinition`). The voice parser's tests, the App Intents, the Command Library, the command palette, the Command Lab, user routines and the offline assistant all read the same list, and `AutoLoomActionCatalogTests` fails the CI test run when an entry is incomplete or its example sentences do not reach it through the parser that speech uses. The catalog does not parse speech itself: `VoiceActionIntentBridge` decides, and the catalog maps each decision back to an entry. This page describes the catalog after plan 2.2 on `autoloom-glasses-jarvis-v1` (111 actions: the 108 of commit `8ee1a24`, `parking.photo` from `2af0bb8`, and `reminder.complete` and `reminder.delete`).
+`ios/GlassifAI/Runtime/ActionCatalog.swift` lists every action the assistant can do as plain data (`ActionDefinition`). The voice parser's tests, the App Intents, the Command Library, the command palette, the Command Lab, user routines and the offline assistant all read the same list, and `AutoLoomActionCatalogTests` fails the CI test run when an entry is incomplete or its example sentences do not reach it through the parser that speech uses. The catalog does not parse speech itself: `VoiceActionIntentBridge` decides, and the catalog maps each decision back to an entry. This page describes the catalog on `autoloom-glasses-jarvis-v1` after research idea D2-03 (112 actions: the 108 of commit `8ee1a24`, `parking.photo` from `2af0bb8`, `reminder.complete` and `reminder.delete` from plan 2.2, and `privacy.incognito`).
 
 ## What an `ActionDefinition` contains
 
@@ -34,17 +34,17 @@
 | `general` | Genel | 13 |
 | `camera` | Kamera | 8 |
 | `vision` | Görüş | 8 |
-| `memory` | Hafıza | 11 |
-| `tasks` | Görevler | 10 |
+| `memory` | Hafıza | 12 |
+| `tasks` | Görevler | 12 |
 | `dealer` | Bayi | 26 |
 | `phone` | Telefon | 3 |
-| `navigation` | Yol tarifi | 7 |
+| `navigation` | Yol tarifi | 8 |
 | `translation` | Çeviri | 1 |
 | `research` | Araştırma | 2 |
 | `media` | Medya | 5 |
 | `automation` | Otomasyon | 14 |
 
-Status labels in the catalog: 71 `EXPERIMENTAL`, 22 `PHYSICAL_TEST_REQUIRED`, 13 `WORKING`, 1 `PARTIAL`, 1 `REQUIRES_PROVIDER`. No action uses `WAITING_FOR_DAT1`, `REQUIRES_PERMISSION`, `UNAVAILABLE` or risk `BLOCKED`. Risks: 100 `SAFE`, 6 `CONFIRM`, 2 `STRONG_CONFIRM`.
+Status labels in the catalog (counted from the code): 68 `EXPERIMENTAL`, 29 `PHYSICAL_TEST_REQUIRED`, 13 `WORKING`, 1 `PARTIAL`, 1 `REQUIRES_PROVIDER`. No action uses `WAITING_FOR_DAT1`, `REQUIRES_PERMISSION`, `UNAVAILABLE` or risk `BLOCKED`. Risks: 102 `SAFE`, 6 `CONFIRM`, 4 `STRONG_CONFIRM`.
 
 ## How the catalog is used
 
@@ -123,6 +123,7 @@ Context tags used in examples: `pending` and `ambiguous` (an action waits for ye
 | `memory.forget` | memory | Kapı kodunu unut | CONFIRM | always | local | EXPERIMENTAL |
 | `memory.visual` | memory | [visual] Anahtarımı buraya bıraktığımı hatırla | SAFE | none | local | EXPERIMENTAL |
 | `memory.findVisual` | memory | Anahtarımı en son nerede gördüm? | SAFE | none | local | WORKING |
+| `privacy.incognito` | memory | Gizli modu aç | SAFE | none | local | EXPERIMENTAL |
 | `task.create` | tasks | Görev oluştur: lastikleri kontrol et | SAFE | none | local | EXPERIMENTAL |
 | `task.list` | tasks | Görevlerim neler? | SAFE | none | local | EXPERIMENTAL |
 | `task.complete` | tasks | Lastik görevini tamamla | SAFE | none | local | EXPERIMENTAL |

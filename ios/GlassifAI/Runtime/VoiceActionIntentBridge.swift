@@ -146,6 +146,9 @@ enum VoiceIntent: Equatable {
   /// "Son yaptığını geri al": undoes the last local action (never a call
   /// or a message).
   case undoLast
+  /// "Gizli modu aç", "bu konuşmayı kaydetme" (true), "gizli modu kapat"
+  /// (false): incognito, nothing from conversations reaches memory.
+  case incognito(Bool)
   /// "Alışveriş listesine süt ekle", "alışveriş listemde ne var?".
   case shopping(ShoppingCommand)
   /// "Park yerimi kaydet", "arabam nerede?", "beni arabama götür".
@@ -234,6 +237,7 @@ enum VoiceIntent: Equatable {
     case .saveCaptureToPhotos: "saveCaptureToPhotos"
     case .dealer(let command): "dealer(\(command.name))"
     case .undoLast: "undoLast"
+    case .incognito(let on): on ? "incognitoOn" : "incognitoOff"
     case .timer(let command):
       switch command {
       case .start: "timerStart"
@@ -390,6 +394,11 @@ enum VoiceActionIntentBridge {
     guard !utterance.isEmpty else { return nil }
     if context.addressedOnly && !addressed && context.awaiting == nil { return nil }
 
+    // Incognito first: "bu konuşmayı kaydetme" is about privacy, never a
+    // recording or a note.
+    if let on = incognito(utterance) {
+      return VoiceBridgeDecision(.incognito(on), on ? "incognito on" : "incognito off")
+    }
     // Ray-Ban photos and recordings, before notes: "bunun fotoğrafını çek ve
     // not al: …" is a photo with a note.
     if let decision = media(utterance, context) { return decision }
@@ -455,6 +464,40 @@ enum VoiceActionIntentBridge {
     return outside.allSatisfy(fillers.contains)
   }
 
+  /// "Gizli modu aç", "bu konuşmayı kaydetme", "go incognito" → true;
+  /// "gizli modu kapat", "turn off incognito" → false. Only the whole phrase,
+  /// with at most a polite word around it: "gizli mod nedir?" stays a
+  /// question for the voice model.
+  static func incognito(_ u: Utterance) -> Bool? {
+    guard u.count <= 7 else { return nil }
+    let off: [[String]] = [
+      ["gizli", "modu", "kapat"], ["gizli", "mod", "kapat"], ["gizli", "modu", "kapatin"],
+      ["gizli", "modu", "kapatir", "misin"], ["gizli", "modu", "bitir"], ["gizli", "modu", "durdur"],
+      ["gizli", "moddan", "cik"], ["turn", "off", "incognito", "mode"], ["turn", "off", "incognito"],
+      ["turn", "incognito", "off"], ["incognito", "mode", "off"], ["incognito", "off"], ["stop", "incognito", "mode"],
+      ["exit", "incognito", "mode"], ["exit", "incognito"], ["leave", "incognito", "mode"], ["end", "incognito", "mode"],
+    ]
+    let on: [[String]] = [
+      ["gizli", "modu", "ac"], ["gizli", "mod", "ac"], ["gizli", "modu", "acin"], ["gizli", "modu", "acar", "misin"],
+      ["gizli", "modu", "baslat"], ["gizli", "moda", "gec"], ["gizli", "moda", "al"], ["bu", "konusmayi", "kaydetme"],
+      ["bu", "konusmayi", "hatirlama"], ["bu", "konusmayi", "hafizaya", "kaydetme"], ["go", "incognito"],
+      ["turn", "on", "incognito", "mode"], ["turn", "on", "incognito"], ["incognito", "mode", "on"],
+      ["start", "incognito", "mode"], ["dont", "save", "this", "conversation"],
+      ["do", "not", "save", "this", "conversation"], ["dont", "remember", "this", "conversation"],
+    ]
+    let fillers: Set<String> = ["lutfen", "please", "simdi", "hemen", "artik", "now", "right"]
+    func said(_ phrases: [[String]]) -> Bool {
+      phrases.contains { phrase in
+        guard let range = u.range(of: phrase) else { return false }
+        let outside = Array(u.keys[0..<range.lowerBound]) + Array(u.keys[range.upperBound...])
+        return outside.allSatisfy(fillers.contains)
+      }
+    }
+    if said(off) { return false }
+    if said(on) { return true }
+    return nil
+  }
+
   /// Whether a partial transcript already starts with a command, so the
   /// voice model's own reply can be held back before the turn ends.
   static func looksLikeCommandStart(_ partial: String, assistantName: String) -> Bool {
@@ -477,6 +520,8 @@ enum VoiceActionIntentBridge {
     ["video", "cek"], ["video", "kaydi"], ["video", "kaydini"], ["kayda", "basla"], ["kaydi", "durdur"],
     ["videoyu", "durdur"], ["cekimi", "bitir"], ["galeriye", "kaydet"], ["take", "a", "photo"], ["take", "a", "picture"],
     ["start", "recording"], ["stop", "recording"], ["record", "a", "video"],
+    ["gizli", "modu"], ["gizli", "mod"], ["gizli", "moda"], ["gizli", "moddan"], ["bu", "konusmayi", "kaydetme"],
+    ["bu", "konusmayi", "hatirlama"], ["go", "incognito"], ["turn", "on", "incognito"], ["turn", "off", "incognito"],
     ["yeni", "arac"], ["vin", "oku"], ["hasar", "ekle"], ["kilometre"], ["bu", "arac", "tamam"], ["sonraki", "arac"],
     ["ilan", "hazirla"], ["piyasa", "bak"], ["foto", "checklist"], ["alisveris", "listesine"], ["alisveris", "listeme"],
     ["timer"], ["zamanlayici"],
