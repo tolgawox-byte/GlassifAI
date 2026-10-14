@@ -109,6 +109,13 @@ struct FrameMetricsSnapshot: Equatable {
   /// Bounded recoveries (decoder rebuilds, stream restarts) and the last one.
   var recoveries: UInt64 = 0
   var lastRecovery = "none"
+  /// Smoothness of the Ray-Ban frames as they reach the phone: the time
+  /// between two frames (median, p95), the gaps long enough to see as a
+  /// stutter, and the longest gap since the stream (or source) started.
+  var frameIntervalMedianMs: Double?
+  var frameIntervalP95Ms: Double?
+  var stutters: UInt64 = 0
+  var longestGapMs = 0
 
   var inputResolution: String {
     inputWidth > 0 ? "\(inputWidth)×\(inputHeight)" : "—"
@@ -188,6 +195,14 @@ final class FrameStore: @unchecked Sendable {
   private var softwareDecode = false
   private var recoveries: UInt64 = 0
   private var lastRecovery = "none"
+  private var glassesIntervals = SampleWindow(capacity: 240)
+  private var lastGlassesArrival: CFTimeInterval?
+  private var stutters: UInt64 = 0
+  private var longestGapMs = 0
+
+  /// A gap between two Ray-Ban frames this long shows as a stutter (frames
+  /// are 33–67 ms apart at 15–30 fps).
+  static let stutterGap: CFTimeInterval = 0.25
 
   /// Describes a glasses sample buffer as delivered by the Meta SDK.
   func recordGlassesSample(compressed: Bool, codec: String, width: Int, height: Int, background: Bool = false) {
@@ -299,7 +314,16 @@ final class FrameStore: @unchecked Sendable {
       captureTime: captureTime,
       epoch: epoch)
     latest = frame
-    if source == .glasses { lastGlassesFrameAt = arrivedAt }
+    if source == .glasses {
+      if let last = lastGlassesArrival, arrivedAt > last {
+        let gap = arrivedAt - last
+        glassesIntervals.add(gap * 1_000)
+        if gap >= Self.stutterGap { stutters &+= 1 }
+        longestGapMs = max(longestGapMs, Int((gap * 1_000).rounded()))
+      }
+      lastGlassesArrival = arrivedAt
+      lastGlassesFrameAt = arrivedAt
+    }
     if source == .iPhone {
       recent.removeAll { $0.source == .iPhone }
     }
@@ -413,6 +437,10 @@ final class FrameStore: @unchecked Sendable {
     awaitingKeyframeSince = nil
     processing.reset()
     transport.reset()
+    glassesIntervals.reset()
+    lastGlassesArrival = nil
+    stutters = 0
+    longestGapMs = 0
     lock.unlock()
   }
 
@@ -473,6 +501,10 @@ final class FrameStore: @unchecked Sendable {
     snapshot.softwareDecode = softwareDecode
     snapshot.recoveries = recoveries
     snapshot.lastRecovery = lastRecovery
+    snapshot.frameIntervalMedianMs = glassesIntervals.percentile(0.5)
+    snapshot.frameIntervalP95Ms = glassesIntervals.percentile(0.95)
+    snapshot.stutters = stutters
+    snapshot.longestGapMs = longestGapMs
     return snapshot
   }
 

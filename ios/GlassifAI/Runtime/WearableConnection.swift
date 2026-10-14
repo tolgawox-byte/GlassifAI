@@ -25,11 +25,25 @@ enum GlassesConnectionPhase: String, Equatable, CaseIterable {
   /// lost): offered again instead of spinning.
   case registrationStalled = "REGISTRATION_STALLED"
   case registeredNoDevice = "REGISTERED_NO_DEVICE"
+  /// The iPhone's Bluetooth is off or AutoLoom may not use it.
+  case bluetoothUnavailable = "BLUETOOTH_UNAVAILABLE"
   case deviceDisconnected = "DEVICE_DISCONNECTED"
   case deviceConnecting = "DEVICE_CONNECTING"
   case deviceConnected = "DEVICE_CONNECTED"
+  /// This build's Meta toolkit is too old for the glasses.
+  case appUpdateRequired = "APP_UPDATE_REQUIRED"
+  /// The glasses' software or their DAT app needs an update in Meta AI.
+  case glassesUpdateRequired = "GLASSES_UPDATE_REQUIRED"
   case requestingCameraPermission = "REQUESTING_CAMERA_PERMISSION"
   case cameraPermissionNeeded = "CAMERA_PERMISSION_NEEDED"
+  /// The DAT 1.0 device session is starting on the glasses.
+  case startingSession = "STARTING_SESSION"
+  /// The wearer paused the session (a temple tap) or the system did.
+  case sessionPaused = "SESSION_PAUSED"
+  /// The DAT app on the glasses did not come up.
+  case glassesAppUnavailable = "GLASSES_APP_UNAVAILABLE"
+  /// The glasses keep refusing sessions: a power cycle is needed.
+  case glassesRefusing = "GLASSES_REFUSING"
   case startingCamera = "STARTING_CAMERA"
   case cameraStreaming = "CAMERA_STREAMING"
   case cameraFailed = "CAMERA_FAILED"
@@ -38,8 +52,9 @@ enum GlassesConnectionPhase: String, Equatable, CaseIterable {
   /// The glasses are linked to this iPhone, whatever the camera is doing.
   var isLinked: Bool {
     switch self {
-    case .deviceConnected, .requestingCameraPermission, .cameraPermissionNeeded, .startingCamera,
-         .cameraStreaming, .cameraFailed, .ready:
+    case .deviceConnected, .appUpdateRequired, .glassesUpdateRequired, .requestingCameraPermission,
+         .cameraPermissionNeeded, .startingSession, .sessionPaused, .glassesAppUnavailable, .glassesRefusing,
+         .startingCamera, .cameraStreaming, .cameraFailed, .ready:
       true
     default:
       false
@@ -53,6 +68,15 @@ enum GlassesConnectionPhase: String, Equatable, CaseIterable {
     default: false
     }
   }
+
+  /// Linked, but only the user can make the glasses usable (an update, a
+  /// power cycle, Developer Mode in Meta AI).
+  var needsUserAction: Bool {
+    switch self {
+    case .appUpdateRequired, .glassesUpdateRequired, .glassesAppUnavailable, .glassesRefusing, .bluetoothUnavailable: true
+    default: false
+    }
+  }
 }
 
 /// The facts the phase is derived from. Independent of the SDK types so the
@@ -62,20 +86,28 @@ struct GlassesConnectionSnapshot: Equatable {
   enum Link: String, Equatable { case unknown, disconnected, connecting, connected }
   enum Permission: String, Equatable { case unknown, checking, requesting, granted, denied }
   enum Stream: String, Equatable { case stopped, waiting, streaming }
+  /// The DAT 1.0 device session.
+  enum Session: String, Equatable { case none, starting, started, paused, stopping, stopped }
+  /// A compatibility value that blocks the camera.
+  enum CompatibilityIssue: String, Equatable { case glassesUpdate, appUpdate }
 
   var sdkConfigured = false
   var registration: Registration = .unavailable
   var restoring = false
   var registrationRequested = false
   var registrationStalled = false
+  var bluetooth: BluetoothAccess = .unknown
   var deviceCount = 0
   /// The SDK's device selector picked a connected device.
   var activeDevice = false
   var link: Link = .unknown
+  var compatibilityIssue: CompatibilityIssue?
   var hasMockDevice = false
   /// The Ray-Ban camera is the chosen source.
   var cameraWanted = false
   var permission: Permission = .unknown
+  var session: Session = .none
+  var sessionProblem: GlassesSessionProblem?
   var stream: Stream = .stopped
   var hasFrames = false
   var cameraFailure: String?
@@ -105,20 +137,32 @@ enum GlassesConnectionReducer {
     }
     let linked = s.link == .connected || s.activeDevice
     if !linked {
+      if s.bluetooth.blocksLink { return .bluetoothUnavailable }
       if s.link == .connecting { return .deviceConnecting }
       return s.deviceCount == 0 ? .registeredNoDevice : .deviceDisconnected
+    }
+    // Versions first: nothing after the link can work until they match.
+    if s.compatibilityIssue == .appUpdate || s.sessionProblem == .sdkTooOld { return .appUpdateRequired }
+    if s.compatibilityIssue == .glassesUpdate || s.sessionProblem == .glassesAppUpdateRequired {
+      return .glassesUpdateRequired
     }
     guard s.cameraWanted else { return .deviceConnected }
     switch s.stream {
     case .streaming: return s.hasFrames ? .ready : .cameraStreaming
-    case .waiting: return .startingCamera
+    case .waiting:
+      if s.session == .paused { return .sessionPaused }
+      return s.session == .starting ? .startingSession : .startingCamera
     case .stopped: break
     }
+    if case .refusing = s.sessionProblem { return .glassesRefusing }
+    if s.sessionProblem == .glassesAppUnavailable { return .glassesAppUnavailable }
+    if s.session == .paused { return .sessionPaused }
     switch s.permission {
     case .checking, .requesting: return .requestingCameraPermission
     case .denied: return .cameraPermissionNeeded
     case .unknown, .granted: break
     }
+    if s.session == .starting { return .startingSession }
     return s.cameraFailure == nil ? .startingCamera : .cameraFailed
   }
 
@@ -154,14 +198,52 @@ enum GlassesConnectionReducer {
         title: L.t("Wake your glasses", "Gözlüğünü uyandır"),
         detail: L.t("Open them and keep them near your iPhone.", "Gözlüğü aç ve iPhone'a yakın tut."),
         tone: .idle, showsTryAgain: false)
+    case .bluetoothUnavailable:
+      return GlassesUserStatus(
+        title: L.t("Bluetooth is off", "Bluetooth kapalı"),
+        detail: cameraIssue ?? L.t("Turn on Bluetooth and allow it for AutoLoom (Settings → AutoLoom).",
+                                   "Bluetooth'u aç ve AutoLoom'a izin ver (Ayarlar → AutoLoom)."),
+        tone: .attention, showsTryAgain: false)
     case .deviceConnecting:
       return GlassesUserStatus(title: L.t("Connecting…", "Bağlanıyor…"), detail: nil, tone: .working, showsTryAgain: false)
     case .deviceConnected, .ready:
       return GlassesUserStatus(title: connected, detail: nil, tone: .connected, showsTryAgain: false)
+    case .appUpdateRequired:
+      return GlassesUserStatus(
+        title: L.t("AutoLoom update needed", "AutoLoom güncellemesi gerekiyor"),
+        detail: L.t("The glasses no longer accept the Meta toolkit in this build (DAT \(GlassesSDKInfo.datVersion)). The iPhone camera still works.",
+                    "Gözlük bu sürümdeki Meta araç setini (DAT \(GlassesSDKInfo.datVersion)) artık kabul etmiyor. iPhone kamerası çalışmaya devam eder."),
+        tone: .attention, showsTryAgain: false)
+    case .glassesUpdateRequired:
+      return GlassesUserStatus(
+        title: L.t("Update in Meta AI", "Meta AI'da güncelleme gerekiyor"),
+        detail: cameraIssue ?? L.t("Update the glasses and their DAT app in Meta AI, then try again.",
+                                   "Meta AI'da gözlüğü ve gözlükteki DAT uygulamasını güncelle, sonra tekrar dene."),
+        tone: .attention, showsTryAgain: true)
     case .requestingCameraPermission:
       return GlassesUserStatus(
         title: connected, detail: L.t("Checking camera permission…", "Kamera izni kontrol ediliyor…"),
         tone: .connected, showsTryAgain: false)
+    case .startingSession:
+      return GlassesUserStatus(
+        title: connected, detail: L.t("Opening the glasses session…", "Gözlük oturumu açılıyor…"),
+        tone: .connected, showsTryAgain: false)
+    case .sessionPaused:
+      return GlassesUserStatus(
+        title: connected, detail: L.t("Paused — tap the glasses' temple to resume.", "Duraklatıldı — devam etmek için gözlüğün sapına dokun."),
+        tone: .connected, showsTryAgain: false)
+    case .glassesAppUnavailable:
+      return GlassesUserStatus(
+        title: L.t("Glasses app not reachable", "Gözlükteki uygulamaya ulaşılamıyor"),
+        detail: L.t("In Meta AI check Developer Mode and that the DAT app is installed on the glasses, then try again.",
+                    "Meta AI'da Geliştirici Modu'nu ve gözlükte DAT uygulamasının kurulu olduğunu kontrol et, sonra tekrar dene."),
+        tone: .attention, showsTryAgain: true)
+    case .glassesRefusing:
+      return GlassesUserStatus(
+        title: L.t("The glasses refuse the connection", "Gözlük bağlantıyı reddediyor"),
+        detail: L.t("Switch the glasses off and on with their power switch (the case is not enough), then try again.",
+                    "Gözlüğü güç düğmesiyle kapatıp aç (kutuya koymak yetmez), sonra tekrar dene."),
+        tone: .attention, showsTryAgain: true)
     case .startingCamera, .cameraStreaming:
       return GlassesUserStatus(title: connected, detail: L.t("Starting camera…", "Kamera başlıyor…"), tone: .connected, showsTryAgain: false)
     case .cameraPermissionNeeded:
@@ -191,8 +273,10 @@ enum GlassesConnectionReducer {
       .ignore
     case .notRegistered, .registrationStalled:
       .startRegistration
-    case .registeredNoDevice, .deviceDisconnected, .deviceConnecting, .deviceConnected, .requestingCameraPermission,
-         .cameraPermissionNeeded, .startingCamera, .cameraStreaming, .cameraFailed, .ready:
+    case .registeredNoDevice, .bluetoothUnavailable, .deviceDisconnected, .deviceConnecting, .deviceConnected,
+         .appUpdateRequired, .glassesUpdateRequired, .requestingCameraPermission, .cameraPermissionNeeded,
+         .startingSession, .sessionPaused, .glassesAppUnavailable, .glassesRefusing,
+         .startingCamera, .cameraStreaming, .cameraFailed, .ready:
       .refresh
     }
   }
@@ -288,6 +372,18 @@ struct DATConfigurationAudit: Equatable {
     return found
   }
 
+  /// Settings that are known to break DAT for some setups, said once.
+  var warnings: [String] {
+    var found: [String] = []
+    // Meta's known issues list the '-' in an iOS bundle id as unsupported
+    // (facebook/meta-wearables-dat-ios #212, #282). Some re-signing tools
+    // change the bundle id of a sideloaded IPA.
+    if bundleIdentifier.contains("-") {
+      found.append("The bundle identifier contains '-', which Meta's toolkit has rejected; re-sign without changing the bundle id")
+    }
+    return found
+  }
+
   var summary: String {
     "bundle \(bundleIdentifier); AppLinkURLScheme \(appLinkURLScheme ?? "missing"); URL schemes \(urlSchemes.joined(separator: ", ")); " +
       "MetaAppID \(metaAppID); ClientToken \(clientToken); TeamID \(teamID); analytics opt-out \(analyticsOptOut ? "yes" : "no")"
@@ -356,6 +452,18 @@ final class WearableConnectionCoordinator: ObservableObject {
   @Published private(set) var registrationLost = false
   /// Something only the user can fix, shown once.
   @Published var userAlert: String?
+  /// The glasses' own state (DAT 1.0 `DeviceState`): worn, folded, battery,
+  /// heat. nil until the SDK reports it.
+  @Published private(set) var worn: Bool?
+  @Published private(set) var hingeOpen: Bool?
+  @Published private(set) var batteryLevel: Int?
+  @Published private(set) var thermal = "—"
+  /// When the glasses link last came up, and when frames last started.
+  @Published private(set) var lastLinkedAt: Date?
+  @Published private(set) var lastReadyAt: Date?
+  /// A user-started registration finished in this run (the Ray-Ban camera is
+  /// then chosen if the iPhone camera was).
+  @Published private(set) var registrationCompletions = 0
 
   private(set) var wearables: WearablesInterface?
   private(set) var configureError: String?
@@ -365,6 +473,8 @@ final class WearableConnectionCoordinator: ObservableObject {
   private var devicesTask: Task<Void, Never>?
   private var linkTokens: [DeviceIdentifier: AnyListenerToken] = [:]
   private var compatibilityTokens: [DeviceIdentifier: AnyListenerToken] = [:]
+  private var deviceStateTokens: [DeviceIdentifier: AnyListenerToken] = [:]
+  private let bluetoothMonitor = BluetoothAccessMonitor()
   private var listenerRetryTask: Task<Void, Never>?
   private var restoreTask: Task<Void, Never>?
   private var registrationWatch: Task<Void, Never>?
@@ -427,7 +537,15 @@ final class WearableConnectionCoordinator: ObservableObject {
       return
     }
     record("SDK configured (DAT \(GlassesSDKInfo.datVersion))")
-    for problem in DATConfigurationAudit.current.problems { record("config: \(problem)") }
+    let config = DATConfigurationAudit.current
+    for problem in config.problems + config.warnings { record("config: \(problem)") }
+    bluetoothMonitor.onChange = { [weak self] access in
+      guard let self else { return }
+      self.snapshot.bluetooth = access
+      self.record("bluetooth \(access.rawValue)")
+      self.evaluate(reason: "bluetooth")
+    }
+    bluetoothMonitor.refresh()
     applyRegistration(wearables.registrationState, source: "launch", force: true)
     applyDevices(wearables.devices)
     if snapshot.registration != .registered {
@@ -473,6 +591,12 @@ final class WearableConnectionCoordinator: ObservableObject {
     stream.$glassesIssue.removeDuplicates().sink { [weak self] issue in
       self?.cameraIssueChanged(issue)
     }.store(in: &streamCancellables)
+    stream.$deviceSessionState.removeDuplicates().sink { [weak self] state in
+      self?.sessionStateChanged(state)
+    }.store(in: &streamCancellables)
+    stream.$sessionProblem.removeDuplicates().sink { [weak self] problem in
+      self?.sessionProblemChanged(problem)
+    }.store(in: &streamCancellables)
     evaluate(reason: "stream bound")
   }
 
@@ -500,9 +624,34 @@ final class WearableConnectionCoordinator: ObservableObject {
     snapshot.cameraFailure = nil
     permissionRequestAllowed = true
     if snapshot.permission == .denied { snapshot.permission = .unknown }
+    // The user did what the screen asked (a power cycle, an update): the
+    // glasses are judged afresh.
+    stream?.clearSessionProblem()
+    snapshot.sessionProblem = nil
+    if snapshot.compatibilityIssue != nil { refresh() }
     resetBackoff()
     connect()
     evaluate(reason: "try again")
+  }
+
+  /// Opens Meta AI where the update the glasses need can be done.
+  func openGlassesUpdate() {
+    guard let wearables else { return }
+    let appUpdate = snapshot.sessionProblem == .glassesAppUpdateRequired
+    record(appUpdate ? "opening the DAT app update in Meta AI" : "opening the firmware update in Meta AI")
+    Task { @MainActor [weak self] in
+      do {
+        if appUpdate {
+          try await wearables.openDATGlassesAppUpdate()
+        } else {
+          try await wearables.openFirmwareUpdate()
+        }
+      } catch {
+        self?.lastError = "open update: \(LogSanitizer.sanitize(String(describing: error), limit: 120))"
+        self?.userAlert = L.t("Meta AI could not open the update page. Open Meta AI → Devices yourself.",
+                              "Meta AI güncelleme sayfasını açamadı. Meta AI → Cihazlar'ı kendin aç.")
+      }
+    }
   }
 
   /// Settings → Forget glasses: the only place registration is removed.
@@ -575,6 +724,8 @@ final class WearableConnectionCoordinator: ObservableObject {
   func sceneBecameActive() {
     isForeground = true
     if registrationRequestedAt != nil, leftAppAt != nil { returnedAt = Date() }
+    // The permission may have been changed in Settings meanwhile.
+    bluetoothMonitor.refresh()
     refresh()
     if snapshot.stream == .stopped {
       // Coming back is a good moment to try at once.
@@ -605,7 +756,11 @@ final class WearableConnectionCoordinator: ObservableObject {
     record("Meta AI callback received (\(LogSanitizer.sanitize(action.value ?? "action", limit: 40)))")
     Task { @MainActor [weak self] in
       do {
-        _ = try await wearables.handleUrl(url)
+        // DAT 1.0: Meta AI can also start the registration itself (App
+        // connections); the user approves it there, so the app continues it.
+        _ = try await wearables.handleUrl(url, onRegistrationRequest: { request in
+          Task { @MainActor in await WearableConnectionCoordinator.shared.continueRegistration(request) }
+        })
         self?.record("Meta AI callback handled")
         self?.refresh()
       } catch {
@@ -691,6 +846,27 @@ final class WearableConnectionCoordinator: ObservableObject {
     }
   }
 
+  /// A registration Meta AI started (DAT 1.0). It is continued at once:
+  /// the approval itself happens in Meta AI. Apps on DAT 0.x could not take
+  /// part in this flow.
+  func continueRegistration(_ request: RegistrationRequest) async {
+    record("Meta AI started a registration")
+    if registrationRequestedAt == nil {
+      registrationRequestedAt = Date()
+      snapshot.registrationRequested = true
+      watchRegistration()
+    }
+    do {
+      try await request.continueRegistration()
+      record("registration continued in Meta AI")
+    } catch {
+      lastError = "registration request: \(LogSanitizer.sanitize(String(describing: error), limit: 120))"
+      record("registration request failed")
+      markRegistrationStalled(detail: nil)
+    }
+    evaluate(reason: "registration request")
+  }
+
   private func markRegistrationStalled(detail: String?) {
     guard snapshot.registration != .registered else { return }
     snapshot.registrationStalled = true
@@ -737,6 +913,7 @@ final class WearableConnectionCoordinator: ObservableObject {
       }
     }
     if fact == .registered {
+      let byUser = registrationRequestedAt != nil || snapshot.registrationRequested
       UserDefaults.standard.set(true, forKey: Self.wasRegisteredKey)
       registrationLost = false
       userForgot = false
@@ -745,6 +922,17 @@ final class WearableConnectionCoordinator: ObservableObject {
       finishRegistrationFlow()
       cameraIssue = nil
       resetBackoff()
+      if byUser, previous != .registered {
+        // Connecting the glasses means using their camera: the iPhone camera
+        // is replaced by the Ray-Ban one (camera off stays off).
+        registrationCompletions += 1
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: CaptureSource.defaultsKey) ?? CaptureSource.iPhoneCamera.rawValue
+            == CaptureSource.iPhoneCamera.rawValue {
+          defaults.set(CaptureSource.glasses.rawValue, forKey: CaptureSource.defaultsKey)
+          record("camera source: Ray-Ban (after connecting)")
+        }
+      }
     }
     evaluate(reason: "registration \(fact.rawValue)")
   }
@@ -782,11 +970,19 @@ final class WearableConnectionCoordinator: ObservableObject {
     for (id, token) in compatibilityTokens where !present.contains(id) {
       Task { await token.cancel() }
     }
+    for (id, token) in deviceStateTokens where !present.contains(id) {
+      Task { await token.cancel() }
+    }
     linkTokens = linkTokens.filter { present.contains($0.key) }
     compatibilityTokens = compatibilityTokens.filter { present.contains($0.key) }
+    deviceStateTokens = deviceStateTokens.filter { present.contains($0.key) }
     if ids.isEmpty {
       deviceName = nil
       compatibility = "—"
+      worn = nil
+      hingeOpen = nil
+      batteryLevel = nil
+      thermal = "—"
       applyLink(nil, source: "no device")
       return
     }
@@ -813,6 +1009,13 @@ final class WearableConnectionCoordinator: ObservableObject {
           Task { @MainActor [weak self] in self?.compatibilityChanged(id: id, value) }
         }
       }
+      // DAT 1.0: worn, folded, battery and heat, delivered at once and on
+      // every change.
+      if deviceStateTokens[id] == nil {
+        deviceStateTokens[id] = device.addDeviceStateListener { [weak self] state in
+          Task { @MainActor [weak self] in self?.deviceStateChanged(id: id, state) }
+        }
+      }
     }
     // A device the SDK cannot resolve yet gets its listeners on a later pass.
     listenerRetryTask?.cancel()
@@ -837,10 +1040,67 @@ final class WearableConnectionCoordinator: ObservableObject {
     snapshot.link = fact
     record("link \(fact.rawValue) (\(source))")
     if fact == .connected, !wasConnected {
-      // A fresh link: try the camera at once.
+      // A fresh link: try the camera at once. A link that dropped and came
+      // back (the power cycle the screen asked for) is judged afresh.
+      lastLinkedAt = Date()
+      if snapshot.sessionProblem?.blocksAutomaticRetry == true || snapshot.sessionProblem == .glassesAppUnavailable {
+        record("glasses back: refusals cleared")
+        stream?.clearSessionProblem()
+        snapshot.sessionProblem = nil
+      }
       resetBackoff()
     }
     evaluate(reason: "link \(fact.rawValue)")
+  }
+
+  private func deviceStateChanged(id: DeviceIdentifier, _ state: DeviceState) {
+    guard id == devices.first else { return }
+    let newWorn: Bool? = switch state.donState {
+    case .donned: true
+    case .doffed: false
+    case .unknown: nil
+    }
+    let newHinge: Bool? = switch state.hingeState {
+    case .open: true
+    case .closed: false
+    case .unknown: nil
+    }
+    if newWorn != worn { record(newWorn.map { $0 ? "glasses worn" : "glasses taken off" } ?? "worn state unknown") }
+    if newHinge != hingeOpen, newHinge == false { record("glasses folded") }
+    worn = newWorn
+    hingeOpen = newHinge
+    batteryLevel = state.batteryLevel
+    thermal = String(describing: state.thermalLevel)
+  }
+
+  /// The camera's device session (DAT 1.0), as part of the connection.
+  private func sessionStateChanged(_ state: DeviceSessionState) {
+    let fact: GlassesConnectionSnapshot.Session = switch state {
+    case .idle: .none
+    case .starting: .starting
+    case .started: .started
+    case .paused: .paused
+    case .stopping: .stopping
+    case .stopped: .stopped
+    }
+    guard fact != snapshot.session else { return }
+    snapshot.session = fact
+    record("session \(fact.rawValue)")
+    evaluate(reason: "session \(fact.rawValue)")
+  }
+
+  private func sessionProblemChanged(_ problem: GlassesSessionProblem?) {
+    guard problem != snapshot.sessionProblem else { return }
+    snapshot.sessionProblem = problem
+    if let problem {
+      record("session problem: \(ConnectionLayerReport.problemText(problem))")
+      if problem.blocksAutomaticRetry {
+        // Retrying cannot help until the user acts: no busy attempts.
+        attemptTask?.cancel()
+        attemptTask = nil
+      }
+    }
+    evaluate(reason: "session problem")
   }
 
   private func compatibilityChanged(id: DeviceIdentifier, _ value: Compatibility) {
@@ -851,21 +1111,30 @@ final class WearableConnectionCoordinator: ObservableObject {
   }
 
   /// The two ends that can be too old: the glasses' firmware (update in Meta
-  /// AI), or this app's Meta toolkit (DAT 0.5.0) after Meta's DAT 1.0
-  /// rollout, which only a new AutoLoom build fixes. Both are said plainly
-  /// instead of retrying a camera that cannot start.
+  /// AI), or this app's Meta toolkit, which only a new AutoLoom build fixes.
+  /// Both are said plainly instead of retrying a camera that cannot start.
   private func alertIfIncompatible(_ value: Compatibility) {
+    let issue: GlassesConnectionSnapshot.CompatibilityIssue?
     switch value {
     case .deviceUpdateRequired:
-      userAlert = L.t("Your glasses need a software update in Meta AI before AutoLoom can use them.",
-                      "AutoLoom'un kullanabilmesi için gözlüğün Meta AI'da güncellenmesi gerekiyor.")
+      issue = .glassesUpdate
+      if snapshot.compatibilityIssue != .glassesUpdate {
+        userAlert = L.t("Your glasses need a software update in Meta AI before AutoLoom can use them.",
+                        "AutoLoom'un kullanabilmesi için gözlüğün Meta AI'da güncellenmesi gerekiyor.")
+      }
     case .sdkUpdateRequired:
-      userAlert = L.t(
-        "Your glasses need a newer AutoLoom build (Meta's toolkit in this build, DAT 0.5.0, is too old for them). Install the DAT 1.0 build; the iPhone camera still works.",
-        "Gözlüğün daha yeni bir AutoLoom sürümü istiyor (bu sürümdeki Meta araç seti, DAT 0.5.0, onun için eski). DAT 1.0 sürümünü yükle; iPhone kamerası çalışmaya devam eder.")
+      issue = .appUpdate
+      if snapshot.compatibilityIssue != .appUpdate {
+        userAlert = L.t(
+          "Your glasses need a newer AutoLoom build (Meta's toolkit in this build, DAT \(GlassesSDKInfo.datVersion), is too old for them). The iPhone camera still works.",
+          "Gözlüğün daha yeni bir AutoLoom sürümü istiyor (bu sürümdeki Meta araç seti, DAT \(GlassesSDKInfo.datVersion), onun için eski). iPhone kamerası çalışmaya devam eder.")
+      }
     default:
-      break
+      issue = nil
     }
+    guard issue != snapshot.compatibilityIssue else { return }
+    snapshot.compatibilityIssue = issue
+    evaluate(reason: "compatibility")
   }
 
   private func activeDeviceChanged(_ active: Bool) {
@@ -953,7 +1222,9 @@ final class WearableConnectionCoordinator: ObservableObject {
       let old = phase
       phase = newPhase
       record("\(old.rawValue) → \(newPhase.rawValue) (\(reason))")
-      if newPhase.isLinked, !old.isLinked { noteLinked() }
+      // "Ray-Ban Connected" only when the glasses are usable.
+      if newPhase.isLinked, !old.isLinked, !newPhase.needsUserAction { noteLinked() }
+      if newPhase == .ready { lastReadyAt = Date() }
     }
     scheduleCameraStart()
   }
@@ -968,7 +1239,10 @@ final class WearableConnectionCoordinator: ObservableObject {
   /// Starts the camera once the glasses are linked, never twice at once,
   /// with a bounded backoff after failures.
   private func scheduleCameraStart() {
-    guard snapshot.cameraWanted, phase.isLinked, stream != nil, wearables != nil else {
+    // Versions that do not match, or glasses that keep refusing, wait for
+    // the user (an update, a power cycle, Try Again) instead of retrying.
+    guard snapshot.cameraWanted, phase.isLinked, stream != nil, wearables != nil,
+          snapshot.compatibilityIssue == nil, snapshot.sessionProblem?.blocksAutomaticRetry != true else {
       attemptTask?.cancel()
       attemptTask = nil
       return
@@ -1056,24 +1330,73 @@ final class WearableConnectionCoordinator: ObservableObject {
     NSLog("[RayBan] %@", line)
   }
 
+  /// Every layer of the connection as measured now, for the layer table
+  /// (Settings → Developer → Ray-Ban connection).
+  func layerFacts(voice: GlassifAIRealtimeSession?) -> ConnectionLayerFacts {
+    let metrics = FrameStore.shared.snapshot()
+    let route = AudioRouteMonitor.shared
+    route.refresh()
+    var facts = ConnectionLayerFacts()
+    facts.bluetooth = snapshot.bluetooth
+    facts.sdkConfigured = snapshot.sdkConfigured
+    facts.registration = snapshot.registration.rawValue
+    facts.link = snapshot.link.rawValue
+    facts.compatibility = compatibility
+    facts.worn = worn
+    facts.hingeOpen = hingeOpen
+    facts.battery = batteryLevel
+    facts.sessionState = snapshot.session.rawValue
+    facts.sessionProblem = snapshot.sessionProblem
+    facts.cameraWanted = snapshot.cameraWanted
+    facts.cameraPermission = snapshot.permission.rawValue
+    facts.streamState = snapshot.stream.rawValue
+    let glassesFrames = metrics.source == FrameSourceKind.glasses.rawValue
+    facts.measuredFPS = glassesFrames ? metrics.measuredFPS : 0
+    facts.lastFrameAgeMs = metrics.lastGlassesFrameAgeMs
+    facts.frameSource = metrics.source == "—" ? "—"
+      : "\(metrics.source) · \(metrics.inputResolution)" + (metrics.lastFrameAgeMs.map { " · \($0) ms" } ?? "")
+    facts.microphone = route.inputSummary
+    facts.microphoneIsGlasses = route.inputs.contains { $0.type == "Bluetooth HFP" }
+    facts.output = route.outputSummary
+    if let voice {
+      facts.voiceState = String(describing: voice.state)
+      facts.voiceActive = voice.isActive
+      facts.dataChannelOpen = voice.isDataChannelOpen
+    }
+    return facts
+  }
+
   /// A sanitized report for "Copy connection report": states, counts and
   /// errors, never identifiers, tokens or configuration values.
   func diagnosticsReport() -> String {
     let config = DATConfigurationAudit.current
     let formatter = DateFormatter()
     formatter.dateFormat = "HH:mm:ss"
-    var lines = [
+    let warnings = config.warnings
+    let linkedAt: String = lastLinkedAt.map { formatter.string(from: $0) } ?? "never"
+    let readyAt: String = lastReadyAt.map { formatter.string(from: $0) } ?? "never"
+    let wornText: String = worn.map { $0 ? "yes" : "no" } ?? "—"
+    let openText: String = hingeOpen.map { $0 ? "yes" : "no" } ?? "—"
+    let batteryText: String = batteryLevel.map { "\($0)%" } ?? "—"
+    let problemText: String = snapshot.sessionProblem.map { ConnectionLayerReport.problemText($0) } ?? "none"
+    var lines: [String] = [
       "AutoLoom Ray-Ban connection report",
       "App \(AppInfo.version) (\(AppInfo.build)) · commit \(AppInfo.commit)",
       "DAT \(GlassesSDKInfo.datVersion) · SDK configured: \(snapshot.sdkConfigured ? "yes" : "no")\(configureError.map { " (\($0))" } ?? "")",
       "Config: \(config.summary)",
       "Config problems: \(config.problems.isEmpty ? "none" : config.problems.joined(separator: "; "))",
+      "Config warnings: \(warnings.isEmpty ? "none" : warnings.joined(separator: "; "))",
+      "Signing: \(ProvisioningSummary.read().summary())",
+      "Bluetooth: \(snapshot.bluetooth.rawValue)",
       "Phase: \(phase.rawValue)",
       "Registration: \(snapshot.registration.rawValue)\(registrationLost ? " (not restored after launch)" : "")",
       "Devices: \(devices.count) · active device: \(snapshot.activeDevice ? "yes" : "no") · device: \(deviceHash)",
-      "Link: \(snapshot.link.rawValue) · compatibility: \(compatibility)",
-      "Camera chosen: \(snapshot.cameraWanted ? "yes" : "no") · permission: \(snapshot.permission.rawValue) · stream: \(snapshot.stream.rawValue) · frames: \(snapshot.hasFrames ? "yes" : "no")",
+      "Link: \(snapshot.link.rawValue) · compatibility: \(compatibility) · last linked: \(linkedAt)",
+      "Glasses: worn \(wornText) · open \(openText) · battery \(batteryText) · thermal \(thermal)",
+      "Session: \(snapshot.session.rawValue) · problem: \(problemText) · last session error: \(stream?.lastSessionError ?? "none")",
+      "Camera chosen: \(snapshot.cameraWanted ? "yes" : "no") · permission: \(snapshot.permission.rawValue) · stream: \(snapshot.stream.rawValue) · frames: \(snapshot.hasFrames ? "yes" : "no") · last ready: \(readyAt)",
       "Transport: \(stream?.activeTransport.shortLabel ?? "—") · last stream state: \(stream?.lastStreamState ?? "—")",
+      "Microphone and camera order: \(stream?.audioOrderNote ?? "—")",
       "Start attempts since last stream: \(reconnectAttempts) · failures: \(failures)",
       "Last error: \(lastError ?? "none")",
       "Transitions:",

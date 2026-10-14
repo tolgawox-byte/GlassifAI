@@ -116,11 +116,13 @@ enum GlassesLinkVisual: Equatable {
     switch phase {
     case .restoring, .registrationStarting, .waitingForMetaAI, .deviceConnecting:
       .searching
-    case .deviceConnected, .requestingCameraPermission, .startingCamera, .cameraStreaming:
+    case .deviceConnected, .requestingCameraPermission, .startingSession, .sessionPaused, .startingCamera,
+         .cameraStreaming:
       .found
     case .ready:
       .connected
-    case .registrationStalled, .cameraPermissionNeeded, .cameraFailed, .sdkUnavailable:
+    case .registrationStalled, .cameraPermissionNeeded, .cameraFailed, .sdkUnavailable, .bluetoothUnavailable,
+         .appUpdateRequired, .glassesUpdateRequired, .glassesAppUnavailable, .glassesRefusing:
       .attention
     case .notRegistered, .registeredNoDevice, .deviceDisconnected:
       .idle

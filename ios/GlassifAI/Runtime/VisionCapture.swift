@@ -188,12 +188,16 @@ enum VisionQueryClassifier {
 
 /// Where Ray-Ban vision requests get their image.
 enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
-  /// The sharpest recent video frame; a still photo only when video stalls.
-  /// Meta documents in-stream photos as frames lifted out of the video
-  /// stream, so a photo adds latency without adding detail on DAT 0.5.
+  /// The sharpest recent video frame; an in-stream photo only when video
+  /// stalls. Meta documents in-stream photos as frames lifted out of the
+  /// video stream, so a photo adds latency without adding detail.
   case automatic
   case videoOnly = "video"
   case photoFirst = "photo"
+  /// Reading requests take a standalone photo from the sensor (DAT 1.0
+  /// `Camera.photo`, Meta beta). Stream and photo cannot use the camera at
+  /// the same time, so the live view pauses for a few seconds.
+  case fullPhoto = "full"
 
   static let defaultsKey = "autoloom.camera.glassesVisionCapture"
 
@@ -204,6 +208,7 @@ enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
     case .automatic: "Automatic (sharpest recent frame; photo if video stalls)"
     case .videoOnly: "Video frames only"
     case .photoFirst: "Still photo first (experiment)"
+    case .fullPhoto: "Full-resolution photo for reading (beta; pauses the view a few seconds)"
     }
   }
 
@@ -214,15 +219,21 @@ enum GlassesVisionCaptureMode: String, CaseIterable, Identifiable {
   func prefersPhoto(for detail: VisionDetail) -> Bool {
     switch self {
     case .photoFirst: true
-    // A standalone photo (DAT 1.0 `Camera.photo`) is far larger than a video
-    // frame, so reading requests take it first; on DAT 0.5 an in-stream
-    // photo adds latency without detail.
-    case .automatic: detail == .high && GlassesSDKInfo.supportsFullResolutionPhoto
-    case .videoOnly: false
+    // Opt-in: a standalone photo is far larger than a video frame but
+    // interrupts the live view and is a Meta beta, so Automatic stays on
+    // video frames.
+    case .fullPhoto: detail == .high && GlassesSDKInfo.supportsFullResolutionPhoto
+    case .automatic, .videoOnly: false
     }
   }
 
   var allowsPhoto: Bool { self != .videoOnly }
+
+  /// How long a vision request waits for the glasses' still: an in-stream
+  /// photo is a video frame, a standalone one crosses the link in seconds.
+  var photoTimeout: TimeInterval {
+    self == .fullPhoto ? 20 : 4
+  }
 }
 
 /// Switches for the high-detail reading pipeline.

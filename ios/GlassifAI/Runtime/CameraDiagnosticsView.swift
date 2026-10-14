@@ -51,6 +51,8 @@ struct CameraDiagnosticsView: View {
         row("Preview", "\(metrics.previewMode) · rendered \(metrics.previewRendered) · dropped \(metrics.previewDropped)")
         row("Processing median / p95", "\(ms(metrics.processingMedianMs)) / \(ms(metrics.processingP95Ms))")
         row("Capture→phone median / p95", "\(ms(metrics.transportMedianMs)) / \(ms(metrics.transportP95Ms))")
+        row("Ray-Ban frame interval median / p95", "\(ms(metrics.frameIntervalMedianMs)) / \(ms(metrics.frameIntervalP95Ms))")
+        row("Stutters (gaps ≥ 250 ms) · longest gap", "\(metrics.stutters) · \(metrics.longestGapMs) ms")
       }
       Section("Last image sent to the AI (metadata only)") {
         Text(metrics.lastVisionImage)
@@ -66,7 +68,7 @@ struct CameraDiagnosticsView: View {
         row("Photos permission (add-only)", PhotoLibrarySaver.permissionState.label)
         row("Save captures", CaptureSaveMode.current.label)
         row("Captures today / all", "\(CaptureLibrary.shared.records(.today).count) / \(CaptureLibrary.shared.records.count)")
-        row("Video audio", "none (DAT 0.5: no Ray-Ban camera audio)")
+        row("Video audio", "none (the stream's audio is a DAT 1.0 beta; not used)")
       }
       Section("Lifecycle transitions") {
         if lifecycle.transitions.isEmpty {

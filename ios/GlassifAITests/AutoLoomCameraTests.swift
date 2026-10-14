@@ -2,7 +2,7 @@ import XCTest
 
 @testable import GlassifAI
 
-/// Ray-Ban stream configuration and transport fallback (DAT 0.5).
+/// Ray-Ban stream configuration and transport fallback (Meta DAT).
 final class AutoLoomCameraTests: XCTestCase {
 
   func testProfilesRequestFullResolutionAndDocumentedFrameRates() {

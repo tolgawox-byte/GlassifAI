@@ -492,7 +492,7 @@ enum ActionCatalog {
       keys: ["takePhoto"], quick: true),
     ActionDefinition(
       "camera.recordStart", .camera, name: "Start recording", tr: "Kaydı başlat",
-      summary: "A Ray-Ban video (no sound on DAT 0.5), saved to Photos when stopped.",
+      summary: "A Ray-Ban video (no sound: the stream's audio is a DAT beta), saved to Photos when stopped.",
       examplesTR: ["Video kaydını başlat", "Kayda başla", "Kayda gir"], examplesEN: ["Start recording"],
       permissions: [.photos, .rayBanCamera], capabilities: [.rayBanCamera], localPriority: true,
       appIntent: "StartRayBanRecordingIntent", ui: "Assistant → record button", status: .physicalTestRequired,

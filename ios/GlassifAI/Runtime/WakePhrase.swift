@@ -90,7 +90,8 @@ enum WakePhraseSettings {
   }
 
   /// Listen only while the Meta glasses report a connected link (a real
-  /// SDK event; DAT 0.5.0 has no worn/unworn event).
+  /// SDK event). DAT 1.0's worn state is shown in Diagnostics; arming still
+  /// follows the link.
   static var armsWithGlasses: Bool {
     UserDefaults.standard.bool(forKey: glassesArmingKey)
   }

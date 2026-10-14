@@ -104,13 +104,17 @@ jobs:
             fi
           done
 
+      # The commit is in each file name and in the app's Info.plist, so a
+      # downloaded IPA can be matched to its source; the check publishes what
+      # each IPA really contains (commit, Meta toolkit, callback scheme).
       - name: Create unsigned IPAs
         run: |
           for configuration in Debug Release; do
             rm -rf Payload
             mkdir -p Payload
             cp -R "build/Build/Products/${configuration}-iphoneos/GlassifAI.app" Payload/
-            zip -qr "AutoLoomMediaGlasses-${configuration}-unsigned.ipa" Payload
+            bash ./scripts/ci-ipa-check.sh Payload/GlassifAI.app "$configuration"
+            zip -qr "AutoLoomMediaGlasses-${configuration}-${GITHUB_SHA::7}-unsigned.ipa" Payload
           done
           ls -la *.ipa
 

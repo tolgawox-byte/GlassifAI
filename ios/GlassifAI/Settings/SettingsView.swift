@@ -210,7 +210,7 @@ struct SettingsView: View {
             row(L.t("Camera diagnostics", "Kamera tanılaması"), "gauge.with.dots.needle.33percent", value: nil)
           }
           if let connection {
-            NavigationLink { ConnectionDiagnosticsView(connection: connection) } label: {
+            NavigationLink { ConnectionDiagnosticsView(connection: connection, voice: voice) } label: {
               row(L.t("Ray-Ban connection", "Ray-Ban bağlantısı"), "antenna.radiowaves.left.and.right", value: nil)
             }
           }
@@ -563,8 +563,8 @@ struct CameraSettingsView: View {
       Section(
         header: Text(L.t("Ray-Ban photos and videos", "Ray-Ban fotoğraf ve videoları")),
         footer: Text(L.t(
-          "Photos and videos come only from the Ray-Ban camera, never from the iPhone camera or the screen. Photos access is add-only: AutoLoom can add to your library but not see it. Nothing is uploaded. Videos are video only: DAT 0.5 gives no Ray-Ban camera audio, and the conversation uses the microphone.",
-          "Fotoğraf ve videolar yalnızca Ray-Ban kamerasından gelir; asla iPhone kamerasından veya ekrandan değil. Fotoğraflar izni yalnızca eklemedir: AutoLoom arşivinize ekleyebilir ama göremez. Hiçbir şey yüklenmez. Videolar yalnızca görüntüdür: DAT 0.5 Ray-Ban kamerasından ses vermez ve mikrofonu konuşma kullanır."))) {
+          "Photos and videos come only from the Ray-Ban camera, never from the iPhone camera or the screen. Photos access is add-only: AutoLoom can add to your library but not see it. Nothing is uploaded. Videos are video only: the Ray-Ban camera's audio is a Meta beta this app does not use, and the conversation uses the microphone.",
+          "Fotoğraf ve videolar yalnızca Ray-Ban kamerasından gelir; asla iPhone kamerasından veya ekrandan değil. Fotoğraflar izni yalnızca eklemedir: AutoLoom arşivinize ekleyebilir ama göremez. Hiçbir şey yüklenmez. Videolar yalnızca görüntüdür: Ray-Ban kamerasının sesi Meta'nın bu uygulamanın kullanmadığı bir beta özelliğidir ve mikrofonu konuşma kullanır."))) {
         Picker(L.t("Save captures", "Çekimleri kaydet"), selection: $captureSaveMode) {
           ForEach(CaptureSaveMode.allCases) { Text($0.label).tag($0.rawValue) }
         }

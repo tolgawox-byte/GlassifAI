@@ -435,7 +435,7 @@ struct DiagnosticsView: View {
         row("Text detail mode", VisionAssistPreferences.textAssist ? "on (on-device OCR + zoomed crop)" : "off")
         row("Enlarge for reading", VisionAssistPreferences.upscale ? "on (≤1.6×, patch budget)" : "off")
         row("Best-frame window", "last \(FrameStore.recentCapacity) frames, ≤\(Int(AssistantOrchestrator.maxFrameAge * 1_000)) ms old")
-        row("Still photo support", "In-stream capture (DAT \(GlassesSDKInfo.datVersion)) = a frame of the video stream; full-resolution photo needs DAT 1.0")
+        row("Still photo support", "In-stream capture = a frame of the video stream; full-resolution standalone photo (DAT \(GlassesSDKInfo.datVersion) Camera.photo, beta) only in the Full-resolution photo mode")
         row("Photos requested / received / failed", "\(metrics.photosRequested) / \(metrics.photosReceived) / \(metrics.photoFailures)")
         row("Last photo", "\(metrics.lastPhotoResolution)" + (metrics.lastPhotoLatencyMs.map { " in \($0) ms" } ?? ""))
         row("Last AI image", metrics.lastVisionImage)

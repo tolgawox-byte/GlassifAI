@@ -1,3 +1,4 @@
+import Combine
 import MWDATCore
 import SwiftUI
 import UIKit
@@ -57,26 +58,46 @@ struct StreamSessionView: View {
       LiveVisionController.shared.isVoiceActive = { voiceSession.isActive }
       WakePhraseListener.shared.isConversationActive = { voiceSession.isActive }
       WakePhraseListener.shared.glassesConnected = connection.glassesLinkConnected
+      // Meta: the glasses microphone (HFP) is set up and settled before the
+      // camera stream starts. A stream started while a call brings up the
+      // glasses microphone waits for that route first.
+      stream.waitForAudioRouteBeforeStream = {
+        guard GlassesAudioOrder.isEnabled, voiceSession.usesGlassesMicrophone else { return }
+        _ = await voiceSession.waitForGlassesMicrophoneRoute(timeout: 3)
+      }
       VoiceStartCoordinator.shared.register(isActive: { voiceSession.isActive }) { reason in
         // The conversation takes over the microphone.
         WakePhraseListener.shared.stopListening(reason: nil)
         let source = CaptureSource(rawValue: UserDefaults.standard.string(forKey: CaptureSource.defaultsKey) ?? "")
           ?? .iPhoneCamera
         let route = AudioRoutePreference.current
+        let glassesMicrophone = route.prefersGlassesAudio(for: source) && route != .iPhone
         // The chime and "Bağlandım, dinliyorum." come only when the
         // connection is really ready, never when the wake phrase is heard.
-        await voiceSession.start(
-          prefersBluetoothHFP: route.prefersGlassesAudio(for: source),
-          forcesBuiltInAudio: route == .iPhone,
-          reason: reason)
+        if source == .glasses, glassesMicrophone, GlassesAudioOrder.isEnabled {
+          // A running Ray-Ban stream steps aside while the glasses
+          // microphone comes up, then starts again (Meta's documented order).
+          await stream.withStreamSetAsideForAudio {
+            await voiceSession.start(
+              prefersBluetoothHFP: true,
+              forcesBuiltInAudio: false,
+              reason: reason)
+            return await voiceSession.waitForGlassesMicrophoneRoute(timeout: 3)
+          }
+        } else {
+          await voiceSession.start(
+            prefersBluetoothHFP: route.prefersGlassesAudio(for: source),
+            forcesBuiltInAudio: route == .iPhone,
+            reason: reason)
+        }
         // A hands-free start: bring the glasses camera back now for visual
         // questions if it is not running.
         if source == .glasses, !stream.isStreaming, voiceSession.isActive {
           WearableConnectionCoordinator.shared.requestStartSoon(reason: "conversation started")
         }
       }
-      if gestureSession == nil, let wearables {
-        gestureSession = GlassesGestureSession(wearables: wearables)
+      if gestureSession == nil, wearables != nil {
+        gestureSession = GlassesGestureSession(events: viewModel.$sessionEvent.eraseToAnyPublisher())
       }
       AudioRouteMonitor.shared.start()
       // Cloud agents are not tried offline.

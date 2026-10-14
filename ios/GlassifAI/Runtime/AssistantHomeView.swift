@@ -315,6 +315,15 @@ struct AssistantHomeView: View {
   /// Only what is happening now: at most a few chips, never a dashboard.
   private var chipRow: some View {
     HStack(spacing: 8) {
+      if captureSource == .iPhoneCamera, connection.phase.isLinked {
+        // The glasses are connected, but the image comes from the iPhone:
+        // said plainly, one tap away from the Ray-Ban camera.
+        Button { captureSourceRaw = CaptureSource.glasses.rawValue } label: {
+          chip(L.t("Ray-Ban connected · use its camera", "Ray-Ban bağlı · gözlük kamerasına geç"),
+               systemImage: "eyeglasses", tint: AutoLoomTheme.electricBlue)
+        }
+        .buttonStyle(.plain)
+      }
       if !online {
         chip(L.t("Offline · notes, tasks, timers work", "Çevrimdışı · not, görev, zamanlayıcı çalışır"), systemImage: "wifi.slash", tint: .orange)
       }
@@ -455,6 +464,15 @@ struct AssistantHomeView: View {
               .multilineTextAlignment(.center)
               .contentTransition(.opacity)
           }
+        }
+        if connection.phase == .glassesUpdateRequired {
+          // The update itself happens in Meta AI.
+          Button { connection.openGlassesUpdate() } label: {
+            Label(L.t("Open in Meta AI", "Meta AI'da aç"), systemImage: "arrow.up.forward.app")
+              .font(.subheadline.weight(.semibold))
+          }
+          .buttonStyle(.bordered)
+          .transition(.opacity)
         }
         if status.showsTryAgain {
           Button { connection.retry() } label: {

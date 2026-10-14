@@ -2,8 +2,8 @@ import SwiftUI
 
 /// What the glasses can do with the linked Meta DAT SDK and this device.
 /// A static table per SDK version (from Meta's documentation), refined by
-/// runtime probes once DAT 1.0 is linked. Ray-Ban Meta Gen 1 is displayless:
-/// nothing display-only is ever shown for it. See `docs/DAT1_MIGRATION.md`.
+/// runtime probes. Ray-Ban Meta Gen 1 is displayless: nothing display-only is
+/// ever shown for it. See `docs/DAT_1_MIGRATION.md`.
 enum RayBanCapability: String, CaseIterable, Identifiable {
   case cameraStream, highQualityPhoto, audioStream, speech, voiceInvocation, motion, imu, inputs
   case backgroundVideo, backgroundAudio, display
@@ -30,9 +30,9 @@ enum RayBanCapability: String, CaseIterable, Identifiable {
   var detail: String {
     switch self {
     case .cameraStream: "DAT Stream, raw or HEVC (hvc1), up to 720×1280, 2–30 fps."
-    case .highQualityPhoto: "DAT 1.0 Camera.photo, up to 4032×3024; cannot run while the stream runs. Today: the in-stream capturePhoto JPEG."
-    case .audioStream: "DAT 1.0 in-stream PCM audio (beta, dev channels). Today: Bluetooth HFP 8 kHz through iOS."
-    case .speech: "DAT 1.0 on-glasses ASR (beta, fixed locale; Turkish unconfirmed). Today: the phone's recogniser over HFP."
+    case .highQualityPhoto: "DAT 1.0 Camera.photo (beta), up to the sensor's resolution; the live stream pauses while it is taken. Off by default: Settings → Camera → Vision image → Full-resolution photo."
+    case .audioStream: "DAT 1.0 in-stream PCM audio (beta). Not used yet: the conversation uses Bluetooth HFP 8 kHz through iOS."
+    case .speech: "DAT 1.0 on-glasses ASR (beta, fixed locale; Turkish unconfirmed). Not used: the phone's recogniser over HFP."
     case .voiceInvocation: "DAT 1.0 VoiceInvocationsStream: only launches the app (no spoken request); needs Meta approval."
     case .motion: "DAT 1.0 addMotion, 5–60 Hz (beta)."
     case .imu: "Accelerometer and gyroscope via addMotion; the magnetometer is always nil on Ray-Ban Meta."
@@ -51,7 +51,7 @@ enum RayBanCapabilityState: String {
   case experimentalDevOnly
   /// In the SDK; support differs per device, decided at runtime.
   case probe
-  /// Needs DAT 1.0 (not linked in this build).
+  /// Needs DAT 1.0 (for a build that links an older SDK).
   case waitingForDAT1
   case unavailable
 
@@ -67,7 +67,7 @@ enum RayBanCapabilityState: String {
 
 struct RayBanCapabilityMatrix: Equatable {
   /// The linked Meta Wearables DAT SDK (updated with the package pin).
-  static let linkedSDKVersion = "0.5.0"
+  static let linkedSDKVersion = GlassesSDKInfo.datVersion
 
   let sdkVersion: String
   let deviceHasDisplay: Bool
@@ -112,8 +112,8 @@ struct RayBanCapabilitiesView: View {
         LabeledContent(L.t("Glasses", "Gözlük"), value: "Ray-Ban Meta Gen 1 · " + L.t("no display", "ekransız"))
       } footer: {
         Text(L.t(
-          "DAT 1.0 rolls out from 30 September 2026 (glasses firmware V128, Meta AI V290). Its new features are beta and only work in developer or beta release channels; they switch on here after the SDK update and a device check.",
-          "DAT 1.0 30 Eylül 2026'dan itibaren dağıtılıyor (gözlük yazılımı V128, Meta AI V290). Yeni özellikleri beta; yalnız geliştirici ya da beta kanallarında çalışıyor. SDK güncellemesi ve cihaz kontrolünden sonra burada açılırlar."))
+          "This build links Meta DAT \(GlassesSDKInfo.datVersion), which needs Meta AI V290 or newer and glasses firmware V128 or newer. Beta features only work in Developer Mode or beta release channels; none is marked available before a device check.",
+          "Bu sürüm Meta DAT \(GlassesSDKInfo.datVersion) kullanıyor; Meta AI V290 veya üstü ve gözlük yazılımı V128 veya üstü gerekir. Beta özellikler yalnız Geliştirici Modu'nda ya da beta kanallarında çalışır; cihazda denenmeden hiçbiri kullanılabilir gösterilmez."))
       }
       Section(L.t("Capabilities", "Yetenekler")) {
         ForEach(RayBanCapability.allCases) { capability in

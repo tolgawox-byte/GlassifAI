@@ -8,8 +8,9 @@ import UIKit
 /// come straight from the glasses stream (the ingestor's sample tap), never
 /// from the preview or a screenshot, and never from the iPhone camera.
 ///
-/// Photos: a DAT still capture (`capturePhoto`; DAT 0.5 has no standalone
-/// `Camera.photo`). Videos: `RayBanVideoRecorder` (HEVC passthrough). The
+/// Photos: a DAT in-stream still capture (`capturePhoto`; the standalone
+/// `Camera.photo` is only used for vision, when Settings asks for it).
+/// Videos: `RayBanVideoRecorder` (HEVC passthrough). The
 /// user hears "saved to Photos" only after Photos confirmed it; anything
 /// Photos did not take is kept in AutoLoom, never dropped.
 @MainActor

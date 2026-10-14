@@ -43,8 +43,8 @@ enum LockedScreenVision {
     UserDefaults.standard.object(forKey: defaultsKey) as? Bool ?? true
   }
 
-  /// Meta DAT 0.5: the HEVC (hvc1) transport keeps streaming while the app
-  /// is in the background; the default raw transport pauses.
+  /// Meta DAT (since 0.5): the HEVC (hvc1) transport keeps streaming while
+  /// the app is in the background; the raw transport pauses.
   static func isSupported(transport: GlassesVideoTransport?) -> Bool {
     transport == .hevc
   }
@@ -115,7 +115,7 @@ enum RayBanStallPolicy {
     }
     guard sampleAge < 2_000, imageAge >= noImageMs, input.hevc else { return .none }
     // 2. Only P-frames the decoder cannot use: a new stream starts with a
-    // keyframe (DAT 0.5 has no keyframe request).
+    // keyframe (DAT has no keyframe request).
     if let wait = input.keyframeWaitMs {
       guard wait >= keyframeWaitLimitMs, mayRestartStream else { return .none }
       return .restartStream(reason: "no keyframe for \(wait / 1_000) s")

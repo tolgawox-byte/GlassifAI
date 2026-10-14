@@ -52,6 +52,40 @@ final class GlassifAIRealtimeSession: NSObject, ObservableObject {
     }
   }
 
+  /// The data channel to the realtime model is open (nil without a call).
+  var isDataChannelOpen: Bool? {
+    dataChannel.map { $0.readyState == .open }
+  }
+
+  /// The current or starting call wants the glasses' hands-free microphone.
+  var usesGlassesMicrophone: Bool {
+    isActive && callAudio?.prefersBluetoothHFP == true && callAudio?.forcesBuiltInAudio != true
+  }
+
+  /// Meta's order for the glasses microphone and camera: the HFP route must
+  /// be up and settled before the camera stream starts ("starting the DAT
+  /// stream before HFP is ready can cause the audio route to fail
+  /// silently"). Waits until the hands-free input has been the route for a
+  /// second, at most `timeout`. False when this call does not use the
+  /// glasses microphone or the route did not come up in time.
+  func waitForGlassesMicrophoneRoute(timeout: TimeInterval) async -> Bool {
+    guard usesGlassesMicrophone else { return false }
+    let deadline = Date().addingTimeInterval(timeout)
+    var routedSince: Date?
+    while Date() < deadline, !Task.isCancelled {
+      let routed = AVAudioSession.sharedInstance().currentRoute.inputs.contains { $0.portType == .bluetoothHFP }
+      if routed {
+        let since = routedSince ?? Date()
+        routedSince = since
+        if Date().timeIntervalSince(since) >= 1.0 { return true }
+      } else {
+        routedSince = nil
+      }
+      try? await Task.sleep(nanoseconds: 100_000_000)
+    }
+    return false
+  }
+
   private let factory = LKRTCPeerConnectionFactory()
   private var peer: LKRTCPeerConnection?
   /// Samples the microphone and assistant voice levels for the orb.

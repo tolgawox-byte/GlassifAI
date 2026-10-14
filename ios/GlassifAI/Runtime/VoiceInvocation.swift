@@ -242,8 +242,8 @@ enum HandsFreeCapabilities {
   static let metaInvocationAvailable = false
   static let metaInvocationPhrase = "Hey Meta, start <app name registered in the Meta Developer Center>"
   static let metaInvocationRequirement =
-    "Needs Meta Wearables DAT 1.0 (this build uses \(GlassesSDKInfo.datVersion)), glasses firmware V128 and Meta AI app V290 " +
-    "(rollout from 2026-09-30), and Voice Invocation approval in the Wearables Developer Center."
+    "Needs DAT 1.0's VoiceInvocationsStream (this build links \(GlassesSDKInfo.datVersion) but does not listen for it yet), " +
+    "glasses firmware V128 and Meta AI app V290, and Voice Invocation approval in the Wearables Developer Center."
   /// No system-wide custom wake word exists for third-party apps on iOS or
   /// the Meta glasses. The app's own wake phrase uses on-device recognition
   /// while the app is open, or in the background with Hands-Free Ready.

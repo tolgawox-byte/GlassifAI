@@ -38,12 +38,16 @@ final class AutoLoomJarvisExpansionTests: XCTestCase {
 
   func testGen1CapabilitiesToday() {
     let matrix = RayBanCapabilityMatrix.current
-    XCTAssertEqual(matrix.sdkVersion, "0.5.0")
+    XCTAssertEqual(matrix.sdkVersion, GlassesSDKInfo.datVersion)
+    XCTAssertEqual(matrix.sdkVersion, "1.0.1")
+    XCTAssertTrue(matrix.isDAT1)
     XCTAssertEqual(matrix.state(.cameraStream), .available)
-    XCTAssertEqual(matrix.state(.highQualityPhoto), .waitingForDAT1)
-    XCTAssertEqual(matrix.state(.voiceInvocation), .waitingForDAT1)
+    XCTAssertEqual(matrix.state(.highQualityPhoto), .experimentalDevOnly, "a Meta beta, never shown as available")
+    XCTAssertEqual(matrix.state(.voiceInvocation), .probe)
     XCTAssertEqual(matrix.state(.display), .unavailable)
     XCTAssertFalse(matrix.showsDisplayUI, "Gen 1 is displayless")
+    XCTAssertEqual(RayBanCapabilityMatrix(sdkVersion: "0.5.0", deviceHasDisplay: false).state(.highQualityPhoto),
+                   .waitingForDAT1, "an older SDK still reads as waiting")
 
     var dat1 = RayBanCapabilityMatrix(sdkVersion: "1.0.0", deviceHasDisplay: false)
     XCTAssertEqual(dat1.state(.speech), .experimentalDevOnly)

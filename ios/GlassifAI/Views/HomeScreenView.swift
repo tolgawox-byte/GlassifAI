@@ -75,6 +75,8 @@ struct HomeScreenView: View {
               .font(.footnote)
               .foregroundStyle(.secondary)
               .multilineTextAlignment(.center)
+
+            ConnectChecklist()
           }
           .frame(maxWidth: 420)
           .padding(.horizontal, 28)
@@ -153,5 +155,50 @@ struct HomeScreenView: View {
         .font(.body)
       Spacer(minLength: 0)
     }
+  }
+}
+
+/// What Meta requires before a developer app can connect, in the order it
+/// is checked (Meta's DAT setup and version pages, and the recovery Meta's
+/// engineers give in the SDK's issue tracker).
+struct ConnectChecklist: View {
+  @State private var expanded = false
+
+  private let steps: [(String, String)] = [
+    (L.t("Meta AI app 290 or newer and glasses software 128 or newer (Meta AI → Devices → your glasses → Settings → General → About).",
+         "Meta AI 290 veya üstü ve gözlük yazılımı 128 veya üstü (Meta AI → Cihazlar → gözlüğün → Ayarlar → Genel → Hakkında)."),
+     "arrow.down.circle"),
+    (L.t("Developer Mode on: Meta AI → Settings → App info → tap the version 5 times. If Meta AI offers to install DAT on the glasses, wear them and keep Meta AI open.",
+         "Geliştirici Modu açık: Meta AI → Ayarlar → Uygulama bilgisi → sürüme 5 kez dokun. Meta AI gözlüğe DAT kurmayı önerirse gözlüğü tak ve Meta AI'ı açık tut."),
+     "hammer"),
+    (L.t("Developer Mode keeps one app at a time: after trying another glasses app, connect AutoLoom again.",
+         "Geliştirici Modu aynı anda tek uygulamaya izin verir: başka bir gözlük uygulaması denediysen AutoLoom'u yeniden bağla."),
+     "1.circle"),
+    (L.t("iPhone Bluetooth on, and allowed for AutoLoom (Settings → AutoLoom → Bluetooth).",
+         "iPhone'da Bluetooth açık ve AutoLoom'a izinli (Ayarlar → AutoLoom → Bluetooth)."),
+     "dot.radiowaves.left.and.right"),
+    (L.t("Still refused? Switch the glasses off and on with the power switch (the case is not enough), then try again.",
+         "Hâlâ reddediyor mu? Gözlüğü güç düğmesiyle kapatıp aç (kutuya koymak yetmez), sonra tekrar dene."),
+     "power"),
+  ]
+
+  var body: some View {
+    DisclosureGroup(isExpanded: $expanded) {
+      VStack(alignment: .leading, spacing: 12) {
+        ForEach(steps.indices, id: \.self) { index in
+          Label {
+            Text(steps[index].0).font(.footnote)
+          } icon: {
+            Image(systemName: steps[index].1).foregroundStyle(.tint)
+          }
+        }
+      }
+      .padding(.top, 8)
+    } label: {
+      Text(L.t("Before connecting", "Bağlanmadan önce"))
+        .font(.subheadline.weight(.semibold))
+    }
+    .padding(14)
+    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
   }
 }

@@ -1750,7 +1750,7 @@ final class AssistantOrchestrator: ObservableObject {
   ) async throws -> VisionAttachment? {
     guard let provider = glassesStillPhoto else { return nil }
     let requestedAt = Date()
-    let still = await provider(4.0)
+    let still = await provider(GlassesVisionCaptureMode.current.photoTimeout)
     try Task.checkCancellation()
     guard let still,
           let record = ledger.record(taskID), !record.phase.isTerminal else { return nil }
