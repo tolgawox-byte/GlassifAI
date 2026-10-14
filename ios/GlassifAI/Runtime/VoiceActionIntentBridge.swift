@@ -155,6 +155,9 @@ enum VoiceIntent: Equatable {
   case parking(ParkingCommand)
   /// "QR kodu oku", "barkodu oku": read on the phone, never opened.
   case readCode
+  /// "Kartviziti oku", "scan this business card": a contact draft in iOS's
+  /// contact card; only the user's tap saves it.
+  case businessCard
   /// "Neler yapabilirsin?": a short contextual answer and the Command Library.
   case capabilities(String?)
   /// "Geçen hafta Corolla ile ilgili kaydettiğim şeyi bul": the global search.
@@ -251,6 +254,7 @@ enum VoiceIntent: Equatable {
       case .remove: "shoppingRemove"
       }
     case .readCode: "readCode"
+    case .businessCard: "businessCard"
     case .capabilities: "capabilities"
     case .search: "search"
     case .vehicleQuestion(let field): "vehicleQuestion(\(field.rawValue))"
@@ -399,6 +403,7 @@ enum VoiceActionIntentBridge {
     if let on = incognito(utterance) {
       return VoiceBridgeDecision(.incognito(on), on ? "incognito on" : "incognito off")
     }
+    if let decision = businessCard(utterance) { return decision }
     // Ray-Ban photos and recordings, before notes: "bunun fotoğrafını çek ve
     // not al: …" is a photo with a note.
     if let decision = media(utterance, context) { return decision }
@@ -498,6 +503,27 @@ enum VoiceActionIntentBridge {
     return nil
   }
 
+  /// "Kartviziti oku", "bu kartviziti rehbere ekle", "scan this business
+  /// card". "Kartvizit nasıl tasarlanır?" stays a question.
+  static func businessCard(_ u: Utterance) -> VoiceBridgeDecision? {
+    guard u.count <= 9 else { return nil }
+    let phrases: [[String]] = [
+      ["kartviziti", "oku"], ["kartviziti", "tara"], ["kartviziti", "kaydet"], ["kartviziti", "rehbere", "ekle"],
+      ["kartviziti", "rehbere", "kaydet"], ["kartviziti", "kisilere", "ekle"], ["kartviziti", "kisilerime", "ekle"],
+      ["kartvizitteki", "kisiyi", "kaydet"], ["kartvizitteki", "kisiyi", "rehbere", "ekle"], ["kartvizit", "tara"],
+      ["kartvizit", "oku"], ["read", "this", "business", "card"], ["read", "the", "business", "card"],
+      ["scan", "this", "business", "card"], ["scan", "the", "business", "card"], ["save", "this", "business", "card"],
+      ["add", "this", "business", "card", "to", "my", "contacts"], ["add", "this", "card", "to", "my", "contacts"],
+    ]
+    let fillers: Set<String> = ["bu", "su", "sunu", "bunu", "lutfen", "please", "hemen", "simdi", "now"]
+    for phrase in phrases {
+      guard let range = u.range(of: phrase) else { continue }
+      let outside = Array(u.keys[0..<range.lowerBound]) + Array(u.keys[range.upperBound...])
+      if outside.allSatisfy(fillers.contains) { return VoiceBridgeDecision(.businessCard, "business card") }
+    }
+    return nil
+  }
+
   /// Whether a partial transcript already starts with a command, so the
   /// voice model's own reply can be held back before the turn ends.
   static func looksLikeCommandStart(_ partial: String, assistantName: String) -> Bool {
@@ -522,6 +548,7 @@ enum VoiceActionIntentBridge {
     ["start", "recording"], ["stop", "recording"], ["record", "a", "video"],
     ["gizli", "modu"], ["gizli", "mod"], ["gizli", "moda"], ["gizli", "moddan"], ["bu", "konusmayi", "kaydetme"],
     ["bu", "konusmayi", "hatirlama"], ["go", "incognito"], ["turn", "on", "incognito"], ["turn", "off", "incognito"],
+    ["kartviziti"], ["kartvizitteki"], ["scan", "this", "business"], ["read", "this", "business"],
     ["yeni", "arac"], ["vin", "oku"], ["hasar", "ekle"], ["kilometre"], ["bu", "arac", "tamam"], ["sonraki", "arac"],
     ["ilan", "hazirla"], ["piyasa", "bak"], ["foto", "checklist"], ["alisveris", "listesine"], ["alisveris", "listeme"],
     ["timer"], ["zamanlayici"],

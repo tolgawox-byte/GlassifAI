@@ -2,6 +2,20 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS — research idea D2-18: business card → contact draft] — branch `autoloom-glasses-jarvis-v1`
+
+The second of the five research ideas (`JARVIS_FEATURE_RESEARCH.md` §8). CI results in `TEST_REPORT.md`. Not tried on an iPhone yet (device test BC1).
+
+### Added
+- **"Kartviziti oku" / "scan this business card".** The card in view (Ray-Ban or iPhone camera) is read on this iPhone with Apple's Vision text recognition. The app takes from it the name, company, title, phones (never a fax number), e-mails and website.
+- The result opens in **iOS's own contact card**: only the user's tap on "Create New Contact" or "Add to Existing Contact" saves it. AutoLoom never writes contacts itself.
+- The draft is someone else's data. It stays in memory for 30 minutes (Home: "Kartvizit hazır · kaydetmek için dokun") and is never saved, logged or put in memory. The action trace keeps no words.
+- The voice model hears only the name or company and how many numbers were found. The card's text counts as outside content for the conversation.
+- Tests: `AutoLoomBusinessCardTests` (9), the catalog entry `contacts.businessCard`.
+
+### CI
+- The screenshot step may take 25 minutes. Run 38501997387 took all 28 screens but reached the old 15-minute limit.
+
 ## [JARVIS — research idea D2-03: incognito ("gizli mod")] — branch `autoloom-glasses-jarvis-v1`
 
 The first of the five research ideas chosen on 2026-10-14 (`JARVIS_FEATURE_RESEARCH.md` §8), after the phase R fixes. CI results in `TEST_REPORT.md`. Not tried on an iPhone yet (device test IN1).

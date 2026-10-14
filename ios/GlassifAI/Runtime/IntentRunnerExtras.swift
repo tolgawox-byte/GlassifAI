@@ -20,6 +20,8 @@ final class AppNavigator: ObservableObject {
     case pcCompanion
     /// Everything waiting for the user's decision (phone and PC).
     case approvals
+    /// A business card read moments ago, in iOS's own contact card.
+    case contactDraft
 
     var id: String {
       switch self {
@@ -31,6 +33,7 @@ final class AppNavigator: ObservableObject {
       case .commandPalette: "palette"
       case .pcCompanion: "pccompanion"
       case .approvals: "approvals"
+      case .contactDraft: "contactdraft"
       }
     }
   }

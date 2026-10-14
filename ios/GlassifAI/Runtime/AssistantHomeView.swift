@@ -24,6 +24,7 @@ struct AssistantHomeView: View {
   @ObservedObject private var sharing = RemoteAssistServer.shared
   @ObservedObject private var pc = PCCompanionStore.shared
   @ObservedObject private var incognito = IncognitoSession.shared
+  @ObservedObject private var contactDrafts = ContactDraftInbox.shared
   @AppStorage(CaptureSource.defaultsKey) private var captureSourceRaw = CaptureSource.iPhoneCamera.rawValue
   @AppStorage(AssistantPreferences.languageKey) private var language = "auto"
   @State private var showTextInput = false
@@ -323,6 +324,14 @@ struct AssistantHomeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint(L.t("Turns incognito off; memory works again", "Gizli modu kapatır; hafıza yeniden çalışır"))
+      }
+      if contactDrafts.current() != nil {
+        // A card read moments ago: iOS's contact card, where a tap saves it.
+        Button { AppNavigator.shared.show(.contactDraft) } label: {
+          chip(L.t("Business card ready · tap to save", "Kartvizit hazır · kaydetmek için dokun"),
+               systemImage: "person.crop.rectangle", tint: AutoLoomTheme.electricBlue)
+        }
+        .buttonStyle(.plain)
       }
       if captureSource == .iPhoneCamera, connection.phase.isLinked {
         // The glasses are connected, but the image comes from the iPhone:

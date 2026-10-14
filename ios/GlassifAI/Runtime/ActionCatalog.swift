@@ -525,6 +525,13 @@ enum ActionCatalog {
       summary: "Read on the phone with Vision; never opened, called or joined.",
       examplesTR: ["QR kodu oku", "Barkodu oku"], examplesEN: ["Read the QR code"], capabilities: [.camera],
       voiceOnly: "The camera is the input; the result is shown on screen", status: .physicalTestRequired, keys: ["readCode"]),
+    ActionDefinition(
+      "contacts.businessCard", .camera, name: "Business card to a contact", tr: "Kartviziti rehbere hazırla",
+      summary: "Reads the card in view on this iPhone and opens iOS's contact card with the name, company, title, phones, e-mails and website. Only the user's tap there saves it; the draft stays in memory for 30 minutes.",
+      examplesTR: ["Kartviziti oku", "Bu kartviziti rehbere ekle"], examplesEN: ["Scan this business card"],
+      negatives: ["Kartvizit nasıl tasarlanır?", "Kartvizit bastırmak istiyorum"],
+      confirmation: .tapOnPhone, permissions: [.camera], capabilities: [.camera],
+      ui: "Home → Business card chip (iOS's contact card)", status: .physicalTestRequired, keys: ["businessCard"]),
   ]
 
   private static let vision: [ActionDefinition] = [
@@ -1005,6 +1012,7 @@ enum ActionCatalog {
     case "camera.recordStatus": return .recordingStatus
     case "captures.saveToPhotos": return .saveCaptureToPhotos
     case "code.read": return .readCode
+    case "contacts.businessCard": return .businessCard
     case "translation.view": return .translateView(language: text("language") ?? L.t("English", "Türkçe"))
     case "dealer.start": return .dealer(.startVehicle)
     case "dealer.next": return .dealer(.nextVehicle)
@@ -1200,6 +1208,7 @@ extension VoiceIntent {
     case .shopping(let command): "shopping." + command.key
     case .parking(let command): "parking." + command.key
     case .readCode: "readCode"
+    case .businessCard: "businessCard"
     case .capabilities: "capabilities"
     case .search: "search"
     case .vehicleQuestion: "vehicleQuestion"

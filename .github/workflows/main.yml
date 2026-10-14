@@ -138,7 +138,9 @@ jobs:
       - name: UI screenshots (Simulator)
         if: always()
         continue-on-error: true
-        timeout-minutes: 15
+        # 28 launches; 557 s and 858 s on recent runners, over 900 s on run
+        # 38501997387 with every screen taken.
+        timeout-minutes: 25
         run: |
           chmod +x ./scripts/ci-screenshots.sh
           ./scripts/ci-screenshots.sh

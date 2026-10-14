@@ -172,6 +172,7 @@ extension VoiceIntent {
     case .correctPending: "CORRECT_PENDING"
     case .graph: "ACTION_GRAPH"
     case .readCode: "READ_CODE"
+    case .businessCard: "BUSINESS_CARD"
     case .ask: "ASK"
     default: traceName.uppercased()
     }
@@ -221,7 +222,7 @@ extension VoiceIntent {
   /// names, numbers or message text.
   var isPrivate: Bool {
     switch self {
-    case .call, .message, .findContact:
+    case .call, .message, .findContact, .businessCard:
       return true
     case .ask(let awaiting):
       switch awaiting {
@@ -894,6 +895,9 @@ extension AssistantOrchestrator {
 
     case .readCode:
       return await runCodeReading(traceID: traceID)
+
+    case .businessCard:
+      return await runBusinessCard(traceID: traceID)
 
     case .capabilities(let topic):
       return runCapabilities(topic: topic, traceID: traceID)

@@ -102,6 +102,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Feature | Status | Verification | Evidence | Completion criterion | Pri |
 |---|---|---|---|---|---|
 | Contacts lookup | Working in code | Pending device | `ContactsLookup` | Privacy wording fix (M2) | P1 |
+| Business card → contact draft (iOS's contact card; only the user's tap saves) | In CI | Automated parser (`AutoLoomBusinessCardTests`); pending device BC1 | `BusinessCard.swift` | BC1 passes on a Turkish and an English card | P1 |
 | Call (system call screen, never automatic) | Working in code | Pending device | `tel:` + tap card | — | P1 |
 | Messages (compose sheet, user sends) | Working in code | Pending device | `MFMessageComposeViewController` | — | P1 |
 | Photos (add-only) | Working in code | Pending device | `PhotoLibrarySaver` | — | P2 |

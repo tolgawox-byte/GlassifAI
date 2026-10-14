@@ -290,7 +290,7 @@ Overlap: 24 of the 26 are new against F01–F28 and the plan. D2-22 extends F24;
 1. **First, phase R**: the Ray-Ban device test. The brief puts connection and camera first.
 2. Then the top five, each small and testable in CI:
    - D2-03 incognito: **IN CI** (`IncognitoMode.swift`, `AutoLoomIncognitoTests`). Memory, summary, visual memory, name and Scene Timeline writes stop; a note asked for by name is still a note (and in Spotlight like any note);
-   - D2-18 business card (OCR → `CNContactViewController`; JARVIS never writes contacts itself);
+   - D2-18 business card: **IN CI** (`BusinessCard.swift`, `AutoLoomBusinessCardTests`). On-device OCR → iOS's contact card for an unknown contact; the draft lives 30 minutes in memory; JARVIS never writes contacts itself;
    - D2-02 links back (only navigation, never an action);
    - D2-01 several PC addresses (companion pairing payload + iOS client, same pin);
    - D2-04 structured test reports (companion parser + comparison with the last run).
