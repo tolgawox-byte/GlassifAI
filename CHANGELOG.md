@@ -21,7 +21,7 @@ Plan item 2.4. CI results: `TEST_REPORT.md`. Not tried on an iPhone yet (device 
 
 ## [JARVIS Ultimate — plan 2.3: repeating reminders, events and tasks; undo a spoken completion] — branch `autoloom-glasses-jarvis-v1`
 
-Plan item 2.3. CI results: `TEST_REPORT.md`. Not tried on an iPhone yet (device tests TK2, RM5).
+Plan item 2.3. CI: run 38489746020 passed (iOS 370/372 with the 8 new tests, Rust 13/13); details in `TEST_REPORT.md`. Not tried on an iPhone yet (device tests TK2, RM5).
 
 ### Added
 - **Repeats said by voice:** "her gün", "hafta içi her gün", "her pazartesi", "cumaları", "her ayın 15'inde", "her yıl", "her sabah", "every day", "every Monday".
