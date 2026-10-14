@@ -72,6 +72,8 @@ struct GlassifAIApp: App {
           .onOpenURL { url in
             if url.scheme?.lowercased() == PCPairingOffer.scheme {
               if PCCompanionStore.shared.receive(url) { AppNavigator.shared.show(.pcCompanion) }
+            } else if SourceLink.open(url) {
+              // A link back from Reminders or Calendar: shows the item only.
             } else {
               WearableConnectionCoordinator.shared.handleOpenURL(url)
             }

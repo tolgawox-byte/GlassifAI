@@ -208,6 +208,9 @@ struct DeviceActionPlan: Equatable {
   var afterUntrustedContent = false
   /// The MCP tool call (skill_call): the service, tool and arguments.
   var skill: SkillCallRequest?
+  /// `glassifai://item/note/<id>` for a reminder or event made from a note
+  /// (research D2-02): Reminders and Calendar show it as the item's link.
+  var sourceLink: URL?
 
   /// Agent requests that sound destructive (deleting, deploying, payments,
   /// email) need a tap, even though other agent requests accept a spoken yes.
@@ -810,6 +813,7 @@ final class DeviceActionExecutor {
     reminder.title = plan.title
     reminder.notes = plan.notes
     reminder.calendar = calendar
+    reminder.url = plan.sourceLink
     if let date = plan.date {
       let fields: Set<Calendar.Component> = plan.hasTime ? [.year, .month, .day, .hour, .minute] : [.year, .month, .day]
       reminder.dueDateComponents = Calendar.current.dateComponents(fields, from: date)
@@ -1038,6 +1042,7 @@ final class DeviceActionExecutor {
     event.endDate = plan.endDate ?? start.addingTimeInterval(3_600)
     event.location = plan.location
     event.notes = plan.notes
+    event.url = plan.sourceLink
     event.calendar = calendar
     if let recurrence = plan.recurrence { event.addRecurrenceRule(recurrence.eventKitRule) }
     try store.save(event, span: plan.recurrence == nil ? .thisEvent : .futureEvents, commit: true)

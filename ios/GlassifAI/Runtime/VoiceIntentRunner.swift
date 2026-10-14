@@ -1165,6 +1165,12 @@ extension AssistantOrchestrator {
     var plan = DeviceActionPlan(kind: kind)
     plan.title = title
     plan.trigger = trigger
+    // Made from the note just saved ("bunun için hatırlatıcı kur"): Reminders
+    // and Calendar link back to it.
+    if kind == .createReminder || kind == .createEvent,
+       let note = Self.linkedNote(title: title, saved: recentSaved, now: Date()) {
+      plan.sourceLink = SourceLink.url("note", note)
+    }
     ReminderLists.applyNamedList(to: &plan, store: DeviceActionExecutor.shared.store)
     if let time {
       plan.date = time.date
@@ -1272,17 +1278,21 @@ extension AssistantOrchestrator {
 
   // MARK: AutoLoom tasks
 
+  /// The note saved in the last ten minutes that this title was made from
+  /// ("Bunun için görev oluştur", "… hatırlatıcı kur").
+  nonisolated static func linkedNote(title: String, saved: (text: String, at: Date, noteID: UUID?)?, now: Date) -> UUID? {
+    guard let saved, let id = saved.noteID, now.timeIntervalSince(saved.at) < 600,
+          VoiceActionIntentBridge.shortTitle(saved.text) == title else { return nil }
+    return id
+  }
+
   private func createTask(title: String, time: ParsedTime?, traceID: UUID) async -> IntentOutcome {
     let store = MemoryStore.shared
     let trace = ActionTraceLog.shared
     trace.update(traceID) { $0.executor = "MemoryStore.addTask (SwiftData, AutoLoom Tasks)" }
     // "Bunun için görev oluştur" right after a note: the task keeps a link
     // to that note.
-    let sourceNote: UUID? = recentSaved.flatMap { saved in
-      guard let id = saved.noteID, Date().timeIntervalSince(saved.at) < 600,
-            VoiceActionIntentBridge.shortTitle(saved.text) == title else { return nil }
-      return id
-    }
+    let sourceNote = Self.linkedNote(title: title, saved: recentSaved, now: Date())
     guard let task = store.addTask(
       title: title, dueAt: time?.date, dueHasTime: time?.hasTime ?? true, source: "voice") else {
       return IntentOutcome(

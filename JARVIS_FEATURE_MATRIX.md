@@ -78,6 +78,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Tasks: create, edit, complete, list, search | Working in code | Automated | `TasksViews`, voice | — | P1 |
 | Snooze, priority, recurrence | Partial | Automated | Snooze from the alert (phase 1f); recurrence passed CI (`AutoLoomRecurrenceTests`, run 38489746020); `priority` still a dead field | Device tests TK1, TK2 | P1 |
 | Apple Reminders create | Working in code | Pending device | `DeviceActions.createReminder` | Device test RM4 | P1 |
+| Link back to the note a reminder or event was made from (`glassifai://item/…`, navigation only) | In CI | Automated (`AutoLoomSourceLinkTests`); pending device SL1 | `SourceLinks.swift`, `DeviceActions` (`url` of the item) | SL1 passes | P2 |
 | Reminder verified after creation | Working in code | Automated (build) | `calendarItem(withIdentifier:)` after saving | Device test | P1 |
 | Reminder list choice (Settings, by name, Tasks sheet) | Working in code | Automated (parser; run 38485233267) | `ReminderLists`, `ReminderListMention` | Device test RM4 | P1 |
 | Complete / delete a reminder by voice | Working in code | Automated (parser, matching; run 38485233267) | `AutoLoomReminderVoiceTests`; completion undone by "geri al"; deletion after a yes; both read back | Device tests RM1–RM3 | P1 |

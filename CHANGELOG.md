@@ -2,6 +2,15 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS — research idea D2-02: links back from Reminders and Calendar] — branch `autoloom-glasses-jarvis-v1`
+
+The third of the five research ideas (`JARVIS_FEATURE_RESEARCH.md` §8). CI results in `TEST_REPORT.md`. Not tried on an iPhone yet (device test SL1).
+
+### Added
+- A reminder or event made from the note just saved ("Not al: …", then "bunun için yarın 9'da hatırlatıcı kur") carries the link `glassifai://item/note/<id>`. Apple Reminders and Calendar show it on the item, and a tap opens AutoLoom at that note. AutoLoom tasks already kept such a link.
+- Opening a link only shows the item: it never runs, sends or changes anything, so a link from anywhere is harmless. Meta's registration callbacks on the same scheme are told apart and still reach the glasses connection.
+- Tests: `AutoLoomSourceLinkTests` (3).
+
 ## [JARVIS — research idea D2-18: business card → contact draft] — branch `autoloom-glasses-jarvis-v1`
 
 The second of the five research ideas (`JARVIS_FEATURE_RESEARCH.md` §8). CI results in `TEST_REPORT.md`. Not tried on an iPhone yet (device test BC1).
