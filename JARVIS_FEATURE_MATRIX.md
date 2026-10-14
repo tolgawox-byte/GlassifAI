@@ -131,7 +131,7 @@ Priority: P0 critical infrastructure/security · P1 core JARVIS · P2 high value
 | Read and summarise documents | Done (text extraction; summary by the phone's model) | Automated | `extract_text` (docx/xlsx/pptx/odt/html/rtf/text; PDF best effort) | PDF via pdf.js (plan 4.6) | P1 |
 | Project analysis | Done | Automated | `analyze_project` (no git execution) | PC2 | P1 |
 | Create/edit files in allowed folders | Done | Automated | create/append/replace/mkdir/rename with backups | PC3 | P1 |
-| Run tests and report errors | Done (owner-defined commands) | Automated | `run_command`, exit code + output tail | PC4 | P1 |
+| Run tests and report errors | Done (owner-defined commands); test counts and the change since the last run in CI | Automated (companion tests, 80/80 locally) | `run_command`, exit code + output tail; `testReport.ts` (node, Jest, Vitest, pytest, dotnet, cargo, go, TAP) | PC4, PC11 | P1 |
 | Task queue, long tasks, status, cancel | Done | Automated | `TaskManager`, kill tree | PC5 | P1 |
 | Results to the iPhone and to voice | Done | Automated (REST/MCP); pending device | `/v1/tasks`, events, `approveAndWait` | PC3/PC5 | P1 |
 | Undo / restore | Done | Automated | `undo_task`, trash | PC6 | P2 |

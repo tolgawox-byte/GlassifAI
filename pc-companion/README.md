@@ -33,6 +33,14 @@ Konsol komutları: `pair`, `devices`, `revoke <id>`, `tasks`, `approve <id>`, `d
 
 Tools that only the model channel (MCP) sees: `pc_status`, `list_tasks`, `get_task`, `cancel_task`. There is **no approval tool**: the model can never approve its own request.
 
+**Test runs.** When a `run_command` prints test results, the companion reads the counts and the failing test names from the output. It understands:
+- node --test (spec and TAP), Jest, Vitest, pytest, dotnet test, cargo test, go test -v and plain TAP.
+
+It compares them with the previous run of the same command in the same folder ("TAP: 70 geçti, 1 başarısız. Önceki çalıştırmaya göre: 1 yeni başarısız (…), 2 düzeldi.").
+- A run with a failing test is reported as unsuccessful even if the program exits with 0.
+- Only the output is read; no report file is opened.
+- The last summary per command and folder is kept in `test-history.json` in the data folder (counts and at most 20 test names, 50 entries).
+
 ## What it never does
 
 - No shell for the model, no arbitrary programs or command lines: the model picks an **allowlisted id** and a **shared folder**; the owner writes the command in `config.json`.

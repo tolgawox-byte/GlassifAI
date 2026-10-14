@@ -2,6 +2,17 @@
 
 All notable changes are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [JARVIS — research idea D2-04: test results from PC test runs] — branch `autoloom-glasses-jarvis-v1`
+
+The fourth of the five research ideas (`JARVIS_FEATURE_RESEARCH.md` §8). PC companion only. Its tests ran on this Windows PC (80/80, `tsc` clean) and run again in CI. Device test PC11.
+
+### Added
+- **`run_command` reads test results from the command's output.** It understands node --test (spec and TAP), Jest, Vitest, pytest, dotnet test, cargo test, go test -v and plain TAP. It reports passed, failed and skipped counts and up to 20 failing test names.
+- **Compared with the previous run of the same command in the same folder:** "1 yeni başarısız (…), 2 düzeldi".
+- **A run with a failing test is no longer reported as a success,** even when the program exits with 0.
+- Only the output is read: no new program, file or permission. Test names are project data, cut to 160 characters.
+- `test/testReport.test.ts` (9 tests).
+
 ## [JARVIS — research idea D2-02: links back from Reminders and Calendar] — branch `autoloom-glasses-jarvis-v1`
 
 The third of the five research ideas (`JARVIS_FEATURE_RESEARCH.md` §8). CI results in `TEST_REPORT.md`. Not tried on an iPhone yet (device test SL1).

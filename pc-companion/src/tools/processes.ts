@@ -8,6 +8,8 @@ import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { promises as fs } from "node:fs";
 import type { AppEntry, CommandEntry } from "../config.ts";
+import { compareRuns, describeComparison, describeSummary, parseTestOutput, TestHistory } from "../testReport.ts";
+import type { TestComparison } from "../testReport.ts";
 import { CompanionError, tail, truncate } from "../util.ts";
 import type { ToolDefinition } from "./types.ts";
 
@@ -177,12 +179,26 @@ export const runCommand: ToolDefinition = {
     const seconds = Math.max(1, Math.round(durationMs / 1000));
     const outputTail = tail(output, 16 * 1024);
     const lastLines = outputTail.trimEnd().split(/\r?\n/).slice(-3).join(" | ");
-    const success = exitCode === 0;
+    // A test run's own counts (research D2-04), compared with the previous
+    // run of this command in this folder. Failing tests make the run
+    // unsuccessful even when the program exits with 0.
+    const tests = parseTestOutput(output);
+    let comparison: TestComparison | undefined;
+    if (tests) {
+      const history = new TestHistory(ctx.dataDir);
+      const key = TestHistory.key(command.id, resolved.display);
+      const previous = await history.previous(key);
+      comparison = previous ? compareRuns(tests, previous) : undefined;
+      await history.record(key, tests).catch(() => undefined);
+    }
+    const changes = comparison ? describeComparison(comparison) : undefined;
+    const testText = tests ? ` ${describeSummary(tests)}.${changes ? ` ${changes}` : ""}` : "";
+    const success = exitCode === 0 && !(tests && tests.failed > 0);
     return {
-      result: { command: command.id, path: resolved.display, exitCode, durationMs, outputTail },
+      result: { command: command.id, path: resolved.display, exitCode, durationMs, outputTail, tests, comparison },
       text: success
-        ? `${command.label} ${seconds} sn'de başarıyla bitti.`
-        : `${command.label} başarısız oldu (çıkış kodu ${exitCode ?? "yok"}, ${seconds} sn). Son satırlar: ${truncate(lastLines, 300)}`,
+        ? `${command.label} ${seconds} sn'de başarıyla bitti.${testText}`
+        : `${command.label} başarısız oldu (çıkış kodu ${exitCode ?? "yok"}, ${seconds} sn).${testText} Son satırlar: ${truncate(lastLines, 300)}`,
       verification: { ok: true, details: `Komut çalıştı ve bitti (çıkış kodu ${exitCode ?? "yok"}).` },
       unsuccessful: !success,
     };

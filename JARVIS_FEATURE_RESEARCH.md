@@ -293,4 +293,4 @@ Overlap: 24 of the 26 are new against F01–F28 and the plan. D2-22 extends F24;
    - D2-18 business card: **IN CI** (`BusinessCard.swift`, `AutoLoomBusinessCardTests`). On-device OCR → iOS's contact card for an unknown contact; the draft lives 30 minutes in memory; JARVIS never writes contacts itself;
    - D2-02 links back: **IN CI** (`SourceLinks.swift`, `AutoLoomSourceLinkTests`). Reminders and events made from a note carry `glassifai://item/note/<id>`; opening it only shows the item;
    - D2-01 several PC addresses (companion pairing payload + iOS client, same pin);
-   - D2-04 structured test reports (companion parser + comparison with the last run).
+   - D2-04 test results: **IN CI** (`pc-companion/src/testReport.ts`; 9 tests, run locally 80/80). Output parsing only (no JUnit/TRX files are opened); compared with the previous run of the same command and folder.
